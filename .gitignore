@@ -1,41 +1,18 @@
-# Prerequisites
-*.d
+*.log
+*.bak
+*backup*
+.DS_Store
 
-# Compiled Object files
-*.slo
-*.lo
-*.o
-*.obj
+# file macchina specifici comuni
+monitors.xml*
+*.swp
 
-# Precompiled Headers
-*.gch
-*.pch
+# cache tipiche
+**/node_modules/
+**/.cache/
 
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
-*.out
-*.app
-
-# debug information files
-*.dwo
+# niente segreti
+secrets*
+*.key
+*.pem
+*.p12
