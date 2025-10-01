@@ -1,8 +1,8 @@
 # Hyprland-dotfiles
 
-Dotfiles per Hyprland, Quickshell e Illogical-Impulse con installer a symlink.
+Dotfiles for Hyprland, Quickshell and Illogical-Impulse with symlink installer.
 
-## Installazione
+## Installation
 git clone https://github.com/MaxGiuP/Hyprland-dotfiles
 cd Hyprland-dotfiles
 chmod +x install.sh
