@@ -1,6 +1,1 @@
-import QtQuick
-
-Flickable {
-    maximumFlickVelocity: 3500
-    boundsBehavior: Flickable.DragOverBounds
-}
+/home/linmax/Hyprland-dotfiles/dotfiles/quickshell/.config/./quickshell/ii/modules/common/widgets/StyledFlickable.qml
