@@ -1,1 +1,17 @@
-/home/linmax/Hyprland-dotfiles/dotfiles/hypr/.config/./hypr/custom/execs.conf.save
+# You can make apps auto-start here
+# Relevant Hyprland wiki section: https://wiki.hyprland.org/Configuring/Keywords/#executing
+
+
+
+#### Combined Audio Setup ####
+exec = pactl set-card-profile alsa_card.pci-0000_01_00.1 pro-audio
+exec = pactl load-module module-combine-sink \
+            sink_name=CombinedStereo \
+            channels=2 channel_map=front-left,front-right \
+            sink_properties=device.description=Combined
+
+# Disconnect left and right headphones
+exec = pw-link --disconnect output.CombinedStereo_alsa_output.pci-0000_00_1f.3.analog-stereo:output_FL alsa_output.pci-0000_00_1f.3.analog-stereo:playback_FL
+exec = pw-link --disconnect output.CombinedStereo_alsa_output.pci-0000_00_1f.3.analog-stereo:output_FR alsa_output.pci-0000_00_1f.3.analog-stereo:playback_FR
+
+

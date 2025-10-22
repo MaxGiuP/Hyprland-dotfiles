@@ -1,1 +1,6 @@
-/home/linmax/Hyprland-dotfiles/dotfiles/quickshell/.config/./quickshell/ii/modules/common/widgets/StyledFlickable.qml
+import QtQuick
+
+Flickable {
+    maximumFlickVelocity: 3500
+    boundsBehavior: Flickable.DragOverBounds
+}

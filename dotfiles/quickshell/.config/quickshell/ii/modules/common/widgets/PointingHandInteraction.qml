@@ -1,1 +1,7 @@
-/home/linmax/Hyprland-dotfiles/dotfiles/quickshell/.config/./quickshell/ii/modules/common/widgets/PointingHandInteraction.qml
+import QtQuick
+
+MouseArea {
+    anchors.fill: parent
+    onPressed: (mouse) => mouse.accepted = false
+    cursorShape: Qt.PointingHandCursor 
+}

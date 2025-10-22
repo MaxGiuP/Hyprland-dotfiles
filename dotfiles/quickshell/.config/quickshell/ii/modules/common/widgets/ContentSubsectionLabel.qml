@@ -1,1 +1,10 @@
-/home/linmax/Hyprland-dotfiles/dotfiles/quickshell/.config/./quickshell/ii/modules/common/widgets/ContentSubsectionLabel.qml
+import QtQuick
+import QtQuick.Layouts
+import qs.modules.common
+import qs.modules.common.widgets
+
+StyledText {
+    text: "Subsection"
+    color: Appearance.colors.colSubtext
+    Layout.leftMargin: 4
+}

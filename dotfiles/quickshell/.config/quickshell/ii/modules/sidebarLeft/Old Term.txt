@@ -1,1 +1,223 @@
-/home/linmax/Hyprland-dotfiles/dotfiles/quickshell/.config/./quickshell/ii/modules/sidebarLeft/Old Term.txt
+/*
+// Terminal.qml
+import qs
+import qs.services
+import qs.modules.common
+import qs.modules.common.widgets
+import qs.modules.common.functions
+import QtQuick 2.15
+import QtQuick.Controls 2.15
+import QtQuick.Layouts 1.15
+import Quickshell
+import Quickshell.Io
+import "./translator/"
+
+FocusScope {
+    id: root
+    width: 360
+    height: 600
+    focus: true
+
+    // Configurazione
+    property string shellProgram: "/bin/bash"
+    property var    shellArgs: ["-i"]
+    property string workingDir: Quickshell.env("HOME") || "/"
+
+    // Cronologia locale
+    property var history: []
+    property int historyIndex: 0
+
+    // riferimento dinamico alla shell corrente
+    property var shell: shellLoader.item
+
+    function appendLine(s) {
+        output.text += (s.length ? s : "") + "\n"
+        output.cursorPosition = output.text.length
+    }
+
+    // Component per creare una nuova shell quando serve
+    Component {
+        id: shellComponent
+        Process {
+            // niente id fisso, l'istanza vive in shellLoader.item
+            command: [root.shellProgram].concat(root.shellArgs)
+            stdinEnabled: true
+            running: true
+            workingDirectory: root.workingDir
+
+            stdout: SplitParser {
+                splitMarker: "\n"
+                onRead: root.appendLine(data)
+            }
+            stderr: SplitParser {
+                splitMarker: "\n"
+                onRead: root.appendLine(data)
+            }
+
+            onStarted: root.appendLine("[shell started pid=" + processId + "]")
+            onExited: function(code) { root.appendLine("[exit " + code + "]") }
+        }
+    }
+
+    // Loader che ospita la shell corrente
+    Loader {
+        id: shellLoader
+        sourceComponent: shellComponent
+    }
+
+    function spawnNewShell() {
+        appendLine("[spawning new shell]")
+        // prova a terminare gentilmente la vecchia
+        if (shell) {
+            try { shell.signal(15) } catch(e) {} // SIGTERM
+        }
+        // ricarica il component per creare una nuova Process
+        shellLoader.sourceComponent = null
+        shellLoader.sourceComponent = shellComponent
+
+        // reset history
+        history = []
+        historyIndex = 0
+        input.forceActiveFocus()
+    }
+
+    Keys.onPressed: (event) => {
+        // Scorciatoie comode
+        if (event.key === Qt.Key_PageUp) {
+            output.flickableItem.contentY = Math.max(0, output.flickableItem.contentY - output.height / 2)
+            event.accepted = true
+        } else if (event.key === Qt.Key_PageDown) {
+            const maxY = output.flickableItem.contentHeight - output.height
+            output.flickableItem.contentY = Math.min(maxY, output.flickableItem.contentY + output.height / 2)
+            event.accepted = true
+        } else if (event.key === Qt.Key_Escape) {
+            input.forceActiveFocus()
+            event.accepted = true
+        }
+    }
+
+    // Output
+    TextArea {
+        id: output
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        readOnly: true
+        wrapMode: TextArea.NoWrap
+        textFormat: TextEdit.PlainText
+        color: "#bdbdbd"
+    }
+
+    
+
+    ColumnLayout {
+        anchors.fill: parent
+        anchors.margins: 8
+        spacing: 6
+
+        // Prompt
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Label {
+                text: "$"
+                padding: 6
+            }
+
+            TextField {
+                id: input
+                Layout.fillWidth: true
+                placeholderText: "Comando..."
+                focus: true
+
+                Keys.onReturnPressed: {
+                    const cmd = text.trim()
+                    if (!cmd.length) return
+                    root.appendLine("$ " + cmd)
+                    root.shell.write(cmd + "\n")
+                    history.push(cmd)
+                    historyIndex = history.length
+                    text = ""
+                }
+                Keys.onUpPressed: {
+                    if (history.length === 0) return
+                    historyIndex = Math.max(0, historyIndex - 1)
+                    text = history[historyIndex]
+                    selectAll()
+                }
+                Keys.onDownPressed: {
+                    if (history.length === 0) return
+                    historyIndex = Math.min(history.length, historyIndex + 1)
+                    text = historyIndex < history.length ? history[historyIndex] : ""
+                    selectAll()
+                }
+            }
+            
+
+            TextCanvas { // Content input
+                id: inputCanvas
+                isInput: true
+                placeholderText: Translation.tr("Enter text to translate...")
+                Keys.onReturnPressed: {
+                        const cmd = text.trim()
+                        if (!cmd.length) return
+                        root.appendLine("$ " + cmd)
+                        root.shell.write(cmd + "\n")
+                        history.push(cmd)
+                        historyIndex = history.length
+                        text = ""
+                    }
+                GroupButton {
+                    id: pasteButton
+                    baseWidth: height
+                    buttonRadius: Appearance.rounding.small
+                    contentItem: MaterialSymbol {
+                        anchors.centerIn: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        iconSize: Appearance.font.pixelSize.larger
+                        text: "content_paste"
+                        color: deleteButton.enabled ? Appearance.colors.colOnLayer1 : Appearance.colors.colSubtext
+                    }
+                    onClicked: {
+                        root.inputField.text = Quickshell.clipboardText
+                    }
+                }
+                GroupButton {
+                    id: deleteButton
+                    baseWidth: height
+                    buttonRadius: Appearance.rounding.small
+                    enabled: inputCanvas.inputTextArea.text.length > 0
+                    contentItem: MaterialSymbol {
+                        anchors.centerIn: parent
+                        horizontalAlignment: Text.AlignHCenter
+                        iconSize: Appearance.font.pixelSize.larger
+                        text: "close"
+                        color: deleteButton.enabled ? Appearance.colors.colOnLayer1 : Appearance.colors.colSubtext
+                    }
+                    onClicked: {
+                        root.inputField.text = ""
+                    }
+                }
+            }
+
+            Button {
+                text: "Clear"
+                onClicked: output.text = ""
+            }
+            Button {
+                text: "Ctrl+C"
+                onClicked: root.shell.signal(2) // SIGINT
+            }
+            Button {
+                text: "New Shell"
+                onClicked: spawnNewShell()
+                ToolTip.visible: hovered
+                ToolTip.text: "Termina la sessione e ne avvia una nuova"
+            }
+        }
+    }
+
+    Component.onCompleted: input.forceActiveFocus()
+    onVisibleChanged: if (visible) input.forceActiveFocus()
+}
+*/

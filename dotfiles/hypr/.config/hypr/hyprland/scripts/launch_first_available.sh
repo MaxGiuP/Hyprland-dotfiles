@@ -1,1 +1,7 @@
-/home/linmax/Hyprland-dotfiles/dotfiles/hypr/.config/./hypr/hyprland/scripts/launch_first_available.sh
+#!/usr/bin/env bash
+for cmd in "$@"; do
+    eval "command -v ${cmd%% *}" >/dev/null 2>&1 || continue
+    eval "$cmd" &
+    exit
+done
+exit 1

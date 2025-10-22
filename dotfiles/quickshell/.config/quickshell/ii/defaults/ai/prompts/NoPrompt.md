@@ -1,1 +1,0 @@
-/home/linmax/Hyprland-dotfiles/dotfiles/quickshell/.config/./quickshell/ii/defaults/ai/prompts/NoPrompt.md
