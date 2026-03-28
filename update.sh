@@ -164,7 +164,10 @@ echo "$git_status" | head -30 | sed 's/^/    /'
 
 echo ""
 if [[ $YES -eq 1 ]] || confirm "Commit these changes?"; then
-    read -rp "$(echo -e "    ${CYN}Commit message (leave blank for auto): ${NC}")" msg
+    msg=""
+    if [[ $YES -eq 0 ]]; then
+        read -rp "$(echo -e "    ${CYN}Commit message (leave blank for auto): ${NC}")" msg || true
+    fi
     if [[ -z "$msg" ]]; then
         changed_names=$(git diff --name-only HEAD 2>/dev/null | awk -F'/' '{print $3}' | sort -u | tr '\n' ' ' || echo "configs")
         msg="Update dotfiles from system: ${changed_names}"
