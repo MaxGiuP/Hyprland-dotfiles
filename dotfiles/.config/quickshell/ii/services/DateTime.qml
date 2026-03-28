@@ -59,7 +59,7 @@ Singleton {
     property string day: formatDate("dddd")
 
     Timer {
-        interval: 10
+        interval: Math.max(100, Config.options?.resources?.updateInterval ?? 3000)
         running: true
         repeat: true
         onTriggered: {
@@ -81,7 +81,6 @@ Singleton {
             if (minutes > 0 || !formatted)
                 formatted += `${formatted ? ", " : ""}${minutes}m`;
             uptime = formatted;
-            interval = Config.options?.resources?.updateInterval ?? 3000;
         }
     }
 

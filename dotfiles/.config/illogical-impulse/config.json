@@ -184,7 +184,7 @@
             "city": "fleet",
             "enable": true,
             "enableGPS": false,
-            "fetchInterval": 50,
+            "fetchInterval": 5,
             "useUSCS": false
         },
         "workspaces": {
@@ -193,7 +193,7 @@
             "numberMap": [
             ],
             "showAppIcons": true,
-            "showNumberDelay": 0,
+            "showNumberDelay": 300,
             "shown": 10,
             "useNerdFont": false
         }
@@ -228,8 +228,8 @@
     },
     "dock": {
         "enable": true,
-        "height": 36,
-        "hoverRegionHeight": 1,
+        "height": 60,
+        "hoverRegionHeight": 20,
         "hoverToReveal": true,
         "ignoredAppRegexes": [
         ],
@@ -304,8 +304,8 @@
         "filterDuplicatePlayers": true
     },
     "musicRecognition": {
-        "interval": 4,
-        "timeout": 16
+        "interval": 2,
+        "timeout": 10
     },
     "networking": {
         "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
@@ -365,7 +365,7 @@
     },
     "resources": {
         "historyLength": 60,
-        "updateInterval": 100
+        "updateInterval": 3000
     },
     "screenRecord": {
         "savePath": "/home/linmax/Video"

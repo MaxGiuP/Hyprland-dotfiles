@@ -12,6 +12,7 @@ RowLayout {
     property real stepSize: 1
     property real from: 0
     property real to: 100
+    property bool spinBoxReady: false
     spacing: 10
     Layout.leftMargin: 8
     Layout.rightMargin: 8
@@ -36,10 +37,20 @@ RowLayout {
         Layout.fillWidth: false
 
         sourceComponent: styledSpinBoxComponent
+
+        onItemChanged: {
+            root.spinBoxReady = false
+            if (item) {
+                Qt.callLater(() => {
+                    if (spinBoxLoader.item)
+                        root.spinBoxReady = true
+                })
+            }
+        }
     }
 
     Binding {
-        when: spinBoxLoader.item
+        when: spinBoxLoader.item && root.spinBoxReady
         target: spinBoxLoader.item
         property: "value"
         value: root.value
@@ -68,6 +79,7 @@ RowLayout {
 
     Connections {
         target: spinBoxLoader.item
+        enabled: root.spinBoxReady
 
         function onValueChanged() {
             if (spinBoxLoader.item && root.value !== spinBoxLoader.item.value)

@@ -15,8 +15,10 @@ Singleton {
     property bool blockWrites: false
     property bool bootstrapping: true
     property bool hydratingAdapter: false
+    property bool localWriteInFlight: false
     property string launcherFolderNamesCache: "{}"
     property string launcherLayoutCache: "[]"
+    property string lastAppliedRuntimeConfigText: ""
 
     function parseConfigText(text) {
         if (!text || !text.trim())
@@ -128,7 +130,21 @@ Singleton {
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
+            root.localWriteInFlight = true
             configFileView.writeAdapter()
+        }
+    }
+
+    Timer {
+        id: externalConfigSyncTimer
+        interval: 500
+        repeat: true
+        running: root.ready && !root.bootstrapping
+        onTriggered: {
+            if (root.localWriteInFlight || root.blockWrites || root.hydratingAdapter)
+                return
+
+            externalRuntimeConfigView.reload()
         }
     }
 
@@ -160,6 +176,30 @@ Singleton {
     }
 
     FileView {
+        id: externalRuntimeConfigView
+        path: root.bootstrapping ? "" : root.runtimeFilePath
+        blockWrites: true
+        watchChanges: false
+        onLoaded: {
+            const latestText = text()
+
+            if (!root.ready) {
+                root.lastAppliedRuntimeConfigText = latestText
+                return
+            }
+
+            if (root.localWriteInFlight || root.blockWrites || root.hydratingAdapter)
+                return
+
+            if (latestText !== root.lastAppliedRuntimeConfigText) {
+                root.lastAppliedRuntimeConfigText = latestText
+                root.blockWrites = true
+                fileReloadTimer.restart()
+            }
+        }
+    }
+
+    FileView {
         id: persistedConfigView
         path: root.filePath
         blockWrites: false
@@ -171,8 +211,8 @@ Singleton {
         path: root.bootstrapping ? "" : root.runtimeFilePath
         // watchChanges: false — same fix as Persistent.qml. The self-watch causes
         // a crash in the quickshell engine when the FileView detects its own write
-        // and immediately tries to reload. External edits to config.json won't
-        // auto-reload while quickshell is running, which is an acceptable tradeoff.
+        // and immediately tries to reload. Cross-instance edits are synced by the
+        // externalRuntimeConfigView polling loop above instead.
         watchChanges: false
         blockWrites: root.blockWrites
         onFileChanged: {
@@ -184,15 +224,19 @@ Singleton {
                 fileWriteTimer.restart()
         }
         onLoaded: {
+            root.lastAppliedRuntimeConfigText = text()
             root.hydrateRuntimeOnlyFields()
         }
         onLoadFailed: error => {
+            root.localWriteInFlight = false
             root.blockWrites = false
             if (error == FileViewError.FileNotFound) {
                 fileWriteTimer.restart();
             }
         }
         onSaved: {
+            root.lastAppliedRuntimeConfigText = text()
+            root.localWriteInFlight = false
             persistedConfigView.setText(text())
         }
 

@@ -30,6 +30,7 @@ ApplicationWindow {
         { displayName: Translation.tr("Audio"), icon: "volume_up", component: "modules/settings/AudioControlConfig.qml" },
         { displayName: Translation.tr("Internet"), icon: "language", component: "modules/settings/InternetConfig.qml" },
         { displayName: Translation.tr("Customisation"), icon: "palette", component: "modules/settings/DesktopThemeConfig.qml" },
+        { displayName: Translation.tr("Interface"), icon: "preview", component: "modules/settings/InterfaceConfig.qml" },
         { displayName: Translation.tr("Apps"), icon: "apps", component: "modules/settings/AppsHubConfig.qml" },
         { displayName: Translation.tr("Account"), icon: "person", component: "modules/settings/AccountsConfig.qml" },
         { displayName: Translation.tr("Date, time & language"), icon: "schedule", component: "modules/settings/DateTimeLanguageConfig.qml" },
@@ -52,7 +53,7 @@ ApplicationWindow {
 
     visible: true
     onClosing: Qt.quit()
-    title: Translation.tr("illogical-impulse Settings")
+    title: "illogical-impulse Settings"
 
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()
@@ -154,55 +155,60 @@ ApplicationWindow {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                 }
 
-                NavigationRail {
-                    id: navRail
-                    anchors {
-                        left: parent.left
-                        top: parent.top
-                        bottom: parent.bottom
-                    }
-                    spacing: 10
-                    expanded: root.width > 900
+                StyledFlickable {
+                    id: navRailFlickable
+                    anchors.fill: parent
+                    clip: true
+                    contentWidth: width
+                    contentHeight: navRail.implicitHeight
+                    flickableDirection: Flickable.VerticalFlick
 
-                    NavigationRailExpandButton {
-                        focus: root.visible
-                    }
+                    NavigationRail {
+                        id: navRail
+                        width: navRailFlickable.width
+                        spacing: 10
+                        expanded: root.width > 900
 
-                    FloatingActionButton {
-                        id: fab
-                        iconText: root.configPathCopied ? "check" : "edit"
-                        buttonText: root.configPathCopied ? Translation.tr("Copied") : Translation.tr("Config file")
-                        expanded: navRail.expanded
-                        downAction: () => root.openConfigFile()
-                        altAction: () => root.copyConfigPath()
-
-                        StyledToolTip {
-                            text: Translation.tr("Open config file\nRight-click to copy path")
+                        NavigationRailExpandButton {
+                            focus: root.visible
                         }
-                    }
 
-                    NavigationRailTabArray {
-                        currentIndex: root.currentPage
-                        expanded: navRail.expanded
+                        FloatingActionButton {
+                            id: fab
+                            iconText: root.configPathCopied ? "check" : "edit"
+                            buttonText: root.configPathCopied ? Translation.tr("Copied") : Translation.tr("Config file")
+                            expanded: navRail.expanded
+                            downAction: () => root.openConfigFile()
+                            altAction: () => root.copyConfigPath()
 
-                        Repeater {
-                            model: root.pages
-                            NavigationRailButton {
-                                required property int index
-                                required property var modelData
-
-                                toggled: root.currentPage === index
-                                onPressed: root.currentPage = index
-                                expanded: navRail.expanded
-                                buttonIcon: modelData.icon
-                                buttonText: modelData.displayName
-                                showToggledHighlight: false
+                            StyledToolTip {
+                                text: Translation.tr("Open config file\nRight-click to copy path")
                             }
                         }
-                    }
 
-                    Item {
-                        Layout.fillHeight: true
+                        NavigationRailTabArray {
+                            currentIndex: root.currentPage
+                            expanded: navRail.expanded
+
+                            Repeater {
+                                model: root.pages
+                                NavigationRailButton {
+                                    required property int index
+                                    required property var modelData
+
+                                    toggled: root.currentPage === index
+                                    onPressed: root.currentPage = index
+                                    expanded: navRail.expanded
+                                    buttonIcon: modelData.icon
+                                    buttonText: modelData.displayName
+                                    showToggledHighlight: false
+                                }
+                            }
+                        }
+
+                        Item {
+                            Layout.fillHeight: true
+                        }
                     }
                 }
             }

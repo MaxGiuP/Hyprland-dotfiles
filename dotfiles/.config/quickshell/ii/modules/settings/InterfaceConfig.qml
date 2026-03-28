@@ -5,7 +5,20 @@ import qs.modules.common
 import qs.modules.common.widgets
 
 ContentPage {
+    id: root
     forceWidth: true
+
+    function parseJson(text, fallback) {
+        try {
+            return JSON.parse(text)
+        } catch (error) {
+            return fallback
+        }
+    }
+
+    function normalizedJson(value) {
+        return JSON.stringify(value, null, 2)
+    }
 
     ContentSection {
         icon: "keyboard"
@@ -131,12 +144,65 @@ ContentPage {
                 }
             }
         }
+        ConfigRow {
+            uniform: true
+            ConfigSpinBox {
+                icon: "height"
+                text: Translation.tr("Dock height")
+                value: Config.options.dock.height
+                from: 48
+                to: 160
+                stepSize: 2
+                onValueChanged: Config.options.dock.height = value
+            }
+            ConfigSpinBox {
+                icon: "gesture"
+                text: Translation.tr("Reveal edge height")
+                value: Config.options.dock.hoverRegionHeight
+                from: 1
+                to: 40
+                stepSize: 1
+                onValueChanged: Config.options.dock.hoverRegionHeight = value
+            }
+        }
         ConfigSwitch {
             buttonIcon: "colors"
             text: Translation.tr("Tint app icons")
             checked: Config.options.dock.monochromeIcons
             onCheckedChanged: {
                 Config.options.dock.monochromeIcons = checked;
+            }
+        }
+
+        ContentSubsection {
+            title: Translation.tr("Pinned apps")
+
+            MaterialTextArea {
+                Layout.fillWidth: true
+                placeholderText: Translation.tr("[\"org.kde.dolphin\", \"kitty\"]")
+                text: root.normalizedJson(Config.options.dock.pinnedApps)
+                wrapMode: TextEdit.Wrap
+                onTextChanged: {
+                    const parsed = root.parseJson(text, null)
+                    if (parsed !== null && Array.isArray(parsed))
+                        Config.options.dock.pinnedApps = parsed
+                }
+            }
+        }
+
+        ContentSubsection {
+            title: Translation.tr("Ignored apps")
+
+            MaterialTextArea {
+                Layout.fillWidth: true
+                placeholderText: Translation.tr("[\"^steam_app_.*$\"]")
+                text: root.normalizedJson(Config.options.dock.ignoredAppRegexes)
+                wrapMode: TextEdit.Wrap
+                onTextChanged: {
+                    const parsed = root.parseJson(text, null)
+                    if (parsed !== null && Array.isArray(parsed))
+                        Config.options.dock.ignoredAppRegexes = parsed
+                }
             }
         }
     }

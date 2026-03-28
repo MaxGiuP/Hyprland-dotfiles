@@ -14,7 +14,7 @@ import Quickshell.Hyprland
 
 Scope { // Scope
     id: root
-    property bool pinned: Config.options?.dock.pinnedOnStartup ?? false
+    readonly property bool pinned: Config.options?.dock.pinnedOnStartup ?? false
     readonly property real controlButtonSize: Math.max(35, (Config.options?.dock.height ?? 70) * 0.62)
 
     Variants {
@@ -30,6 +30,9 @@ Scope { // Scope
             property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
             readonly property int activeWorkspaceId: monitor?.activeWorkspace?.id ?? -1
             readonly property bool activeWorkspaceEmpty: activeWorkspaceId === -1 || HyprlandData.hyprlandClientsForWorkspace(activeWorkspaceId).length === 0
+            readonly property real revealRegionHeight: Config.options?.dock.hoverToReveal ? Math.max(1, Config.options.dock.hoverRegionHeight ?? 2) : 0
+            readonly property real hiddenDockOvershoot: Math.max(6, Appearance.sizes.hyprlandGapsOut + 2)
+            readonly property real hiddenDockVisualOffset: dockRoot.reveal ? 0 : (dockRoot.revealRegionHeight > 0 ? dockRoot.revealRegionHeight + dockRoot.hiddenDockOvershoot : 0)
 
             property bool reveal: !launchpadOnThisScreen
                                   && (root.pinned
@@ -76,7 +79,7 @@ Scope { // Scope
                 height: parent.height
                 anchors {
                     top: parent.top
-                    topMargin: dockRoot.reveal ? 0 : Config.options?.dock.hoverToReveal ? (dockRoot.implicitHeight - Config.options.dock.hoverRegionHeight) : (dockRoot.implicitHeight + 1)
+                    topMargin: dockRoot.reveal ? 0 : Config.options?.dock.hoverToReveal ? (dockRoot.implicitHeight - dockRoot.revealRegionHeight) : (dockRoot.implicitHeight + 1)
                     horizontalCenter: parent.horizontalCenter
                 }
                 implicitWidth: dockHoverRegion.implicitWidth + Appearance.sizes.elevationMargin * 2
@@ -95,12 +98,21 @@ Scope { // Scope
                         id: dockBackground
                         anchors {
                             top: parent.top
+                            topMargin: dockRoot.hiddenDockVisualOffset
                             bottom: parent.bottom
+                            bottomMargin: -dockRoot.hiddenDockVisualOffset
                             horizontalCenter: parent.horizontalCenter
                         }
 
                         implicitWidth: dockRow.implicitWidth + 5 * 2
                         height: parent.height - Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut
+
+                        Behavior on anchors.topMargin {
+                            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                        }
+                        Behavior on anchors.bottomMargin {
+                            animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                        }
 
                         StyledRectangularShadow {
                             target: dockVisualBackground
@@ -135,7 +147,7 @@ Scope { // Scope
                                     clickedHeight: baseHeight + 20
                                     buttonRadius: Appearance.rounding.normal
                                     toggled: root.pinned
-                                    onClicked: root.pinned = !root.pinned
+                                    onClicked: Config.options.dock.pinnedOnStartup = !Config.options.dock.pinnedOnStartup
                                 contentItem: MaterialSymbol {
                                     text: "keep"
                                     horizontalAlignment: Text.AlignHCenter

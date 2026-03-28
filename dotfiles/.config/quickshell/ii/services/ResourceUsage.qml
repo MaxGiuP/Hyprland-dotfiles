@@ -116,7 +116,7 @@ Singleton {
     }
 
     Timer {
-        interval: 1
+        interval: Math.max(100, Config.options?.resources?.updateInterval ?? 3000)
         running: true
         repeat: true
         onTriggered: {
@@ -202,8 +202,6 @@ Singleton {
             effUsagePercent  = Math.round(effUsage * 100)
 
             perCorePrev = nextPrev
-
-            interval = Config.options?.resources?.updateInterval ?? 3000
         }
     }
 
