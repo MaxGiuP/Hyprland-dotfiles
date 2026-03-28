@@ -1,0 +1,2303 @@
+/*
+ * Material You GTK/libadwaita dynamic color bridge
+ * Generated from: /home/linmax/.local/state/quickshell/user/generated/colors.json
+ *
+ * Design: full Material You surface-scale depth hierarchy.
+ * surface_container_lowest < background = surface < container_low <
+ * container < container_high < container_highest < surface_bright
+ */
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 1. LIBADWAITA CSS CUSTOM PROPERTIES
+ *    User-stylesheet :root beats libadwaita's author :root, so our Material
+ *    You values win over libadwaita's hard-coded defaults.
+ * ════════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── Surface / window ──────────────────────────────────────────────────── */
+  --window-bg-color:                 #19120c;
+  --window-fg-color:                 #efe0d5;
+  --view-bg-color:                   #19120c;
+  --view-fg-color:                   #efe0d5;
+
+  /* ── Surface containers (elevation layers) ─────────────────────────────── */
+  --headerbar-bg-color:              #312822;
+  --headerbar-fg-color:              #efe0d5;
+  --headerbar-border-color:          #51443a;
+  --headerbar-backdrop-color:        #261e18;
+  --headerbar-shade-color:           #51443a;
+  --headerbar-darker-shade-color:    #221a14;
+
+  --sidebar-bg-color:                #19120c;
+  --sidebar-fg-color:                #efe0d5;
+  --sidebar-backdrop-color:          #19120c;
+  --sidebar-border-color:            alpha(#51443a, 0.3);
+  --secondary-sidebar-bg-color:      #261e18;
+  --secondary-sidebar-fg-color:      #efe0d5;
+  --secondary-sidebar-backdrop-color:#221a14;
+
+  --card-bg-color:                   #261e18;
+  --card-fg-color:                   #efe0d5;
+  --dialog-bg-color:                 #312822;
+  --dialog-fg-color:                 #efe0d5;
+  --popover-bg-color:                #3c332c;
+  --popover-fg-color:                #efe0d5;
+  --thumbnail-bg-color:              #261e18;
+  --thumbnail-fg-color:              #efe0d5;
+
+  /* ── Accent ────────────────────────────────────────────────────────────── */
+  --accent-color:                    #ffb878;
+  --accent-bg-color:                 #ffb878;
+  --accent-fg-color:                 #4b2700;
+
+  /* ── Status ────────────────────────────────────────────────────────────── */
+  --destructive-color:               #ffb4ab;
+  --destructive-bg-color:            #ffb4ab;
+  --destructive-fg-color:            #690005;
+
+  --success-color:                   #c2cb98;
+  --success-bg-color:                #434a23;
+  --success-fg-color:                #dfe8b2;
+
+  --warning-color:                   #e2c0a5;
+  --warning-bg-color:                #5a422d;
+  --warning-fg-color:                #ffdcc1;
+
+  --error-color:                     #ffb4ab;
+  --error-bg-color:                  #93000a;
+  --error-fg-color:                  #ffdad6;
+
+  /* ── Misc libadwaita tokens ─────────────────────────────────────────────── */
+  --border-opacity:                  8%;
+  --dim-label-opacity:               0.55;
+  --scrollbar-outline-color:         transparent;
+
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 2. GTK @define-color TOKENS
+ *    Consumed by GTK3, WhiteSur, and older libadwaita-adjacent code.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Accent */
+@define-color accent_color           #ffb878;
+@define-color accent_bg_color        #ffb878;
+@define-color accent_fg_color        #4b2700;
+
+/* Destructive */
+@define-color destructive_color      #ffb4ab;
+@define-color destructive_bg_color   #ffb4ab;
+@define-color destructive_fg_color   #690005;
+
+/* Success (tertiary = greener tone) */
+@define-color success_color          #c2cb98;
+@define-color success_bg_color       #434a23;
+@define-color success_fg_color       #dfe8b2;
+
+/* Warning (secondary = warm/amber tone) */
+@define-color warning_color          #e2c0a5;
+@define-color warning_bg_color       #5a422d;
+@define-color warning_fg_color       #ffdcc1;
+
+/* Error */
+@define-color error_color            #ffb4ab;
+@define-color error_bg_color         #93000a;
+@define-color error_fg_color         #ffdad6;
+
+/* Window & view */
+@define-color window_bg_color        #19120c;
+@define-color window_fg_color        #efe0d5;
+@define-color view_bg_color          #19120c;
+@define-color view_fg_color          #efe0d5;
+
+/* Headerbar */
+@define-color headerbar_bg_color     #312822;
+@define-color headerbar_fg_color     #efe0d5;
+@define-color headerbar_border_color #51443a;
+@define-color headerbar_backdrop_color #261e18;
+@define-color headerbar_shade_color  #51443a;
+@define-color headerbar_darker_shade_color #221a14;
+
+/* Sidebar */
+@define-color sidebar_bg_color       #221a14;
+@define-color sidebar_fg_color       #efe0d5;
+@define-color sidebar_backdrop_color #19120c;
+@define-color secondary_sidebar_bg_color   #261e18;
+@define-color secondary_sidebar_fg_color   #efe0d5;
+@define-color secondary_sidebar_backdrop_color #221a14;
+
+/* Card / dialog / popover */
+@define-color card_bg_color          #261e18;
+@define-color card_fg_color          #efe0d5;
+@define-color dialog_bg_color        #312822;
+@define-color dialog_fg_color        #efe0d5;
+@define-color popover_bg_color       #3c332c;
+@define-color popover_fg_color       #efe0d5;
+@define-color thumbnail_bg_color     #261e18;
+@define-color thumbnail_fg_color     #efe0d5;
+
+/* GTK3 legacy names */
+@define-color base_color             #19120c;
+@define-color text_color             #efe0d5;
+@define-color bg_color               #19120c;
+@define-color theme_bg_color         #19120c;
+@define-color theme_fg_color         #efe0d5;
+@define-color theme_base_color       #19120c;
+@define-color theme_text_color       #efe0d5;
+@define-color theme_selected_bg_color      #ffb878;
+@define-color theme_selected_fg_color      #4b2700;
+@define-color theme_unfocused_bg_color     #221a14;
+@define-color theme_unfocused_base_color   #19120c;
+@define-color theme_unfocused_fg_color     #efe0d5;
+@define-color theme_unfocused_text_color   #efe0d5;
+@define-color theme_unfocused_selected_bg_color  #5a422d;
+@define-color theme_unfocused_selected_fg_color  #ffdcc1;
+@define-color insensitive_bg_color   #221a14;
+@define-color insensitive_fg_color   #d6c3b6;
+@define-color insensitive_base_color #19120c;
+@define-color borders                #51443a;
+@define-color unfocused_borders      #51443a;
+@define-color link_color             #ffb878;
+@define-color visited_link_color     #e2c0a5;
+@define-color placeholder_text_color #d6c3b6;
+@define-color content_view_bg        #19120c;
+@define-color text_view_bg           #19120c;
+@define-color entry_bg_color         #261e18;
+@define-color tooltip_bg_color       #413730;
+@define-color tooltip_fg_color       #efe0d5;
+
+/* Bare semantic aliases — many GTK widgets and our own rules reference these */
+@define-color on_surface                  #efe0d5;
+@define-color on_surface_variant          #d6c3b6;
+@define-color surface_bright              #413730;
+@define-color shadow_color                #130d07;
+
+/* Full Material You palette — exposed for any custom widget code */
+@define-color primary_color               #ffb878;
+@define-color on_primary_color            #4b2700;
+@define-color primary_container_color     #6b3b03;
+@define-color on_primary_container_color  #ffdcc1;
+@define-color secondary_color             #e2c0a5;
+@define-color on_secondary_color          #412c19;
+@define-color secondary_container_color   #5a422d;
+@define-color on_secondary_container_color #ffdcc1;
+@define-color tertiary_color              #c2cb98;
+@define-color on_tertiary_color           #2c340e;
+@define-color tertiary_container_color    #434a23;
+@define-color on_tertiary_container_color #dfe8b2;
+@define-color error_container_color       #93000a;
+@define-color on_error_container_color    #ffdad6;
+@define-color outline_color              #9e8e82;
+@define-color outline_variant_color      #51443a;
+@define-color surface_variant_color      #51443a;
+@define-color on_surface_variant_color   #d6c3b6;
+@define-color surface_bright_color       #413730;
+@define-color surface_container_lowest   #130d07;
+@define-color surface_container_low      #221a14;
+@define-color surface_container          #261e18;
+@define-color surface_container_high     #312822;
+@define-color surface_container_highest  #3c332c;
+@define-color inverse_surface_color      #efe0d5;
+@define-color inverse_on_surface_color   #372f28;
+@define-color inverse_primary_color      #87521b;
+@define-color surface_tint_color         #ffb878;
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 3. WINDOW & BACKGROUND
+ *    Set the CSS custom properties at the window/root level so every
+ *    var(--window-bg-color) etc. reference inside the window resolves
+ *    to our colors even before the per-widget rules kick in.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+window,
+window.background,
+.background,
+:root {
+  --window-bg-color:    #221a14;
+  --window-fg-color:    #efe0d5;
+  --view-bg-color:      #221a14;
+  --view-fg-color:      #efe0d5;
+  --sidebar-bg-color:   #221a14;
+  --sidebar-fg-color:   #efe0d5;
+  --card-bg-color:      #261e18;
+  --card-fg-color:      #efe0d5;
+  --dialog-bg-color:    #312822;
+  --dialog-fg-color:    #efe0d5;
+  --popover-bg-color:   #3c332c;
+  --popover-fg-color:   #efe0d5;
+  --accent-color:       #ffb878;
+  --accent-bg-color:    #ffb878;
+  --accent-fg-color:    #4b2700;
+}
+
+window,
+window.background,
+.background {
+  background-color: #221a14 !important;
+  background-image: none !important;
+  color: #efe0d5 !important;
+}
+
+/* libadwaita 1.4–1.8 scaffold widgets */
+toolbarview {
+  background-color: #221a14 !important;
+  background-image: none !important;
+}
+
+navigationview > stack,
+navigationsplitview > .content-bin {
+  background-color: #221a14 !important;
+  background-image: none !important;
+}
+navigationsplitview > .sidebar-bin {
+  background-color: #19120c !important;
+  background-image: none !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 4. VIEWS & SCROLLED WINDOWS
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+.view,
+iconview,
+iconview > cell,
+textview,
+textview > text,
+columnview,
+listview,
+treeview,
+treeview.view,
+layout,
+fixed {
+  background-color: #19120c !important;
+  color: #efe0d5 !important;
+}
+
+/* ── Scrolledwindow children — catches ALL content views universally ───────
+ * scrolledwindow > * catches ANY GtkScrollable direct child, including
+ * EelCanvas/NemoIconContainer which implements GtkScrollable and is placed
+ * as a DIRECT child of GtkScrolledWindow (no intermediate GtkViewport).
+ * Without this rule, nemo-canvas-item is invisible to viewport selectors. */
+scrolledwindow > *,
+scrolledwindow > viewport,
+scrolledwindow > viewport > *,
+scrolledwindow > treeview,
+scrolledwindow > iconview,
+scrolledwindow > layout,
+scrolledwindow > fixed,
+scrolledwindow > textview,
+viewport,
+viewport > * {
+  background-color: #19120c !important;
+  background-image: none !important;
+  color: #efe0d5 !important;
+}
+
+/* ── nemo-canvas-item: CSS node name registered by NemoIconContainer ───────
+ * NemoIconContainer calls gtk_widget_class_set_css_name("nemo-canvas-item")
+ * so it matches this selector specifically, even though it inherits GtkLayout.
+ * This is the definitive fix for the white Nemo icon view background. */
+nemo-canvas-item {
+  background-color: #19120c !important;
+  background-image: none !important;
+  color: #efe0d5 !important;
+}
+
+/* Row/cell selection states */
+treeview:selected,
+treeview > row:selected,
+iconview:selected,
+iconview > cell:selected,
+row:selected {
+  background-color: #ffb878 !important;
+  color: #4b2700 !important;
+}
+treeview:selected:focus,
+iconview:selected:focus,
+row:selected:focus-within {
+  background-color: #ffb878 !important;
+  color: #4b2700 !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 5. HEADERBAR, TITLEBAR & ALL LIBADWAITA 1.8 HEADER-CLASS WIDGETS
+ *
+ *    libadwaita 1.8 uses var(--headerbar-bg-color) on these widgets:
+ *      headerbar, tabbar .box, searchbar > revealer > box,
+ *      actionbar > revealer > box, toolbarview > .top-bar.raised,
+ *      toolbarview > .bottom-bar.raised
+ *
+ *    Strategy: set the CSS custom property directly on each element AND
+ *    override background-color with !important so we win regardless of
+ *    whether the @define-color cascade resolves correctly.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Shared custom-property injection — forces var(--headerbar-bg-color) to our
+ * value on every element that uses it, even if :root inheritance is blocked. */
+headerbar,
+.titlebar,
+headerbar.titlebar,
+.titlebar.horizontal,
+tabbar .box,
+tabbar tab:checked,
+searchbar > revealer > box,
+actionbar > revealer > box,
+toolbarview > .top-bar,
+toolbarview > .top-bar.raised,
+toolbarview > .bottom-bar,
+toolbarview > .bottom-bar.raised,
+.toolbar-view .top-bar,
+.toolbar-view .bottom-bar {
+  --headerbar-bg-color:     #312822;
+  --headerbar-fg-color:     #efe0d5;
+  --headerbar-border-color: #51443a;
+  --headerbar-shade-color:  #51443a;
+}
+
+/* Backdrop (unfocused window) variants */
+headerbar:backdrop,
+.titlebar:backdrop,
+headerbar.titlebar:backdrop,
+tabbar .box:backdrop,
+searchbar > revealer > box:backdrop,
+actionbar > revealer > box:backdrop,
+toolbarview > .top-bar:backdrop,
+toolbarview > .bottom-bar:backdrop {
+  --headerbar-bg-color: #261e18;
+}
+
+/* ── Explicit background override — use 'background' shorthand to reset ALL
+ * background sub-properties. 'background: none' from libadwaita APPLICATION
+ * CSS would win over 'background-color: x !important' in certain GTK4 cascade
+ * edge cases, but 'background: x !important' beats it unambiguously.       */
+headerbar,
+.titlebar,
+headerbar.titlebar,
+.titlebar.horizontal,
+adw-header-bar {
+  background: #221a14 !important;
+  background-color: #221a14 !important;
+  background-image: none !important;
+  border-image: none !important;
+  color: #efe0d5 !important;
+  border-bottom: 1px solid alpha(#51443a, 0.5) !important;
+  box-shadow: none !important;
+}
+headerbar:backdrop,
+.titlebar:backdrop,
+adw-header-bar:backdrop {
+  background: #221a14 !important;
+  background-color: #221a14 !important;
+  background-image: none !important;
+  border-image: none !important;
+  color: #d6c3b6 !important;
+  box-shadow: none !important;
+}
+
+/* tabbar — used in GNOME Web, Text Editor, etc. */
+tabbar .box {
+  background-color: #261e18 !important;
+  color: #efe0d5 !important;
+  border-bottom: 1px solid #51443a !important;
+}
+tabbar .box:backdrop {
+  background-color: #261e18 !important;
+}
+tabbar tab {
+  color: #d6c3b6 !important;
+}
+tabbar tab:checked {
+  background-color: #312822 !important;
+  color: #efe0d5 !important;
+}
+tabbar tab:hover {
+  background-color: #413730 !important;
+}
+
+/* searchbar — used in Nautilus, Files, Text Editor etc. */
+searchbar > revealer > box {
+  background-color: #261e18 !important;
+  color: #efe0d5 !important;
+  border-bottom: 1px solid #51443a !important;
+}
+searchbar > revealer > box:backdrop {
+  background-color: #261e18 !important;
+}
+
+/* actionbar — used in Nautilus selection mode, GNOME Photos etc. */
+actionbar > revealer > box {
+  background-color: #261e18 !important;
+  color: #efe0d5 !important;
+  border-top: 1px solid #51443a !important;
+}
+actionbar > revealer > box:backdrop {
+  background-color: #261e18 !important;
+}
+
+/* toolbarview bars — the GNOME 45+ replacement for headerbar.
+ * Use both direct-child (>) and descendant ( ) selectors to catch
+ * Nautilus AdwToolbarView and any intermediate wrappers. */
+toolbarview > .top-bar,
+toolbarview > .top-bar.raised,
+toolbarview .top-bar,
+.top-bar {
+  background: #261e18 !important;
+  color: #efe0d5 !important;
+  border-bottom: 1px solid #51443a !important;
+}
+toolbarview > .top-bar:backdrop,
+toolbarview > .top-bar.raised:backdrop,
+toolbarview .top-bar:backdrop,
+.top-bar:backdrop {
+  background: #261e18 !important;
+  color: #d6c3b6 !important;
+}
+toolbarview > .bottom-bar,
+toolbarview > .bottom-bar.raised,
+toolbarview .bottom-bar,
+.bottom-bar {
+  background-color: #312822 !important;
+  color: #efe0d5 !important;
+  border-top: 1px solid #51443a !important;
+}
+.bottom-bar:backdrop {
+  background-color: #261e18 !important;
+}
+
+/* toolbar (GTK3) */
+toolbar {
+  background-color: #261e18 !important;
+  color: #efe0d5 !important;
+  background-image: none !important;
+  border-bottom: 1px solid #51443a !important;
+}
+
+headerbar .title,
+.titlebar .title {
+  color: @on_surface;
+  font-weight: 600;
+}
+headerbar .subtitle,
+.titlebar .subtitle {
+  color: @on_surface_variant_color;
+  font-size: smaller;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 6. SIDEBAR & NAVIGATION SIDEBAR
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+.sidebar,
+.navigation-sidebar,
+placessidebar,
+placessidebar list {
+  background-color: @sidebar_bg_color;
+  color: @sidebar_fg_color;
+  border-right: 1px solid @borders;
+}
+
+placessidebar > viewport.frame {
+  border: none;
+}
+
+.sidebar row,
+.navigation-sidebar row,
+placessidebar row {
+  border-radius: 6px;
+  margin: 1px 4px;
+  padding: 2px 6px;
+  color: @on_surface;
+}
+
+.sidebar row:hover,
+.navigation-sidebar row:hover,
+placessidebar row:hover {
+  background-color: alpha(@accent_bg_color, 0.08);
+}
+
+.sidebar row:selected,
+.navigation-sidebar row:selected,
+placessidebar row:selected {
+  background-color: alpha(@accent_bg_color, 0.18);
+  color: @accent_bg_color;
+}
+
+.sidebar row:selected:focus,
+.navigation-sidebar row:selected:focus,
+placessidebar row:selected:focus {
+  background-color: @primary_container_color;
+  color: @on_primary_container_color;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 7. BUTTONS
+ *    Tonal Material You button hierarchy:
+ *    flat < regular (tonal) < suggested-action (primary) < destructive
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Base button — tonal surface */
+button {
+  background-color: #312822;
+  color: #efe0d5;
+  border: 1px solid #51443a;
+  border-radius: 6px;
+  padding: 5px 12px;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+button:hover {
+  background-color: #413730;
+  box-shadow: 0 1px 4px alpha(#51443a, 0.18);
+}
+button:active {
+  background-color: #6b3b03;
+  color: #ffdcc1;
+  border-color: transparent;
+  box-shadow: none;
+}
+button:focus:focus-visible {
+  outline: 2px solid #ffb878;
+  outline-offset: 2px;
+}
+button:disabled {
+  opacity: 0.45;
+}
+
+/* Suggested action — primary filled */
+button.suggested-action,
+.suggested-action {
+  background-color: #ffb878;
+  color: #4b2700;
+  border-color: transparent;
+  font-weight: 600;
+}
+button.suggested-action:hover,
+.suggested-action:hover {
+  background-color: mix(#ffb878, white, 0.08);
+  box-shadow: 0 2px 6px alpha(#ffb878, 0.35);
+}
+button.suggested-action:active,
+.suggested-action:active {
+  background-color: mix(#ffb878, #51443a, 0.08);
+  box-shadow: none;
+}
+
+/* Destructive action — error filled */
+button.destructive-action,
+.destructive-action {
+  background-color: #ffb4ab;
+  color: #690005;
+  border-color: transparent;
+  font-weight: 600;
+}
+button.destructive-action:hover {
+  background-color: mix(#ffb4ab, white, 0.08);
+  box-shadow: 0 2px 6px alpha(#ffb4ab, 0.35);
+}
+button.destructive-action:active {
+  background-color: mix(#ffb4ab, #51443a, 0.08);
+  box-shadow: none;
+}
+
+/* Flat / icon-only buttons */
+button.flat,
+button.image-button.flat,
+button.circular {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+button.flat:hover,
+button.image-button.flat:hover,
+button.circular:hover {
+  background-color: alpha(#efe0d5, 0.08);
+  border-color: transparent;
+  box-shadow: none;
+}
+button.flat:active,
+button.image-button.flat:active,
+button.circular:active {
+  background-color: alpha(#efe0d5, 0.14);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Toggle buttons (active/checked state) */
+button:checked,
+button.toggle:checked {
+  background-color: #5a422d;
+  color: #ffdcc1;
+  border-color: transparent;
+}
+button:checked:hover,
+button.toggle:checked:hover {
+  background-color: mix(#5a422d, white, 0.08);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 8. CHECKBOXES & RADIO BUTTONS
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+checkbutton,
+radiobutton {
+  color: @on_surface;
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+checkbutton:hover,
+radiobutton:hover {
+  background-color: alpha(@window_fg_color, 0.06);
+}
+
+check,
+radio {
+  background-color: transparent;
+  border: 2px solid @outline_color;
+  border-radius: 3px;
+  min-width: 18px;
+  min-height: 18px;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+radio { border-radius: 9px; }
+
+check:checked,
+check:indeterminate {
+  background-color: @accent_bg_color;
+  border-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+radio:checked {
+  background-color: @accent_bg_color;
+  border-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+check:disabled,
+radio:disabled {
+  opacity: 0.45;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 9. SWITCH / TOGGLE
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+switch {
+  background-color: @outline_color;
+  color: @surface;
+  border-radius: 14px;
+  transition: background-color 200ms ease;
+  min-width: 52px;
+  min-height: 28px;
+}
+switch:hover {
+  background-color: mix(white, @outline_color, 0.1);
+}
+switch:checked {
+  background-color: @accent_bg_color;
+}
+switch:checked:hover {
+  background-color: mix(white, @accent_bg_color, 0.1);
+}
+switch:disabled {
+  opacity: 0.45;
+}
+
+switch slider {
+  background-color: @surface;
+  border-radius: 12px;
+  margin: 3px;
+  min-width: 22px;
+  min-height: 22px;
+  box-shadow: 0 1px 4px alpha(#51443a, 0.3);
+  transition: min-width 200ms ease, min-height 200ms ease,
+              background-color 200ms ease;
+}
+switch:checked slider {
+  background-color: @accent_fg_color;
+  min-width: 26px;
+  min-height: 26px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 10. ENTRY / TEXT INPUT
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+entry,
+.entry,
+scrolledwindow > entry,
+viewport > entry {
+  background-color: #221a14 !important;
+  color: #efe0d5;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 6px 10px;
+  caret-color: #ffb878;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+entry:focus-within,
+.entry:focus-within,
+scrolledwindow > entry:focus-within,
+viewport > entry:focus-within {
+  border-color: #ffb878;
+  box-shadow: 0 0 0 2px alpha(#ffb878, 0.22);
+  background-color: #221a14 !important;
+}
+entry:disabled,
+.entry:disabled {
+  opacity: 0.45;
+}
+
+entry > image { color: #d6c3b6; }
+entry > image:hover { color: #efe0d5; }
+
+/* Placeholder */
+entry > text > placeholder {
+  color: #d6c3b6;
+  font-style: italic;
+  opacity: 0.6;
+}
+
+/* Search entry */
+searchentry {
+  background-color: #261e18;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+}
+searchentry:focus-within {
+  border-color: #ffb878;
+  box-shadow: 0 0 0 2px alpha(#ffb878, 0.22);
+  background-color: #261e18;
+}
+searchentry > text,
+searchentry text {
+  background-color: transparent;
+  color: #efe0d5;
+}
+
+/* Text view */
+textview,
+textview > text {
+  background-color: #19120c;
+  color: #efe0d5;
+}
+textview > text > selection,
+entry > text > selection,
+spinbutton > text > selection,
+label selection,
+searchentry > text > selection {
+  background-color: #ffb878;
+  color: #1c1b1f;
+}
+
+/* SpinButton */
+spinbutton {
+  background-color: @surface_container_high;
+  border: 1px solid @outline_variant_color;
+  border-radius: 6px;
+}
+spinbutton:focus-within {
+  border-color: @accent_bg_color;
+  box-shadow: 0 0 0 2px alpha(@accent_bg_color, 0.22);
+}
+spinbutton > text {
+  background-color: transparent;
+  color: @on_surface;
+}
+spinbutton > button {
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+spinbutton > button:hover {
+  background-color: alpha(@window_fg_color, 0.08);
+}
+
+/* Linked widgets (button groups) */
+.linked > entry,
+.linked > entry:focus-within {
+  border-radius: 0;
+}
+.linked > entry:first-child  { border-radius: 6px 0 0 6px; }
+.linked > entry:last-child   { border-radius: 0 6px 6px 0; }
+.linked > entry:only-child   { border-radius: 6px; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 11. COMBOBOX / DROPDOWN
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+combobox,
+dropdown {
+  background-color: @surface_container_high;
+  color: @on_surface;
+  border: 1px solid @outline_variant_color;
+  border-radius: 6px;
+}
+combobox:focus-within,
+dropdown:focus-within {
+  border-color: @accent_bg_color;
+  box-shadow: 0 0 0 2px alpha(@accent_bg_color, 0.22);
+}
+combobox > .linked > entry,
+combobox > .linked > button {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  color: @on_surface;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 12. SCROLLBAR
+ *     All rules use !important — WhiteSur GTK3 theme will otherwise win.
+ *     GTK3 scrollbar node tree: scrollbar > contents > trough > slider
+ *     GTK4 scrollbar node tree: scrollbar > trough > slider
+ *     Both are covered via descendant selectors.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Track background — whole scrollbar widget */
+scrollbar,
+scrollbar.vertical,
+scrollbar.horizontal {
+  background-color: #221a14 !important;
+  border: none !important;
+}
+
+/* GTK3 intermediate 'contents' node + trough */
+scrollbar > contents,
+scrollbar trough,
+scrollbar > trough,
+scrollbar > contents > trough {
+  background-color: #221a14 !important;
+  border: none !important;
+  border-radius: 100px !important;
+}
+
+/* Slider (thumb) */
+scrollbar slider,
+scrollbar trough > slider,
+scrollbar > trough > slider,
+scrollbar > contents > trough > slider {
+  background-color: #d6c3b6 !important;
+  border-radius: 100px !important;
+  min-width: 6px !important;
+  min-height: 6px !important;
+  margin: 3px !important;
+  transition: background-color 150ms ease, min-width 150ms ease,
+              min-height 150ms ease;
+}
+scrollbar slider:hover,
+scrollbar trough > slider:hover,
+scrollbar > contents > trough > slider:hover {
+  background-color: #efe0d5 !important;
+  min-width: 8px !important;
+  min-height: 8px !important;
+  margin: 2px !important;
+}
+scrollbar slider:active,
+scrollbar trough > slider:active,
+scrollbar > contents > trough > slider:active {
+  background-color: #ffb878 !important;
+  min-width: 8px !important;
+  min-height: 8px !important;
+  margin: 2px !important;
+}
+
+/* Arrow buttons (GTK3 scrollbars with arrows) */
+scrollbar button,
+scrollbar > button {
+  background-color: #261e18 !important;
+  color: #efe0d5 !important;
+  border: none !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
+}
+scrollbar button:hover,
+scrollbar > button:hover {
+  background-color: #312822 !important;
+}
+
+/* Overlay scrollbars (GTK4 default) */
+scrollbar.overlay-indicator {
+  background-color: transparent !important;
+}
+scrollbar.overlay-indicator trough,
+scrollbar.overlay-indicator > trough {
+  background-color: transparent !important;
+}
+scrollbar.overlay-indicator trough > slider,
+scrollbar.overlay-indicator > trough > slider {
+  background-color: #d6c3b6 !important;
+  box-shadow: 0 0 0 1px alpha(#51443a, 0.2) !important;
+  min-width: 6px !important;
+  min-height: 6px !important;
+}
+scrollbar.overlay-indicator:not(.hovering):not(.dragging) {
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+scrollbar.overlay-indicator.hovering,
+scrollbar.overlay-indicator.dragging {
+  opacity: 1;
+}
+
+/* Scrollbar sizing */
+scrollbar.vertical   slider { min-width: 6px !important; }
+scrollbar.horizontal slider { min-height: 6px !important; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 13. PROGRESS BAR
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+progressbar {
+  color: @on_surface;
+}
+progressbar > trough {
+  background-color: @surface_container_high;
+  border-radius: 100px;
+  min-height: 6px;
+}
+progressbar > trough > progress {
+  background-color: @accent_bg_color;
+  border-radius: 100px;
+  min-height: 6px;
+}
+progressbar > trough > progress:indeterminate {
+  background-image: linear-gradient(
+    to right,
+    transparent 0%,
+    @accent_bg_color 30%,
+    @accent_bg_color 70%,
+    transparent 100%
+  );
+}
+progressbar.osd > trough {
+  background-color: alpha(@surface_container_highest, 0.6);
+}
+progressbar.osd > trough > progress {
+  background-color: @accent_bg_color;
+}
+
+/* Level bar (e.g. storage usage) */
+levelbar > trough {
+  background-color: @surface_container_high;
+  border-radius: 100px;
+}
+levelbar > trough > block.filled {
+  background-color: @accent_bg_color;
+  border-radius: 100px;
+}
+levelbar > trough > block.empty {
+  background-color: transparent;
+}
+levelbar > trough > block.filled.high  { background-color: @success_color; }
+levelbar > trough > block.filled.low   { background-color: @error_color; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 14. SCALE / SLIDER
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+scale trough {
+  background-color: @surface_container_high;
+  border-radius: 100px;
+  min-height: 4px;
+  min-width: 4px;
+}
+scale trough > fill,
+scale trough > highlight {
+  background-color: @accent_bg_color;
+  border-radius: 100px;
+}
+scale trough > slider {
+  background-color: @accent_bg_color;
+  border-radius: 100px;
+  min-width: 18px;
+  min-height: 18px;
+  box-shadow: 0 1px 4px alpha(#51443a, 0.28);
+  transition: min-width 120ms ease, min-height 120ms ease;
+}
+scale trough > slider:hover {
+  background-color: mix(white, @accent_bg_color, 0.1);
+  min-width: 22px;
+  min-height: 22px;
+  box-shadow: 0 2px 6px alpha(@accent_bg_color, 0.4);
+}
+scale trough > slider:active {
+  min-width: 20px;
+  min-height: 20px;
+}
+scale:disabled trough {
+  opacity: 0.45;
+}
+scale marks > mark > indicator {
+  background-color: @outline_variant_color;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 15. NOTEBOOK / TABS
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+notebook > header {
+  background-color: @headerbar_bg_color;
+  border-bottom: 1px solid @outline_variant_color;
+  padding: 0 4px;
+}
+notebook > header.top    { border-bottom: 1px solid @outline_variant_color; }
+notebook > header.bottom { border-top:    1px solid @outline_variant_color; }
+notebook > header.left   { border-right:  1px solid @outline_variant_color; }
+notebook > header.right  { border-left:   1px solid @outline_variant_color; }
+
+notebook > header > tabs > tab {
+  background-color: transparent;
+  color: @on_surface_variant_color;
+  padding: 8px 16px;
+  border-radius: 0;
+  border: none;
+  border-bottom: 3px solid transparent;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+notebook > header > tabs > tab:hover {
+  color: @on_surface;
+  background-color: alpha(@window_fg_color, 0.06);
+}
+notebook > header > tabs > tab:checked {
+  color: @accent_bg_color;
+  border-bottom-color: @accent_bg_color;
+  background-color: transparent;
+  font-weight: 600;
+}
+notebook > header > tabs > tab button.flat {
+  padding: 0;
+  min-width: 20px;
+  min-height: 20px;
+  border-radius: 100px;
+  color: @on_surface_variant_color;
+}
+notebook > header > tabs > tab button.flat:hover {
+  background-color: alpha(@window_fg_color, 0.1);
+  color: @on_surface;
+}
+notebook > stack {
+  background-color: @view_bg_color;
+  border: 1px solid @outline_variant_color;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 16. TREEVIEW / LISTVIEW / COLUMNVIEW
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+treeview.view,
+columnview,
+listview {
+  background-color: @view_bg_color;
+  color: @on_surface;
+}
+
+/* Column headers — all treeview header button variants (GTK3 + GTK4) */
+treeview header,
+treeview > header,
+treeview header button,
+treeview > header > button,
+treeview.view > header > button,
+columnview > header,
+columnview > header > row > button,
+columnview > header button {
+  background-color: #261e18 !important;
+  background-image: none !important;
+  color: #d6c3b6 !important;
+  border-bottom: 1px solid #51443a !important;
+  border-right: 1px solid #51443a !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-weight: 600;
+  font-size: smaller;
+  padding: 6px 10px;
+}
+/* Nautilus: column sort header matches body background for flat consistency.
+ * padding-left 6px aligns the label with list row content (rows have margin: 1px 4px). */
+window.nautilus-window columnview > header,
+window.nautilus-window columnview > header > row,
+window.nautilus-window columnview > header > row > button,
+window.nautilus-window columnview > header button {
+  background-color: #19120c !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  border-right: 1px solid alpha(#51443a, 0.55) !important;
+  border-left: none !important;
+  box-shadow: none !important;
+  padding: 5px 6px !important;
+}
+window.nautilus-window columnview > separator,
+window.nautilus-window columnview separator {
+  background-color: transparent !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  opacity: 0 !important;
+}
+window.nautilus-window columnview > listview {
+  border-top: none !important;
+}
+treeview header button:hover,
+treeview > header > button:hover,
+treeview.view > header > button:hover,
+columnview > header > row > button:hover,
+columnview > header button:hover {
+  background-color: #413730 !important;
+  color: #efe0d5 !important;
+}
+treeview header button:active,
+treeview > header > button:active,
+treeview.view > header > button:active,
+columnview > header > row > button:active,
+columnview > header button:active {
+  background-color: #312822 !important;
+  color: #ffb878 !important;
+}
+
+/* path-bar / pathbar — covers both GTK3 class (.path-bar) and GTK4 node (pathbar).
+ * WhiteSur sets pathbar > button:checked { background-color: #b8b8b8 } (near-white)
+ * which is the currently-active directory crumb — override it to our dark palette. */
+path-bar,
+path-bar > button,
+path-bar > button.text-button,
+path-bar > button.image-button,
+pathbar,
+pathbar > button,
+pathbar > button.text-button,
+pathbar > button.image-button {
+  background-color: #261e18 !important;
+  background-image: none !important;
+  border-image: none !important;
+  color: #efe0d5 !important;
+  box-shadow: none !important;
+}
+path-bar > button:hover,
+pathbar > button:hover {
+  background-color: #312822 !important;
+}
+path-bar > button:checked,
+path-bar > button:active,
+pathbar > button:checked,
+pathbar > button:active {
+  background-color: #ffb878 !important;
+  background-image: none !important;
+  border-image: none !important;
+  color: #4b2700 !important;
+  box-shadow: none !important;
+}
+
+/* Row states */
+treeview.view:hover,
+listview > row:hover,
+columnview > listview > row:hover {
+  background-color: alpha(@window_fg_color, 0.05);
+}
+treeview.view:selected,
+listview > row:selected,
+columnview > listview > row:selected {
+  background-color: alpha(@accent_bg_color, 0.16);
+  color: @on_surface;
+}
+treeview.view:selected:focus,
+listview > row:selected:focus,
+columnview > listview > row:selected:focus {
+  background-color: @accent_bg_color;
+  color: #1c1b1f;
+}
+
+/* Alternating row colors (subtle) */
+treeview.view:nth-child(even) {
+  background-color: alpha(@window_fg_color, 0.025);
+}
+
+/* Expanders */
+treeview.view arrow {
+  color: @on_surface_variant_color;
+}
+treeview.view arrow:hover {
+  color: @on_surface;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 17. SELECTION
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+:selected {
+  background-color: @accent_bg_color;
+  color: #1c1b1f;
+}
+/* Unfocused selection — tonal, less dominant */
+:selected:not(:focus-within) {
+  background-color: @secondary_container_color;
+  color: @on_secondary_container_color;
+}
+
+row:selected {
+  background-color: alpha(@accent_bg_color, 0.16);
+  color: @on_surface;
+}
+row:selected:focus-within {
+  background-color: @accent_bg_color;
+  color: #1c1b1f;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 18. POPOVERS & CONTEXT MENUS
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Popover / dropdown menu rendering.
+ *
+ * Box-shadow on popover > contents bleeds into the popup window's empty space,
+ * which requires alpha channel transparency to avoid black bleed — unreliable.
+ * Fix: give window.popup.csd the menu background + border so it fills completely.
+ * No empty space → no black area, regardless of compositor alpha support.
+ */
+popover {
+  background: none;
+}
+popover > arrow {
+  /* arrow is invisible — the window background fills everything cleanly */
+  background: transparent;
+  border: none;
+  -gtk-icon-shadow: none;
+}
+popover > contents,
+popover.menu > contents {
+  /* window.popup.csd provides background/border/radius — keep contents flat */
+  background: transparent;
+  color: @on_surface;
+  border: none;
+  border-radius: 0;
+  padding: 4px;
+  box-shadow: none;
+}
+
+/* GTK3 menus */
+menu,
+.menu,
+.context-menu {
+  background-color: @popover_bg_color;
+  color: @on_surface;
+  border: 1px solid @outline_variant_color;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 10px 28px alpha(#51443a, 0.12),
+              0 2px   6px alpha(#ffb878, 0.04);
+}
+
+menuitem {
+  color: @on_surface;
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-height: 30px;
+  transition: background-color 100ms ease;
+}
+menuitem:hover,
+modelbutton:hover {
+  background-color: alpha(@accent_bg_color, 0.30);
+  color: #1c1b1f;
+}
+menuitem:active,
+modelbutton:active {
+  background-color: alpha(@accent_bg_color, 0.45);
+  color: #1c1b1f;
+}
+menuitem:disabled {
+  color: alpha(@on_surface, 0.45);
+}
+menuitem accelerator {
+  color: @on_surface_variant_color;
+}
+menuitem check,
+menuitem radio {
+  background-color: transparent;
+  border: none;
+  min-width: 14px;
+  min-height: 14px;
+}
+menuitem check:checked,
+menuitem radio:checked {
+  color: @accent_bg_color;
+}
+
+menu > arrow,
+.menu > arrow {
+  background-color: @popover_bg_color;
+  color: @on_surface_variant_color;
+  min-height: 16px;
+}
+
+/* Separator inside menus */
+menu > separator,
+.menu > separator,
+menu separator,
+.menu separator {
+  background-color: @outline_variant_color;
+  min-height: 1px;
+  margin: 4px 8px;
+}
+
+/* Menu bar */
+menubar {
+  background-color: @headerbar_bg_color;
+  color: @on_surface;
+  padding: 0 4px;
+}
+menubar > item {
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: @on_surface;
+}
+menubar > item:hover {
+  background-color: alpha(@window_fg_color, 0.08);
+}
+menubar > item:active,
+menubar > item:checked {
+  background-color: alpha(@accent_bg_color, 0.16);
+  color: @accent_bg_color;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 19. TOOLTIP
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+tooltip,
+tooltip.background {
+  background-color: @surface_bright_color;
+  color: @on_surface;
+  border: 1px solid @outline_variant_color;
+  border-radius: 6px;
+  padding: 4px 10px;
+  box-shadow: 0 2px 8px alpha(#51443a, 0.3);
+}
+tooltip > label {
+  color: @on_surface;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 20. CARDS
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+.card {
+  background-color: @card_bg_color;
+  color: @card_fg_color;
+  border: 1px solid @outline_variant_color;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px alpha(#51443a, 0.2);
+}
+.card:hover {
+  box-shadow: 0 2px 8px alpha(#51443a, 0.28);
+  border-color: @outline_color;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 21. DIALOGS
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+dialog {
+  background-color: @dialog_bg_color;
+  color: @dialog_fg_color;
+  border-radius: 14px;
+}
+dialog > box.dialog-vbox {
+  background-color: @dialog_bg_color;
+}
+messagedialog {
+  background-color: @dialog_bg_color;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 22. FRAME & SEPARATOR
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+frame > border,
+.frame {
+  border: 1px solid @outline_variant_color;
+  border-radius: 6px;
+}
+separator {
+  background-color: transparent;
+  min-width: 1px;
+  min-height: 1px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 23. INFO / STATUS BAR
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+infobar {
+  border-bottom: 1px solid @outline_variant_color;
+}
+infobar.info > revealer > box {
+  background-color: @surface_container_high;
+  color: @on_surface;
+}
+infobar.question > revealer > box {
+  background-color: @primary_container_color;
+  color: @on_primary_container_color;
+}
+infobar.warning > revealer > box {
+  background-color: @warning_bg_color;
+  color: @warning_fg_color;
+}
+infobar.error > revealer > box {
+  background-color: @error_container_color;
+  color: @on_error_container_color;
+}
+
+statusbar {
+  background-color: @surface_container_low;
+  color: @on_surface_variant_color;
+  border-top: 1px solid @outline_variant_color;
+  padding: 2px 8px;
+  font-size: smaller;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 24. LINK
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+link,
+label.link {
+  color: @accent_bg_color;
+  text-decoration-color: alpha(@accent_bg_color, 0.4);
+}
+link:hover,
+label.link:hover {
+  color: mix(white, @accent_bg_color, 0.15);
+}
+link:visited,
+label.link:visited {
+  color: @visited_link_color;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 25. BADGE / PILL / TAG (GNOME 43+)
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+.badge,
+.tag {
+  background-color: @secondary_container_color;
+  color: @on_secondary_container_color;
+  border-radius: 100px;
+  padding: 2px 8px;
+  font-size: smaller;
+  font-weight: 600;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 26. EXPANDER
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+expander > title {
+  color: @on_surface;
+  padding: 4px 0;
+}
+expander > title:hover {
+  background-color: alpha(@window_fg_color, 0.06);
+}
+expander > title > arrow {
+  color: @on_surface_variant_color;
+  transition: transform 200ms ease;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 27. CALENDAR
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+calendar {
+  background-color: @view_bg_color;
+  color: @on_surface;
+  border: 1px solid @outline_variant_color;
+  border-radius: 10px;
+  padding: 8px;
+}
+calendar > header {
+  background-color: @headerbar_bg_color;
+  color: @on_surface;
+  border-radius: 10px 10px 0 0;
+  padding: 6px 8px;
+}
+calendar:selected,
+calendar .highlight {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+  border-radius: 100px;
+  font-weight: 600;
+}
+calendar .today {
+  color: @accent_bg_color;
+  font-weight: 700;
+}
+calendar .other-month {
+  color: alpha(@on_surface, 0.35);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 28. OSD (on-screen display — volume/brightness overlays)
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+.osd {
+  background-color: alpha(@surface_bright_color, 0.92);
+  color: @on_surface;
+  border-radius: 14px;
+  border: 1px solid @outline_variant_color;
+  box-shadow: 0 4px 16px alpha(#51443a, 0.4);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 29. CSD WINDOW DECORATION
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+window.csd {
+  outline-color: transparent;
+  box-shadow: 0 8px 40px alpha(#51443a, 0.5),
+              0 2px  6px alpha(#51443a, 0.3);
+}
+window.csd:backdrop {
+  box-shadow: 0 4px 20px alpha(#51443a, 0.3),
+              0 1px  3px alpha(#51443a, 0.2);
+}
+window.popup.csd {
+  /* Fill the entire popup window with the menu background so there is no
+   * empty space that could appear black. Border + radius here instead of
+   * on popover > contents, removing any dependency on alpha transparency. */
+  background-color: #3c332c;
+  background-image: none;
+  border: 1.5px solid alpha(#51443a, 0.65);
+  border-radius: 10px;
+  box-shadow: none;
+  outline: none;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 30. ADDITIONAL SCAFFOLD SAFETY NETS
+ *     Catch any remaining transparent-by-default containers.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* navigationview inner stack */
+navigationview > stack {
+  background-color: #19120c !important;
+  background-image: none !important;
+}
+/* scrolled window viewport */
+scrolledwindow > viewport {
+  background-color: #19120c !important;
+  background-image: none !important;
+}
+/* adw-bin and generic overlay containers */
+adw-bin,
+.overlay > widget,
+overlay > widget {
+  background-color: transparent;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 31. APP-SPECIFIC OVERRIDES
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Nautilus */
+/* WhiteSur sets the Nautilus headerbar to transparent + a gradient background-image.
+ * Override with the exact same #19120c used for the body — zero colour difference. */
+window.nautilus-window headerbar,
+window.nautilus-window headerbar:backdrop,
+.nautilus-window headerbar,
+.nautilus-window headerbar:backdrop,
+.nautilus-window.background.csd headerbar,
+.nautilus-window.background.csd headerbar:backdrop {
+  background-color: #19120c !important;
+  background-image: none !important;
+  border-image: none !important;
+  border-bottom: 1px solid alpha(#51443a, 0.5) !important;
+}
+window.nautilus-window toolbarview > .top-bar,
+window.nautilus-window toolbarview > .top-bar.raised,
+window.nautilus-window toolbarview .top-bar,
+window.nautilus-window .top-bar {
+  background: #19120c !important;
+  background-color: #19120c !important;
+  background-image: none !important;
+  border-image: none !important;
+  color: #efe0d5 !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+window.nautilus-window toolbarview,
+window.nautilus-window navigationsplitview,
+window.nautilus-window navigationsplitview > .content-bin {
+  background-color: #19120c !important;
+  background-image: none !important;
+}
+window.nautilus-window scrolledwindow,
+window.nautilus-window scrolledwindow > viewport {
+  background-color: #19120c !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+window.nautilus-window listview,
+window.nautilus-window gridview,
+window.nautilus-window .view,
+window.nautilus-window .content-view {
+  background-color: #19120c !important;
+  color: #efe0d5 !important;
+}
+window.nautilus-window .navigation-sidebar,
+window.nautilus-window navigationsplitview > .sidebar-bin {
+  background-color: #19120c !important;
+  color: #efe0d5 !important;
+  border-right: 2px solid alpha(#51443a, 0.28) !important;
+  box-shadow: 3px 0 14px -4px alpha(#51443a, 0.35) !important;
+}
+window.nautilus-window row:selected {
+  background-color: #ffb878 !important;
+  color: #1c1b1f !important;
+}
+window.nautilus-window row:selected:not(:focus-within) {
+  background-color: alpha(@accent_bg_color, 0.16) !important;
+  color: @on_surface !important;
+}
+/* Subtle row dividers in Nautilus list view */
+window.nautilus-window listview > row {
+  border-bottom: 1px solid alpha(#51443a, 0.08) !important;
+}
+
+/* Floating bar (Nautilus status / selection bar) */
+.floating-bar {
+  background-color: @surface_bright_color;
+  border: 1px solid @outline_variant_color;
+  border-radius: 100px;
+  box-shadow: 0 2px 10px alpha(#51443a, 0.3);
+}
+
+/* GNOME Software / generic libadwaita */
+.application-window toolbarview,
+.application-window navigationview > stack {
+  background-color: @window_bg_color !important;
+  background-image: none !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 32. MISCELLANEOUS POLISH
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Reduce libadwaita's white-highlight border on headerbars */
+:root { --border-opacity: 6%; }
+
+/* Spinner */
+spinner { color: @accent_bg_color; }
+
+/* Image widget */
+image { color: @on_surface; }
+
+/* Paned separator — 2px with top/bottom fade */
+paned > separator {
+  background-color: transparent;
+  min-width: 2px;
+  min-height: 2px;
+}
+paned.horizontal > separator {
+  background-image: linear-gradient(to bottom,
+    transparent 0%,
+    alpha(#51443a, 0.55) 20%,
+    alpha(#51443a, 0.55) 80%,
+    transparent 100%);
+}
+paned.vertical > separator {
+  background-image: linear-gradient(to right,
+    transparent 0%,
+    alpha(#51443a, 0.55) 20%,
+    alpha(#51443a, 0.55) 80%,
+    transparent 100%);
+}
+
+/* Group box label */
+.groupbox label {
+  color: @on_surface_variant_color;
+  font-weight: 600;
+  font-size: smaller;
+}
+
+/* Color swatch (e.g. color picker) */
+colorchooser swatch,
+.color-button {
+  border: 2px solid @outline_variant_color;
+  border-radius: 4px;
+}
+colorchooser swatch:selected {
+  border-color: @accent_bg_color;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 33. UNIVERSAL GTK3/GTK4 COMPREHENSIVE OVERRIDES
+ *     General selectors that work for ANY app without being app-specific.
+ *     Covers file managers, text editors, browsers, and all GTK apps.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Window containers ─────────────────────────────────────────────────── */
+window,
+window.background,
+.background,
+dialog,
+messagedialog {
+  background-color: #19120c !important;
+  color: #efe0d5 !important;
+}
+
+/* ── All paned/box containers — transparent so parent bg shows through ─── */
+paned,
+box {
+  background-color: transparent;
+}
+
+/* ── Path/location bars (filechooser, file managers) ────────────────────── */
+.path-bar,
+.path-bar button,
+.location-bar,
+.location-entry,
+.breadcrumb {
+  background-color: #261e18 !important;
+  color: #efe0d5 !important;
+}
+
+/* ── Sidebars (universal — matches any sidebar regardless of app) ────────── */
+.sidebar,
+.navigation-sidebar,
+placessidebar,
+placessidebar list,
+placessidebar > viewport,
+.sidebar-pane,
+.sidebar-panel,
+.sidebar > viewport,
+.sidebar > scrolledwindow > viewport,
+navigationsplitview > .sidebar-bin {
+  background-color: #19120c !important;
+  color: #efe0d5 !important;
+}
+
+/* ── Universal content views — works for any GTK3 list/icon widget ───────
+ * These are listed from most specific to most general to avoid breaking
+ * widgets that need different colors. */
+treeview,
+treeview.view,
+iconview,
+iconview > cell,
+columnview,
+listview,
+layout,
+fixed {
+  background-color: #19120c !important;
+  color: #efe0d5 !important;
+  background-image: none !important;
+}
+
+/* ── Content area selection states ──────────────────────────────────────── */
+treeview:selected,
+treeview > row:selected,
+iconview:selected,
+iconview > cell:selected,
+layout:selected,
+listview > row:selected {
+  background-color: #ffb878 !important;
+  color: #4b2700 !important;
+}
+
+/* ── Nemo-specific CSS nodes (registered via gtk_widget_class_set_css_name) ─
+ * nemo-places-sidebar ≠ placessidebar — different CSS node names. */
+nemo-places-sidebar,
+nemo-places-sidebar list,
+nemo-places-sidebar > scrolledwindow,
+nemo-places-sidebar > scrolledwindow > *,
+places-treeview {
+  background-color: #221a14 !important;
+  color: #efe0d5 !important;
+  background-image: none !important;
+}
+
+/* ── Toolbars (universal, any GTK3/GTK4 toolbar) ────────────────────────── */
+toolbar,
+toolbar.primary-toolbar,
+.toolbar,
+GtkToolbar {
+  background-color: #312822 !important;
+  color: #efe0d5 !important;
+  background-image: none !important;
+  border-image: none !important;
+  border-bottom: 1px solid #51443a !important;
+  box-shadow: none !important;
+}
+/* Toolbar children — buttons, entries, separators inside toolbar */
+toolbar button,
+toolbar > toolbutton,
+toolbar > button,
+.toolbar button {
+  background-color: transparent !important;
+  color: #efe0d5 !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+toolbar button:hover,
+.toolbar button:hover {
+  background-color: alpha(white, 0.08) !important;
+}
+
+/* ── Menubars (universal) ────────────────────────────────────────────────── */
+menubar {
+  background-color: #312822 !important;
+  color: #efe0d5 !important;
+  background-image: none !important;
+}
+
+/* ── Status bars (universal) ─────────────────────────────────────────────── */
+statusbar,
+.statusbar {
+  background-color: #221a14 !important;
+  color: #d6c3b6 !important;
+  border-top: 1px solid #51443a !important;
+}
+
+/* ── Labels (ensure proper color inheritance) ───────────────────────────── */
+label {
+  color: #efe0d5;
+}
+
+/* ── Text in any text widget ─────────────────────────────────────────────── */
+text,
+richtext {
+  background-color: #19120c !important;
+  color: #efe0d5 !important;
+}
+
+/* ── .content-pane: libadwaita's content region in AdwNavigationSplitView ───
+ * WhiteSur sets .content-pane toolbarview { background: transparent } at THEME
+ * level so the toolbarview is transparent and the content-pane bg shows
+ * through. We must color .content-pane itself so headerbars inside it don't
+ * fall through to the Adwaita grey that libadwaita bakes in. */
+.content-pane {
+  background-color: #19120c !important;
+  color: #efe0d5 !important;
+}
+.content-pane toolbarview,
+.content-pane toolbarview.view {
+  background-color: #19120c !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * 34. @media (prefers-color-scheme: dark) — MATCH LIBADWAITA'S INJECTION LAYER
+ *
+ *     libadwaita 1.8 injects its dark @define-color tokens inside a
+ *     @media (prefers-color-scheme: dark) block at APPLICATION priority (600).
+ *     Our global @define-color declarations (USER, 800) should win by cascade
+ *     priority, but we also inject inside the same media block so the
+ *     specificity context is identical and there is zero ambiguity.
+ *
+ *     Additionally, we override the CSS custom properties inside this block
+ *     so that var(--headerbar-bg-color) etc. resolve to OUR colors for every
+ *     libadwaita app regardless of which method the app uses to read them.
+ * ════════════════════════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  /* Named color re-declarations in the dark-mode context */
+  @define-color window_bg_color        #19120c;
+  @define-color window_fg_color        #efe0d5;
+  @define-color view_bg_color          #19120c;
+  @define-color view_fg_color          #efe0d5;
+  @define-color headerbar_bg_color     #312822;
+  @define-color headerbar_fg_color     #efe0d5;
+  @define-color headerbar_border_color #51443a;
+  @define-color headerbar_backdrop_color #261e18;
+  @define-color headerbar_shade_color  #51443a;
+  @define-color headerbar_darker_shade_color #221a14;
+  @define-color sidebar_bg_color       #221a14;
+  @define-color sidebar_fg_color       #efe0d5;
+  @define-color sidebar_backdrop_color #19120c;
+  @define-color card_bg_color          #261e18;
+  @define-color card_fg_color          #efe0d5;
+  @define-color dialog_bg_color        #312822;
+  @define-color dialog_fg_color        #efe0d5;
+  @define-color popover_bg_color       #3c332c;
+  @define-color popover_fg_color       #efe0d5;
+
+  /* CSS custom property re-declarations — these beat APPLICATION-level :root */
+  :root {
+    --window-bg-color:       #19120c;
+    --window-fg-color:       #efe0d5;
+    --view-bg-color:         #19120c;
+    --view-fg-color:         #efe0d5;
+    --headerbar-bg-color:    #312822;
+    --headerbar-fg-color:    #efe0d5;
+    --headerbar-border-color:#51443a;
+    --headerbar-backdrop-color:#261e18;
+    --headerbar-shade-color: #51443a;
+    --sidebar-bg-color:      #221a14;
+    --sidebar-fg-color:      #efe0d5;
+    --sidebar-backdrop-color:#19120c;
+    --card-bg-color:         #261e18;
+    --dialog-bg-color:       #312822;
+    --popover-bg-color:      #3c332c;
+  }
+
+  /* Force headerbar background using the 'background' shorthand so ALL
+   * background sub-properties are reset — not just background-color.
+   * This catches any case where a 'background: none' from libadwaita's
+   * compiled APPLICATION-level CSS is winning over our background-color. */
+  headerbar,
+  .titlebar,
+  adw-header-bar,
+  toolbarview > .top-bar,
+  toolbarview > .top-bar.raised,
+  toolbarview .top-bar,
+  .top-bar {
+    background: #312822 !important;
+    color: #efe0d5 !important;
+  }
+  headerbar:backdrop,
+  .titlebar:backdrop,
+  adw-header-bar:backdrop,
+  toolbarview > .top-bar:backdrop,
+  .top-bar:backdrop {
+    background: #221a14 !important;
+    color: #d6c3b6 !important;
+  }
+
+  /* Content pane in dark media context */
+  .content-pane {
+    background-color: #19120c !important;
+  }
+  .content-pane toolbarview {
+    background-color: #19120c !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * MATERIA COMPATIBILITY — override hardcoded #8ab4f8 blue accent
+ * Materia bakes its blue accent directly into keyframes and element rules.
+ * These rules replace every occurrence with the system primary colour.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Ripple animations — redefine keyframes to use system primary */
+@keyframes ripple {
+  to { background-image: radial-gradient(circle, #ffb878 0%, transparent 0%); }
+}
+@keyframes ripple-on-slider {
+  to { background-image: radial-gradient(farthest-side, #ffb878 100%, transparent 100%); }
+}
+@keyframes ripple-on-headerbar {
+  from { background-image: radial-gradient(farthest-side, #ffb878 0%, transparent 0%); }
+  to   { background-image: radial-gradient(farthest-side, #ffb878 100%, transparent 100%); }
+}
+
+/* Caret / insertion cursor */
+entry, text, textview > text, searchentry, spinbutton {
+  caret-color: #ffb878;
+}
+
+/* Selection highlight — fully opaque so it's readable on any background */
+selection {
+  background-color: #ffb878;
+  color: #4b2700;
+}
+/* Entry / search selection — explicit to prevent libadwaita overriding colour */
+entry text selection,
+entry > text > selection,
+searchentry text selection,
+searchentry > text > selection,
+text selection {
+  background-color: #ffb878;
+  color: #4b2700;
+}
+
+/* Selection-mode titlebar (Materia sets background to #8ab4f8) */
+.titlebar.selection-mode {
+  background-color: #ffb878;
+  color: #4b2700;
+}
+.titlebar.selection-mode button { color: #4b2700; }
+
+/* Suggested-action — Materia hardcodes #8ab4f8 */
+button.suggested-action,
+.suggested-action > button {
+  background-color: #ffb878;
+  color: #4b2700;
+}
+
+/* Nautilus/headerbar controls — stop libadwaita/Materia blue-gray fallbacks */
+headerbar,
+.titlebar,
+toolbarview > .top-bar,
+window.nautilus-window headerbar,
+window.nautilus-window .top-bar,
+window.nautilus-window .path-bar-box,
+window.nautilus-window .location-bar,
+window.nautilus-window .nautilus-path-bar {
+  text-shadow: none !important;
+  -gtk-icon-shadow: none !important;
+  box-shadow: none !important;
+}
+headerbar separator,
+.titlebar separator,
+toolbarview > .top-bar separator,
+window.nautilus-window headerbar separator,
+window.nautilus-window .top-bar separator,
+window.nautilus-window .linked separator,
+window.nautilus-window pathbar separator,
+window.nautilus-window .path-bar-box separator {
+  background-color: alpha(#51443a, 0.45) !important;
+  color: alpha(#51443a, 0.45) !important;
+  box-shadow: none !important;
+}
+headerbar button,
+headerbar button.flat,
+headerbar menubutton > button,
+headerbar splitbutton > button,
+.titlebar button,
+.titlebar button.flat,
+.titlebar menubutton > button,
+.titlebar splitbutton > button,
+toolbarview > .top-bar button,
+toolbarview > .top-bar menubutton > button,
+toolbarview > .top-bar splitbutton > button,
+window.nautilus-window headerbar button,
+window.nautilus-window .top-bar button {
+  background-color: #261e18 !important;
+  background-image: none !important;
+  border: 1.5px solid alpha(#51443a, 0.75) !important;
+  border-radius: 8px !important;
+  color: #efe0d5 !important;
+  box-shadow: inset 0 1px 0 alpha(#efe0d5, 0.06),
+              0 1px 3px alpha(#51443a, 0.18) !important;
+}
+headerbar button:hover,
+headerbar button.flat:hover,
+.titlebar button:hover,
+.titlebar button.flat:hover,
+toolbarview > .top-bar button:hover,
+window.nautilus-window headerbar button:hover,
+window.nautilus-window .top-bar button:hover {
+  background-color: #413730 !important;
+  color: #efe0d5 !important;
+}
+headerbar button:active,
+headerbar button:checked,
+.titlebar button:active,
+.titlebar button:checked,
+toolbarview > .top-bar button:active,
+toolbarview > .top-bar button:checked,
+window.nautilus-window headerbar button:active,
+window.nautilus-window headerbar button:checked,
+window.nautilus-window .top-bar button:active,
+window.nautilus-window .top-bar button:checked {
+  background-color: #6b3b03 !important;
+  border-color: #6b3b03 !important;
+  color: #ffdcc1 !important;
+}
+
+/* Directory / location bar — blend with headerbar, soft border */
+.location-bar,
+.path-bar-box,
+.nautilus-path-bar,
+pathbar,
+pathbar.linked,
+headerbar .linked,
+.titlebar .linked,
+toolbarview > .top-bar .linked,
+window.nautilus-window .location-bar,
+window.nautilus-window .path-bar-box,
+window.nautilus-window .nautilus-path-bar,
+window.nautilus-window pathbar {
+  background-color: #261e18 !important;
+  background-image: none !important;
+  border-color: alpha(#51443a, 0.45) !important;
+  color: #efe0d5 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+.location-bar entry,
+.location-bar entry.flat,
+.path-bar-box entry,
+.path-bar-box entry.flat,
+.nautilus-path-bar entry,
+.nautilus-path-bar entry.flat,
+headerbar entry,
+headerbar entry.flat,
+headerbar .linked > entry,
+.titlebar entry,
+.titlebar entry.flat,
+.titlebar .linked > entry,
+toolbarview > .top-bar entry,
+toolbarview > .top-bar entry.flat,
+toolbarview > .top-bar .linked > entry,
+window.nautilus-window headerbar entry,
+window.nautilus-window headerbar entry.flat,
+window.nautilus-window headerbar .linked > entry,
+window.nautilus-window .top-bar entry,
+window.nautilus-window .top-bar entry.flat,
+window.nautilus-window .top-bar .linked > entry,
+window.nautilus-window .location-bar entry,
+window.nautilus-window .location-bar entry.flat {
+  background-color: #261e18 !important;
+  background-image: none !important;
+  border: 1px solid alpha(#51443a, 0.38) !important;
+  outline: none !important;
+  outline-color: transparent !important;
+  color: #efe0d5 !important;
+  box-shadow: none !important;
+}
+.location-bar entry:focus-within,
+.location-bar entry.flat:focus-within,
+.path-bar-box entry:focus-within,
+.path-bar-box entry.flat:focus-within,
+.nautilus-path-bar entry:focus-within,
+.nautilus-path-bar entry.flat:focus-within,
+headerbar entry:focus-within,
+headerbar entry.flat:focus-within,
+headerbar .linked > entry:focus-within,
+.titlebar entry:focus-within,
+.titlebar entry.flat:focus-within,
+.titlebar .linked > entry:focus-within,
+toolbarview > .top-bar entry:focus-within,
+toolbarview > .top-bar entry.flat:focus-within,
+toolbarview > .top-bar .linked > entry:focus-within,
+window.nautilus-window headerbar entry:focus-within,
+window.nautilus-window headerbar entry.flat:focus-within,
+window.nautilus-window headerbar .linked > entry:focus-within,
+window.nautilus-window .top-bar entry:focus-within,
+window.nautilus-window .top-bar entry.flat:focus-within,
+window.nautilus-window .top-bar .linked > entry:focus-within,
+window.nautilus-window .location-bar entry:focus-within,
+window.nautilus-window .location-bar entry.flat:focus-within {
+  background-color: #261e18 !important;
+  border: 1px solid #6b3b03 !important;
+  outline: none !important;
+  outline-color: transparent !important;
+  box-shadow: 0 0 0 1px alpha(#ffb878, 0.18) !important;
+}
+.location-bar entry > text,
+.path-bar-box entry > text,
+.nautilus-path-bar entry > text,
+headerbar entry > text,
+.titlebar entry > text,
+toolbarview > .top-bar entry > text,
+window.nautilus-window headerbar entry > text,
+window.nautilus-window .top-bar entry > text,
+window.nautilus-window .location-bar entry > text {
+  color: #efe0d5 !important;
+}
+.location-bar entry image,
+.path-bar-box entry image,
+.nautilus-path-bar entry image,
+headerbar entry image,
+.titlebar entry image,
+toolbarview > .top-bar entry image,
+window.nautilus-window headerbar entry image,
+window.nautilus-window .top-bar entry image,
+window.nautilus-window .location-bar entry image {
+  color: #d6c3b6 !important;
+  -gtk-icon-shadow: none !important;
+}
+.location-bar,
+.path-bar-box,
+.nautilus-path-bar,
+pathbar,
+window.nautilus-window .location-bar,
+window.nautilus-window .path-bar-box,
+window.nautilus-window .nautilus-path-bar,
+window.nautilus-window pathbar,
+headerbar .linked,
+.titlebar .linked,
+toolbarview > .top-bar .linked {
+  box-shadow: none !important;
+  outline: none !important;
+  border-color: transparent !important;
+}
+window.nautilus-window headerbar *,
+window.nautilus-window .top-bar *,
+window.nautilus-window .location-bar *,
+window.nautilus-window .path-bar-box *,
+window.nautilus-window .nautilus-path-bar * {
+  text-shadow: none !important;
+  -gtk-icon-shadow: none !important;
+}
+
+/* Path-bar breadcrumb buttons — flat, no hard outline */
+.path-bar-box .nautilus-path-bar button,
+.titlebar .path-bar button,
+pathbar.linked > button,
+window.nautilus-window pathbar > button,
+window.nautilus-window .nautilus-path-bar button {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #efe0d5;
+}
+.path-bar-box .nautilus-path-bar button:hover,
+.titlebar .path-bar button:hover,
+pathbar.linked > button:hover,
+window.nautilus-window pathbar > button:hover,
+window.nautilus-window .nautilus-path-bar button:hover {
+  background-color: alpha(#efe0d5, 0.08);
+}
+.path-bar-box .nautilus-path-bar button:checked,
+.titlebar .path-bar button:checked,
+pathbar.linked > button:checked,
+window.nautilus-window pathbar > button:checked,
+window.nautilus-window .nautilus-path-bar button:checked {
+  background-color: alpha(#ffb878, 0.18);
+  color: #ffb878;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * SCROLL EDGE — replace near-black shade with warm background-tinted fade
+ * libadwaita drives undershoot/overshoot via --shade-color (near-black).
+ * Materia's overshoot uses rgba(138,180,248,0.24) (blue). Both replaced here.
+ * ════════════════════════════════════════════════════════════════════════════ */
+
+/* Override libadwaita's --shade-color so undershoot shadows are warm */
+* { --shade-color: alpha(#51443a, 0.3); }
+
+/* Overshoot indicators — transparent with subtle warm primary tint */
+overshoot.top,
+scrolledwindow > overshoot.top {
+  background-color: transparent;
+  background-image: radial-gradient(farthest-side at top, alpha(#ffb878, 0.12) 0%, transparent 100%);
+  box-shadow: none;
+}
+overshoot.bottom,
+scrolledwindow > overshoot.bottom {
+  background-color: transparent;
+  background-image: radial-gradient(farthest-side at bottom, alpha(#ffb878, 0.12) 0%, transparent 100%);
+  box-shadow: none;
+}
+overshoot.left,
+scrolledwindow > overshoot.left {
+  background-color: transparent;
+  background-image: radial-gradient(farthest-side at left, alpha(#ffb878, 0.12) 0%, transparent 100%);
+  box-shadow: none;
+}
+overshoot.right,
+scrolledwindow > overshoot.right {
+  background-color: transparent;
+  background-image: radial-gradient(farthest-side at right, alpha(#ffb878, 0.12) 0%, transparent 100%);
+  box-shadow: none;
+}
+
+/* Undershoot shadows — warm fade instead of near-black */
+undershoot.top,
+scrolledwindow > undershoot.top {
+  background-color: transparent;
+  background-image: linear-gradient(to bottom, alpha(#51443a, 0.2), transparent);
+  box-shadow: none;
+}
+undershoot.bottom,
+scrolledwindow > undershoot.bottom {
+  background-color: transparent;
+  background-image: linear-gradient(to top, alpha(#51443a, 0.2), transparent);
+  box-shadow: none;
+}
+undershoot.left,
+scrolledwindow > undershoot.left {
+  background-color: transparent;
+  background-image: linear-gradient(to right, alpha(#51443a, 0.2), transparent);
+  box-shadow: none;
+}
+undershoot.right,
+scrolledwindow > undershoot.right {
+  background-color: transparent;
+  background-image: linear-gradient(to left, alpha(#51443a, 0.2), transparent);
+  box-shadow: none;
+}

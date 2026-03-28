@@ -1,0 +1,41 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(du:*)",
+      "Bash(python3:*)",
+      "Bash(sudo cp:*)",
+      "Bash(ls:*)",
+      "Bash(xargs cat:*)",
+      "WebSearch",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:discourse.mozilla.org)",
+      "WebFetch(domain:www.elevenforum.com)",
+      "WebFetch(domain:support.mozilla.org)",
+      "WebFetch(domain:munix.dk)",
+      "WebFetch(domain:heyjoe8890.wordpress.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:searchfox.org)",
+      "WebFetch(domain:devnodes.in)",
+      "WebFetch(domain:groups.google.com)",
+      "WebFetch(domain:forums.mozillazine.org)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(bash:*)",
+      "Bash(jq:*)",
+      "Bash(timeout 5:*)",
+      "Bash(timeout 8 curl:*)",
+      "Bash(hyprctl reload:*)",
+      "Bash(hyprctl version:*)",
+      "WebFetch(domain:wiki.hyprland.org)",
+      "WebFetch(domain:wiki.hypr.land)",
+      "WebFetch(domain:code.hyprland.org)",
+      "WebFetch(domain:hypr.land)",
+      "Bash(chmod +x:*)",
+      "Bash(hyprctl:*)",
+      "Bash(unzip:*)",
+      "Bash(mkdir:*)",
+      "Bash(thunderbird:*)",
+      "Bash(zip:*)"
+    ]
+  }
+}

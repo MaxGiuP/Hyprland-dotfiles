@@ -1,0 +1,87 @@
+/*
+ * Quickshell GTK geometry tuning
+ */
+
+:root {
+  --qs-pad-1: 4px;
+  --qs-pad-2: 6px;
+  --qs-pad-3: 8px;
+  --qs-pad-4: 10px;
+  --qs-radius-control: 6px;
+  --qs-radius-list: 8px;
+  --qs-radius-window: 12px;
+  --qs-radius-menu: 10px;
+  --qs-radius-popover: 12px;
+}
+
+window.csd,
+window.csd.background,
+dialog.background,
+messagedialog.background {
+  border-radius: var(--qs-radius-window);
+}
+
+headerbar,
+.titlebar {
+  min-height: 44px;
+  padding: var(--qs-pad-1) var(--qs-pad-3);
+}
+
+button,
+modelbutton,
+menubutton > button,
+splitbutton > button,
+entry,
+spinbutton,
+combobox,
+dropdown {
+  min-height: 30px;
+  padding: var(--qs-pad-2) var(--qs-pad-4);
+  border-radius: var(--qs-radius-control);
+}
+
+list row,
+listview row,
+columnview row,
+sidebar row,
+navigation-sidebar row {
+  margin: 1px 4px;
+  border-radius: var(--qs-radius-list);
+}
+
+menu,
+.menu {
+  padding: var(--qs-pad-2);
+  border-radius: var(--qs-radius-menu);
+}
+
+menuitem {
+  min-height: 30px;
+  padding: var(--qs-pad-2) var(--qs-pad-3);
+  border-radius: var(--qs-radius-control);
+}
+
+popover > contents {
+  border-radius: 0;
+}
+
+notebook > stack,
+frame,
+.card {
+  border-radius: var(--qs-radius-list);
+}
+
+/* Motion */
+button,
+modelbutton,
+menubutton > button,
+splitbutton > button {
+  transition: background-color 120ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow       120ms cubic-bezier(0.4, 0, 0.2, 1),
+              color            120ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+entry,
+spinbutton {
+  transition: border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow   150ms cubic-bezier(0.4, 0, 0.2, 1);
+}

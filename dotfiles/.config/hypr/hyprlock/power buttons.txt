@@ -1,0 +1,35 @@
+# Reboot
+label {
+    monitor =
+    text =  󰜉 
+    color = $outer_color
+    font_size = 35
+    onclick = reboot
+    position = 120, 75
+    halign = center
+    valign = bottom
+}
+
+# Power off
+label {
+    monitor =
+    text =  󰐥 
+    color = $outer_color
+    font_size = 35
+    onclick = shutdown now
+    position = 0, 75
+    halign = center
+    valign = bottom
+}
+
+# Suspend
+label {
+    monitor =
+    text =  󰤄 
+    color = $outer_color
+    font_size = 35
+    onclick = systemctl suspend
+    position = -120, 75
+    halign = center
+    valign = bottom
+}

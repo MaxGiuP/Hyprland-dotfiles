@@ -1,18 +1,31 @@
 *.log
 *.bak
+*.bak.*
 *backup*
 .DS_Store
 
-# file macchina specifici comuni
+# machine-specific
 monitors.xml*
 *.swp
+*.swo
 
-# cache tipiche
+# caches
 **/node_modules/
 **/.cache/
+**/__pycache__/
 
-# niente segreti
+# fish history and session state
+dotfiles/.config/fish/fish_history
+dotfiles/.config/fish/fish_variables
+
+# kitty session state
+dotfiles/.config/kitty/*.bak
+
+# secrets
 secrets*
 *.key
 *.pem
 *.p12
+
+# gtk bookmarks (personal paths)
+dotfiles/.config/gtk-3.0/bookmarks

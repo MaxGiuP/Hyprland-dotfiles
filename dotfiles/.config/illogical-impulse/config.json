@@ -1,0 +1,573 @@
+{
+    "ai": {
+        "extraModels": [
+            {
+                "api_format": "openai",
+                "description": "This is a custom model. Edit the config to add more! | Anyway, this is DeepSeek R1 Distill LLaMA 70B",
+                "endpoint": "https://openrouter.ai/api/v1/chat/completions",
+                "homepage": "https://openrouter.ai/deepseek/deepseek-r1-distill-llama-70b:free",
+                "icon": "spark-symbolic",
+                "key_get_link": "https://openrouter.ai/settings/keys",
+                "key_id": "openrouter",
+                "model": "deepseek/deepseek-r1-distill-llama-70b:free",
+                "name": "Custom: DS R1 Dstl. LLaMA 70B",
+                "requires_key": true
+            }
+        ],
+        "systemPrompt": "## Style\n- Use casual tone, don't be formal! Make sure you answer precisely without hallucination and prefer bullet points over walls of text. You can have a friendly greeting at the beginning of the conversation, but don't repeat the user's question\n\n## Context (ignore when irrelevant)\n- You are a helpful and inspiring sidebar assistant on a {DISTRO} Linux system\n- Desktop environment: {DE}\n- Current date & time: {DATETIME}\n- Focused app: {WINDOWCLASS}\n\n## Presentation\n- Use Markdown features in your response: \n  - **Bold** text to **highlight keywords** in your response\n  - **Split long information into small sections** with h2 headers and a relevant emoji at the start of it (for example `## 🐧 Linux`). Bullet points are preferred over long paragraphs, unless you're offering writing support or instructed otherwise by the user.\n- Asked to compare different options? You should firstly use a table to compare the main aspects, then elaborate or include relevant comments from online forums *after* the table. Make sure to provide a final recommendation for the user's use case!\n- Use LaTeX formatting for mathematical and scientific notations whenever appropriate. Enclose all LaTeX '$$' delimiters. NEVER generate LaTeX code in a latex block unless the user explicitly asks for it. DO NOT use LaTeX for regular documents (resumes, letters, essays, CVs, etc.).\n",
+        "tool": "functions"
+    },
+    "appearance": {
+        "extraBackgroundTint": true,
+        "fakeScreenRounding": 0,
+        "fonts": {
+            "expressive": "Space Grotesk",
+            "iconNerd": "JetBrains Mono NF",
+            "main": "Google Sans Flex",
+            "monospace": "JetBrains Mono NF",
+            "numbers": "Google Sans Flex",
+            "reading": "Readex Pro",
+            "title": "Google Sans Flex"
+        },
+        "palette": {
+            "accentColor": "",
+            "type": "auto"
+        },
+        "transparency": {
+            "automatic": false,
+            "backgroundTransparency": 0.25,
+            "contentTransparency": 0.77,
+            "enable": true
+        },
+        "wallpaperTheming": {
+            "enableAppsAndShell": true,
+            "enableGtkApps": true,
+            "enableQtApps": true,
+            "enableTerminal": true,
+            "terminalGenerationProps": {
+                "forceDarkMode": true,
+                "harmonizeThreshold": 100,
+                "harmony": 1,
+                "termFgBoost": 1
+            }
+        }
+    },
+    "apps": {
+        "bluetooth": "kcmshell6 kcm_bluetooth",
+        "changePassword": "kitty -1 --hold=yes fish -i -c 'passwd'",
+        "manageUser": "kcmshell6 kcm_users",
+        "network": "plasmawindowed org.kde.plasma.networkmanagement",
+        "networkEthernet": "kcmshell6 kcm_networkmanagement",
+        "taskManager": "plasma-systemmonitor --page-name Processes",
+        "terminal": "kitty -1",
+        "update": "kitty -1 --hold=yes fish -i -c 'pkexec pacman -Syu'",
+        "volumeMixer": "~/.config/hypr/hyprland/scripts/launch_first_available.sh \"pavucontrol-qt\" \"pavucontrol\""
+    },
+    "audio": {
+        "protection": {
+            "enable": false,
+            "maxAllowed": 154,
+            "maxAllowedIncrease": 18
+        }
+    },
+    "background": {
+        "hideWhenFullscreen": true,
+        "parallax": {
+            "autoVertical": false,
+            "enableSidebar": true,
+            "enableWorkspace": false,
+            "vertical": false,
+            "widgetsFactor": 1.2,
+            "workspaceZoom": 1.1
+        },
+        "thumbnailPath": "/home/linmax/Immagini/Wallpapers/226539-3840x2160-desktop-4k-megan-fox-background-image.jpg",
+        "wallpaperPath": "/home/linmax/Pictures/Wallpapers/226539-3840x2160-desktop-4k-megan-fox-background-image.jpg",
+        "widgets": {
+            "clock": {
+                "cookie": {
+                    "aiStyling": true,
+                    "constantlyRotate": false,
+                    "dateInClock": true,
+                    "dateStyle": "rect",
+                    "dialNumberStyle": "dots",
+                    "hourHandStyle": "fill",
+                    "hourMarks": false,
+                    "minuteHandStyle": "medium",
+                    "secondHandStyle": "line",
+                    "sides": 12,
+                    "timeIndicators": false,
+                    "useSineCookie": true
+                },
+                "digital": {
+                    "adaptiveAlignment": true,
+                    "animateChange": true,
+                    "font": {
+                        "family": "Google Sans Flex",
+                        "roundness": 64.3981272563177,
+                        "size": 129.77662454873646,
+                        "weight": 827.0155449720507,
+                        "width": 102.79313327316486
+                    },
+                    "showDate": true,
+                    "vertical": false
+                },
+                "enable": true,
+                "placementStrategy": "mostBusy",
+                "quote": {
+                    "enable": true,
+                    "text": ""
+                },
+                "showOnlyWhenLocked": false,
+                "style": "cookie",
+                "styleLocked": "cookie",
+                "x": 84,
+                "y": 74
+            },
+            "weather": {
+                "enable": true,
+                "placementStrategy": "leastBusy",
+                "x": 99,
+                "y": 99
+            }
+        }
+    },
+    "bar": {
+        "autoHide": {
+            "enable": false,
+            "hoverRegionWidth": 2,
+            "pushWindows": false,
+            "showWhenPressingSuper": {
+                "delay": 140,
+                "enable": true
+            }
+        },
+        "backgroundOpacity": 0,
+        "borderless": false,
+        "bottom": false,
+        "cornerStyle": 1,
+        "floatStyleShadow": true,
+        "hideWhenFullscreen": true,
+        "indicators": {
+            "notifications": {
+                "showUnreadCount": true
+            }
+        },
+        "resources": {
+            "alwaysShowCpu": true,
+            "alwaysShowSwap": true,
+            "cpuWarningThreshold": 90,
+            "memoryWarningThreshold": 95,
+            "swapWarningThreshold": 85
+        },
+        "screenList": [
+        ],
+        "showBackground": true,
+        "tooltips": {
+            "clickToShow": false
+        },
+        "topLeftIcon": "spark",
+        "utilButtons": {
+            "showBarHideToggle": true,
+            "showColorPicker": true,
+            "showDarkModeToggle": false,
+            "showKeyboardLayoutSwitcher": true,
+            "showKeyboardToggle": true,
+            "showMicToggle": false,
+            "showPerformanceProfileToggle": false,
+            "showScreenRecord": false,
+            "showScreenSnip": true,
+            "showUpdates": true
+        },
+        "verbose": true,
+        "vertical": false,
+        "weather": {
+            "city": "fleet",
+            "enable": true,
+            "enableGPS": false,
+            "fetchInterval": 50,
+            "useUSCS": false
+        },
+        "workspaces": {
+            "alwaysShowNumbers": true,
+            "monochromeIcons": false,
+            "numberMap": [
+            ],
+            "showAppIcons": true,
+            "showNumberDelay": 0,
+            "shown": 10,
+            "useNerdFont": false
+        }
+    },
+    "battery": {
+        "automaticSuspend": true,
+        "critical": 5,
+        "full": 100,
+        "low": 20,
+        "suspend": 3
+    },
+    "calendar": {
+        "locale": "en-GB"
+    },
+    "cheatsheet": {
+        "fontSize": {
+            "comment": 12,
+            "key": 12
+        },
+        "splitButtons": true,
+        "superKey": "",
+        "useFnSymbol": false,
+        "useMacSymbol": false,
+        "useMouseSymbol": false
+    },
+    "conflictKiller": {
+        "autoKillNotificationDaemons": true,
+        "autoKillTrays": true
+    },
+    "crosshair": {
+        "code": "0;P;d;1;0l;10;0o;2;1b;0"
+    },
+    "dock": {
+        "enable": true,
+        "height": 36,
+        "hoverRegionHeight": 1,
+        "hoverToReveal": true,
+        "ignoredAppRegexes": [
+        ],
+        "monochromeIcons": false,
+        "pinnedApps": [
+            "kitty",
+            "org.kde.dolphin",
+            "org.mozilla.thunderbird",
+            "vmplayer"
+        ],
+        "pinnedOnStartup": false
+    },
+    "hacks": {
+        "arbitraryRaceConditionDelay": 20
+    },
+    "interactions": {
+        "deadPixelWorkaround": {
+            "enable": false
+        },
+        "scrolling": {
+            "fasterTouchpadScroll": false,
+            "mouseScrollDeltaThreshold": 120,
+            "mouseScrollFactor": 120,
+            "touchpadScrollFactor": 450
+        }
+    },
+    "language": {
+        "translator": {
+            "engine": "auto",
+            "sourceLanguage": "Italiano",
+            "targetLanguage": "English"
+        },
+        "ui": "it_IT"
+    },
+    "launcher": {
+        "folderNamesJson": "{}",
+        "layoutJson": "[{\"appId\":\"org.gnome.TwentyFortyEight\",\"type\":\"app\"},{\"appId\":\"accerciser\",\"type\":\"app\"},{\"appId\":\"org.gnome.SimpleScan\",\"type\":\"app\"},{\"appId\":\"blueman-adapters\",\"type\":\"app\"},{\"appId\":\"org.gnome.Yelp\",\"type\":\"app\"},{\"appId\":\"Alacritty\",\"type\":\"app\"},{\"appId\":\"org.gnome.baobab\",\"type\":\"app\"},{\"appId\":\"org.kde.ark\",\"type\":\"app\"},{\"appId\":\"com.ulduzsoft.Birdtray\",\"type\":\"app\"},{\"appId\":\"bisq-desktop\",\"type\":\"app\"},{\"appId\":\"org.gnome.Boxes\",\"type\":\"app\"},{\"appId\":\"org.gnome.Builder\",\"type\":\"app\"},{\"appId\":\"org.gnome.Calculator\",\"type\":\"app\"},{\"appId\":\"com.ml4w.calendar\",\"type\":\"app\"},{\"appId\":\"org.gnome.Calendar\",\"type\":\"app\"},{\"appId\":\"org.gnome.Characters\",\"type\":\"app\"},{\"appId\":\"dde-trash\",\"type\":\"app\"},{\"appId\":\"org.gnome.Cheese\",\"type\":\"app\"},{\"appId\":\"cmake-gui\",\"type\":\"app\"},{\"appId\":\"code-oss\",\"type\":\"app\"},{\"appId\":\"dde-computer\",\"type\":\"app\"},{\"appId\":\"nm-connection-editor\",\"type\":\"app\"},{\"appId\":\"org.gnome.Connections\",\"type\":\"app\"},{\"appId\":\"org.gnome.Console\",\"type\":\"app\"},{\"appId\":\"org.kde.akonadiconsole\",\"type\":\"app\"},{\"appId\":\"org.gnome.Contacts\",\"type\":\"app\"},{\"appId\":\"org.freedesktop.MalcontentControl\",\"type\":\"app\"},{\"appId\":\"pavucontrol-qt\",\"type\":\"app\"},{\"appId\":\"org.gnome.dspy\",\"type\":\"app\"},{\"appId\":\"dde-desktop\",\"type\":\"app\"},{\"appId\":\"org.gnome.Devhelp\",\"type\":\"app\"},{\"appId\":\"org.gnome.DiskUtility\",\"type\":\"app\"},{\"appId\":\"org.kde.discover\",\"type\":\"app\"},{\"appId\":\"nwg-displays\",\"type\":\"app\"},{\"appId\":\"org.gnome.Dictionary.Devel\",\"type\":\"app\"},{\"appId\":\"org.kde.dolphin\",\"type\":\"app\"},{\"appId\":\"org.DolphinEmu.dolphin-emu\",\"type\":\"app\"},{\"appId\":\"DOOM Eternal\",\"type\":\"app\"},{\"appId\":\"ca.desrt.dconf-editor\",\"type\":\"app\"},{\"appId\":\"org.gnome.TextEditor\",\"type\":\"app\"},{\"appId\":\"org.kde.sieveeditor\",\"type\":\"app\"},{\"appId\":\"electron35\",\"type\":\"app\"},{\"appId\":\"electron27\",\"type\":\"app\"},{\"appId\":\"electron36\",\"type\":\"app\"},{\"appId\":\"electron37\",\"type\":\"app\"},{\"appId\":\"electrum\",\"type\":\"app\"},{\"appId\":\"org.gnome.Todo\",\"type\":\"app\"},{\"appId\":\"io.github.mrvladus.List\",\"type\":\"app\"},{\"appId\":\"bssh\",\"type\":\"app\"},{\"appId\":\"bvnc\",\"type\":\"app\"},{\"appId\":\"avahi-discover\",\"type\":\"app\"},{\"appId\":\"org.kde.pimdataexporter\",\"type\":\"app\"},{\"appId\":\"org.gnome.Extensions\",\"type\":\"app\"},{\"appId\":\"org.gnome.Evolution\",\"type\":\"app\"},{\"appId\":\"org.gnome.eog\",\"type\":\"app\"},{\"appId\":\"nemo\",\"type\":\"app\"},{\"appId\":\"org.gnome.Nautilus\",\"type\":\"app\"},{\"appId\":\"org.gnome.FileRoller\",\"type\":\"app\"},{\"appId\":\"firefox\",\"type\":\"app\"},{\"appId\":\"com.github.tchx84.Flatseal\",\"type\":\"app\"},{\"appId\":\"fluid1.3\",\"type\":\"app\"},{\"appId\":\"org.fontforge.FontForge\",\"type\":\"app\"},{\"appId\":\"foot\",\"type\":\"app\"},{\"appId\":\"footclient\",\"type\":\"app\"},{\"appId\":\"foot-server\",\"type\":\"app\"},{\"appId\":\"org.gnome.Photos\",\"type\":\"app\"},{\"appId\":\"org.gnome.Snapshot\",\"type\":\"app\"},{\"appId\":\"dev.bragefuglseth.Fretboard\",\"type\":\"app\"},{\"appId\":\"org.gnome.Geary\",\"type\":\"app\"},{\"appId\":\"org.gnome.gedit\",\"type\":\"app\"},{\"appId\":\"cups\",\"type\":\"app\"},{\"appId\":\"blueman-manager\",\"type\":\"app\"},{\"appId\":\"com.mattjakeman.ExtensionManager\",\"type\":\"app\"},{\"appId\":\"dde-file-manager\",\"type\":\"app\"},{\"appId\":\"pcmanfm-qt\",\"type\":\"app\"},{\"appId\":\"kvantummanager\",\"type\":\"app\"},{\"appId\":\"virt-manager\",\"type\":\"app\"},{\"appId\":\"org.gnome.GHex\",\"type\":\"app\"},{\"appId\":\"org.gnome.Games\",\"type\":\"app\"},{\"appId\":\"org.gnome.gitg\",\"type\":\"app\"},{\"appId\":\"org.gnome.Glade\",\"type\":\"app\"},{\"appId\":\"gimp\",\"type\":\"app\"},{\"appId\":\"google-chrome\",\"type\":\"app\"},{\"appId\":\"google-earth-pro\",\"type\":\"app\"},{\"appId\":\"nwg-look\",\"type\":\"app\"},{\"appId\":\"org.kde.gwenview\",\"type\":\"app\"},{\"appId\":\"lstopo\",\"type\":\"app\"},{\"appId\":\"org.pipewire.Helvum\",\"type\":\"app\"},{\"appId\":\"org.gnome.Hitori\",\"type\":\"app\"},{\"appId\":\"com.ml4w.hyprlandsettings\",\"type\":\"app\"},{\"appId\":\"org.gnome.Settings\",\"type\":\"app\"},{\"appId\":\"systemsettings\",\"type\":\"app\"},{\"appId\":\"kdesystemsettings\",\"type\":\"app\"},{\"appId\":\"system-config-printer\",\"type\":\"app\"},{\"appId\":\"qt5ct\",\"type\":\"app\"},{\"appId\":\"qt6ct\",\"type\":\"app\"},{\"appId\":\"org.kde.kdeconnect.nonplasma\",\"type\":\"app\"},{\"appId\":\"input-remapper-gtk\",\"type\":\"app\"},{\"appId\":\"org.kde.kdeconnect.app\",\"type\":\"app\"},{\"appId\":\"org.kde.kdeconnect.sms\",\"type\":\"app\"},{\"appId\":\"kitty\",\"type\":\"app\"},{\"appId\":\"org.gnome.Klotski\",\"type\":\"app\"},{\"appId\":\"org.kde.kmail2\",\"type\":\"app\"},{\"appId\":\"org.komorebiteam.komorebi\",\"type\":\"app\"},{\"appId\":\"org.kde.konsole\",\"type\":\"app\"},{\"appId\":\"org.kde.korganizer\",\"type\":\"app\"},{\"appId\":\"org.kde.krdc\",\"type\":\"app\"},{\"appId\":\"org.kde.ktnef\",\"type\":\"app\"},{\"appId\":\"L.A. Noire\",\"type\":\"app\"},{\"appId\":\"mpv\",\"type\":\"app\"},{\"appId\":\"vlc\",\"type\":\"app\"},{\"appId\":\"libreoffice-startcenter\",\"type\":\"app\"},{\"appId\":\"libreoffice-base\",\"type\":\"app\"},{\"appId\":\"libreoffice-calc\",\"type\":\"app\"},{\"appId\":\"libreoffice-draw\",\"type\":\"app\"},{\"appId\":\"libreoffice-impress\",\"type\":\"app\"},{\"appId\":\"libreoffice-math\",\"type\":\"app\"},{\"appId\":\"libreoffice-writer\",\"type\":\"app\"},{\"appId\":\"looking-glass-client\",\"type\":\"app\"},{\"appId\":\"gtk-lshw\",\"type\":\"app\"},{\"appId\":\"org.gnome.Mahjongg\",\"type\":\"app\"},{\"appId\":\"mailspring\",\"type\":\"app\"},{\"appId\":\"org.gnome.Maps\",\"type\":\"app\"},{\"appId\":\"wine-Programs-MechLands Driver\",\"type\":\"app\"},{\"appId\":\"org.kde.merkuro.calendar\",\"type\":\"app\"},{\"appId\":\"org.kde.merkuro.contact\",\"type\":\"app\"},{\"appId\":\"org.gnome.Weather\",\"type\":\"app\"},{\"appId\":\"org.gnome.Mines\",\"type\":\"app\"},{\"appId\":\"com.ml4w.settings\",\"type\":\"app\"},{\"appId\":\"com.ml4w.sidebar\",\"type\":\"app\"},{\"appId\":\"com.ml4w.welcome\",\"type\":\"app\"},{\"appId\":\"wine-Programs-Mod Organizer-Mod Organizer\",\"type\":\"app\"},{\"appId\":\"monero-gui\",\"type\":\"app\"},{\"appId\":\"org.gnome.SystemMonitor\",\"type\":\"app\"},{\"appId\":\"org.kde.plasma-systemmonitor\",\"type\":\"app\"},{\"appId\":\"gnome-system-monitor-kde\",\"type\":\"app\"},{\"appId\":\"org.xfce.mousepad\",\"type\":\"app\"},{\"appId\":\"org.gnome.MultiWriter\",\"type\":\"app\"},{\"appId\":\"org.gnome.Music\",\"type\":\"app\"},{\"appId\":\"yad-icon-browser\",\"type\":\"app\"},{\"appId\":\"org.gnome.Nibbles\",\"type\":\"app\"},{\"appId\":\"sticky\",\"type\":\"app\"},{\"appId\":\"org.gnome.Notes\",\"type\":\"app\"},{\"appId\":\"com.vixalien.sticky\",\"type\":\"app\"},{\"appId\":\"nvidia-settings\",\"type\":\"app\"},{\"appId\":\"obsidian\",\"type\":\"app\"},{\"appId\":\"jconsole-java11-openjdk\",\"type\":\"app\"},{\"appId\":\"org.openrgb.OpenRGB\",\"type\":\"app\"},{\"appId\":\"org.gnome.clocks\",\"type\":\"app\"},{\"appId\":\"org.gnome.seahorse.Application\",\"type\":\"app\"},{\"appId\":\"lxappearance\",\"type\":\"app\"},{\"appId\":\"org.gnome.tweaks\",\"type\":\"app\"},{\"appId\":\"org.gnome.Polari\",\"type\":\"app\"},{\"appId\":\"Portal\",\"type\":\"app\"},{\"appId\":\"Portal 2\",\"type\":\"app\"},{\"appId\":\"Portal Reloaded\",\"type\":\"app\"},{\"appId\":\"Portal Stories Mel\",\"type\":\"app\"},{\"appId\":\"org.freedesktop.IBus.Setup\",\"type\":\"app\"},{\"appId\":\"rygel-preferences\",\"type\":\"app\"},{\"appId\":\"org.kde.akonadiimportwizard\",\"type\":\"app\"},{\"appId\":\"protontricks\",\"type\":\"app\"},{\"appId\":\"net.davidotek.pupgui2\",\"type\":\"app\"},{\"appId\":\"com.saivert.pwvucontrol\",\"type\":\"app\"},{\"appId\":\"qalculate-gtk\",\"type\":\"app\"},{\"appId\":\"org.qbittorrent.qBittorrent\",\"type\":\"app\"},{\"appId\":\"qdirstat\",\"type\":\"app\"},{\"appId\":\"org.rncbc.qpwgraph\",\"type\":\"app\"},{\"appId\":\"assistant\",\"type\":\"app\"},{\"appId\":\"org.qt-project.qtcreator\",\"type\":\"app\"},{\"appId\":\"qdbusviewer\",\"type\":\"app\"},{\"appId\":\"linguist\",\"type\":\"app\"},{\"appId\":\"qv4l2\",\"type\":\"app\"},{\"appId\":\"qvidcap\",\"type\":\"app\"},{\"appId\":\"designer\",\"type\":\"app\"},{\"appId\":\"org.gnome.Quadrapassel\",\"type\":\"app\"},{\"appId\":\"org.gnome.Recipes\",\"type\":\"app\"},{\"appId\":\"org.gnome.SoundRecorder\",\"type\":\"app\"},{\"appId\":\"org.gnome.Logs\",\"type\":\"app\"},{\"appId\":\"org.pulseaudio.pavucontrol\",\"type\":\"app\"},{\"appId\":\"org.gnome.Reversi\",\"type\":\"app\"},{\"appId\":\"About_KDE-Services\",\"type\":\"app\"},{\"appId\":\"org.gnome.Decibels\",\"type\":\"app\"},{\"appId\":\"org.gnome.Showtime\",\"type\":\"app\"},{\"appId\":\"rofi\",\"type\":\"app\"},{\"appId\":\"rofi-theme-selector\",\"type\":\"app\"},{\"appId\":\"RPCS3-RPCS3\",\"type\":\"app\"},{\"appId\":\"rpcs3\",\"type\":\"app\"},{\"appId\":\"jetbrains-rustrover\",\"type\":\"app\"},{\"appId\":\"org.gnome.Chess\",\"type\":\"app\"},{\"appId\":\"scrcpy\",\"type\":\"app\"},{\"appId\":\"kde-material-you-colors-screenshot-helper\",\"type\":\"app\"},{\"appId\":\"pcmanfm-qt-desktop-pref\",\"type\":\"app\"},{\"appId\":\"shadps4\",\"type\":\"app\"},{\"appId\":\"signal\",\"type\":\"app\"},{\"appId\":\"org.gnome.Software\",\"type\":\"app\"},{\"appId\":\"re.fossplant.songrec\",\"type\":\"app\"},{\"appId\":\"speedcrunch\",\"type\":\"app\"},{\"appId\":\"org.gnome.LightsOff\",\"type\":\"app\"},{\"appId\":\"com.spotify.Client\",\"type\":\"app\"},{\"appId\":\"steam\",\"type\":\"app\"},{\"appId\":\"org.gnome.Sudoku\",\"type\":\"app\"},{\"appId\":\"org.gnome.Sysprof\",\"type\":\"app\"},{\"appId\":\"org.gnome.Tali\",\"type\":\"app\"},{\"appId\":\"org.gnome.Taquin\",\"type\":\"app\"},{\"appId\":\"org.gnome.Terminal\",\"type\":\"app\"},{\"appId\":\"org.gnome.Tetravex\",\"type\":\"app\"},{\"appId\":\"RPCS3-The Last of Us™\",\"type\":\"app\"},{\"appId\":\"thunderbird\",\"type\":\"app\"},{\"appId\":\"vncviewer\",\"type\":\"app\"},{\"appId\":\"org.gnome.font-viewer\",\"type\":\"app\"},{\"appId\":\"wine-Programs-Ubisoft-UbisoftConnect-Ubisoft Connect\",\"type\":\"app\"},{\"appId\":\"wine-Programs-Ubisoft-UbisoftConnect-Uninstall\",\"type\":\"app\"},{\"appId\":\"wine-Programs-ETHNIC CLEANSING-Uninstall ETHNIC CLEANSING\",\"type\":\"app\"},{\"appId\":\"wine-Programs-Mod Organizer-Uninstall Mod Organizer\",\"type\":\"app\"},{\"appId\":\"org.upscayl.Upscayl\",\"type\":\"app\"},{\"appId\":\"uuctl\",\"type\":\"app\"},{\"appId\":\"via-nativia\",\"type\":\"app\"},{\"appId\":\"org.gnome.Totem\",\"type\":\"app\"},{\"appId\":\"vmware-netcfg\",\"type\":\"app\"},{\"appId\":\"org.gnome.Tour\",\"type\":\"app\"},{\"appId\":\"org.gnome.Evince\",\"type\":\"app\"},{\"appId\":\"xreader\",\"type\":\"app\"},{\"appId\":\"org.gnome.Loupe\",\"type\":\"app\"},{\"appId\":\"org.gnome.ColorProfileViewer\",\"type\":\"app\"},{\"appId\":\"remote-viewer\",\"type\":\"app\"},{\"appId\":\"vmware-player\",\"type\":\"app\"},{\"appId\":\"vmware-workstation\",\"type\":\"app\"},{\"appId\":\"codium\",\"type\":\"app\"},{\"appId\":\"codium-wayland\",\"type\":\"app\"},{\"appId\":\"org.komorebiteam.wallpapercreator\",\"type\":\"app\"},{\"appId\":\"waypaper\",\"type\":\"app\"},{\"appId\":\"org.gnome.Epiphany\",\"type\":\"app\"},{\"appId\":\"winetricks\",\"type\":\"app\"},{\"appId\":\"org.wireshark.Wireshark\",\"type\":\"app\"},{\"appId\":\"wps-office-prometheus\",\"type\":\"app\"},{\"appId\":\"wps-office-pdf\",\"type\":\"app\"},{\"appId\":\"wps-office-wpp\",\"type\":\"app\"},{\"appId\":\"wps-office-et\",\"type\":\"app\"},{\"appId\":\"wps-office-wps\",\"type\":\"app\"},{\"appId\":\"xarchiver\",\"type\":\"app\"},{\"appId\":\"xgps\",\"type\":\"app\"},{\"appId\":\"xgpsspeed\",\"type\":\"app\"},{\"appId\":\"com.github.xournalpp.xournalpp\",\"type\":\"app\"},{\"appId\":\"yad-settings\",\"type\":\"app\"},{\"appId\":\"dev.zed.Zed\",\"type\":\"app\"}]",
+        "pinnedApps": [
+            "org.kde.dolphin",
+            "kitty",
+            "cmake-gui"
+        ]
+    },
+    "light": {
+        "antiFlashbang": {
+            "enable": false
+        },
+        "night": {
+            "automatic": false,
+            "colorTemperature": 1000,
+            "from": "17:00",
+            "to": "06:00"
+        }
+    },
+    "lock": {
+        "blur": {
+            "enable": true,
+            "extraZoom": 0.94,
+            "radius": 40
+        },
+        "centerClock": false,
+        "launchOnStartup": false,
+        "materialShapeChars": true,
+        "security": {
+            "requirePasswordToPower": false,
+            "unlockKeyring": true
+        },
+        "showLockedText": true,
+        "useHyprlock": false
+    },
+    "media": {
+        "filterDuplicatePlayers": true
+    },
+    "musicRecognition": {
+        "interval": 4,
+        "timeout": 16
+    },
+    "networking": {
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+    },
+    "notifications": {
+        "timeout": 10000
+    },
+    "osd": {
+        "timeout": 1500
+    },
+    "osk": {
+        "layout": "Italian",
+        "pinnedOnStartup": false
+    },
+    "overlay": {
+        "clickthroughOpacity": 0.8,
+        "darkenScreen": true,
+        "floatingImage": {
+            "imageSource": "https://media.tenor.com/H5U5bJzj3oAAAAAi/kukuru.gif",
+            "scale": 0.5
+        },
+        "openingZoomAnimation": true
+    },
+    "overview": {
+        "centerIcons": true,
+        "columns": 5,
+        "enable": true,
+        "orderBottomUp": false,
+        "orderRightLeft": false,
+        "rows": 2,
+        "scale": 0.09
+    },
+    "panelFamily": "ii",
+    "policies": {
+        "ai": 1
+    },
+    "regionSelector": {
+        "annotation": {
+            "useSatty": false
+        },
+        "circle": {
+            "padding": 10,
+            "strokeWidth": 6
+        },
+        "rect": {
+            "showAimLines": true
+        },
+        "targetRegions": {
+            "content": true,
+            "contentRegionOpacity": 0.8,
+            "layers": false,
+            "opacity": 0.3,
+            "selectionPadding": 5,
+            "showLabel": false,
+            "windows": true
+        }
+    },
+    "resources": {
+        "historyLength": 60,
+        "updateInterval": 100
+    },
+    "screenRecord": {
+        "savePath": "/home/linmax/Video"
+    },
+    "screenSnip": {
+        "savePath": ""
+    },
+    "search": {
+        "engineBaseUrl": "https://search.brave.com/search?q=",
+        "excludedSites": [
+        ],
+        "imageSearch": {
+            "imageSearchEngineBaseUrl": "https://lens.google.com/uploadbyurl?url=",
+            "useCircleSelection": false
+        },
+        "nonAppResultDelay": 30,
+        "prefix": {
+            "action": "/",
+            "app": ">",
+            "clipboard": ";",
+            "emojis": ":",
+            "math": "=",
+            "shellCommand": "$",
+            "showDefaultActionsWithoutPrefix": true,
+            "webSearch": "?"
+        },
+        "sloppy": false
+    },
+    "sidebar": {
+        "ai": {
+            "textFadeIn": false
+        },
+        "cornerOpen": {
+            "bottom": true,
+            "clickless": false,
+            "clicklessCornerEnd": false,
+            "clicklessCornerVerticalOffset": 0,
+            "cornerRegionHeight": 5,
+            "cornerRegionWidth": 250,
+            "enable": true,
+            "valueScroll": true,
+            "visualize": true
+        },
+        "keepRightSidebarLoaded": true,
+        "quickSliders": {
+            "enable": true,
+            "showBrightness": true,
+            "showMic": false,
+            "showVolume": true
+        },
+        "quickToggles": {
+            "android": {
+                "columns": 5,
+                "toggles": [
+                    {
+                        "size": 2,
+                        "type": "network"
+                    },
+                    {
+                        "size": 2,
+                        "type": "bluetooth"
+                    },
+                    {
+                        "size": 1,
+                        "type": "idleInhibitor"
+                    },
+                    {
+                        "size": 2,
+                        "type": "audio"
+                    },
+                    {
+                        "size": 2,
+                        "type": "nightLight"
+                    },
+                    {
+                        "size": 1,
+                        "type": "mic"
+                    }
+                ]
+            },
+            "style": "android"
+        },
+        "translator": {
+            "delay": 300,
+            "enable": true
+        }
+    },
+    "sounds": {
+        "battery": false,
+        "pomodoro": true,
+        "theme": "freedesktop"
+    },
+    "time": {
+        "dateFormat": "ddd, dd/MM",
+        "dateWithYearFormat": "dd/MM/yyyy",
+        "format": "hh:mm",
+        "pomodoro": {
+            "breakTime": 300,
+            "cyclesBeforeLongBreak": 2,
+            "focus": 4020,
+            "longBreak": 900
+        },
+        "secondPrecision": true,
+        "shortDateFormat": "dd/MM"
+    },
+    "tray": {
+        "filterPassive": true,
+        "invertPinnedItems": true,
+        "monochromeIcons": false,
+        "pinnedItems": [
+            "Fcitx"
+        ],
+        "showItemId": false
+    },
+    "updates": {
+        "adviseUpdateThreshold": 75,
+        "checkInterval": 120,
+        "stronglyAdviseUpdateThreshold": 200
+    },
+    "waffles": {
+        "actionCenter": {
+            "toggles": [
+                "network",
+                "bluetooth",
+                "easyEffects",
+                "powerProfile",
+                "idleInhibitor",
+                "nightLight",
+                "darkMode",
+                "antiFlashbang",
+                "cloudflareWarp",
+                "mic",
+                "musicRecognition",
+                "notifications",
+                "onScreenKeyboard",
+                "gameMode",
+                "screenSnip",
+                "colorPicker"
+            ]
+        },
+        "bar": {
+            "bottom": true,
+            "leftAlignApps": false
+        },
+        "calendar": {
+            "force2CharDayOfWeek": true
+        },
+        "tweaks": {
+            "smootherMenuAnimations": true,
+            "smootherSearchBar": true,
+            "switchHandlePositionFix": true
+        }
+    },
+    "wallpaperSelector": {
+        "useSystemFileDialog": false
+    },
+    "windows": {
+        "centerTitle": true,
+        "showTitlebar": false
+    },
+    "workSafety": {
+        "enable": {
+            "clipboard": false,
+            "wallpaper": false
+        },
+        "triggerCondition": {
+            "fileKeywords": [
+                "anime",
+                "booru",
+                "ecchi",
+                "hentai",
+                "yande.re",
+                "konachan",
+                "breast",
+                "nipples",
+                "pussy",
+                "nsfw",
+                "spoiler",
+                "girl"
+            ],
+            "linkKeywords": [
+                "hentai",
+                "porn",
+                "sukebei",
+                "hitomi.la",
+                "rule34",
+                "gelbooru",
+                "fanbox",
+                "dlsite"
+            ],
+            "networkNameKeywords": [
+                "airport",
+                "cafe",
+                "college",
+                "company",
+                "eduroam",
+                "free",
+                "guest",
+                "public",
+                "school",
+                "university"
+            ]
+        }
+    }
+}

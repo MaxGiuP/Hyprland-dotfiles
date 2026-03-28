@@ -1,0 +1,749 @@
+/*
+ * Material You GTK3 color bridge — GTK3-safe, no.
+ * User CSS priority (800) > theme CSS priority (200) so we win without it.
+ * Generated from: /home/linmax/.local/state/quickshell/user/generated/colors.json
+ */
+
+/* ══════════════════════════════════════════════════════════════
+ * 1. @define-color TOKENS
+ *    These override named colors globally — every GTK3 widget that
+ *    reads @bg_color, @base_color, @selected_bg_color etc. gets our
+ *    Material You colors automatically, including NemoIconContainer.
+ * ══════════════════════════════════════════════════════════════ */
+@define-color theme_fg_color            #efe0d5;
+@define-color theme_bg_color            #19120c;
+@define-color theme_base_color          #19120c;
+@define-color theme_text_color          #efe0d5;
+@define-color theme_selected_bg_color   #ffb878;
+@define-color theme_selected_fg_color   #4b2700;
+@define-color theme_unfocused_fg_color  #efe0d5;
+@define-color theme_unfocused_bg_color  #19120c;
+@define-color theme_unfocused_base_color #19120c;
+@define-color theme_unfocused_text_color #efe0d5;
+@define-color theme_unfocused_selected_bg_color  #261e18;
+@define-color theme_unfocused_selected_fg_color  #efe0d5;
+@define-color fg_color                  #efe0d5;
+@define-color bg_color                  #19120c;
+@define-color base_color                #19120c;
+@define-color text_color                #efe0d5;
+@define-color selected_bg_color         #ffb878;
+@define-color selected_fg_color         #4b2700;
+@define-color insensitive_bg_color      #221a14;
+@define-color insensitive_fg_color      #d6c3b6;
+@define-color insensitive_base_color    #19120c;
+@define-color unfocused_insensitive_color #d6c3b6;
+@define-color borders                   #51443a;
+@define-color unfocused_borders         #51443a;
+@define-color link_color                #ffb878;
+@define-color placeholder_text_color    #d6c3b6;
+@define-color content_view_bg           #19120c;
+@define-color text_view_bg              #19120c;
+@define-color wm_bg                     #312822;
+@define-color wm_bg_unfocused           #261e18;
+
+@define-color accent_color              #ffb878;
+@define-color accent_bg_color           #ffb878;
+@define-color accent_fg_color           #4b2700;
+@define-color destructive_color         #ffb4ab;
+@define-color destructive_bg_color      #ffb4ab;
+@define-color destructive_fg_color      #690005;
+@define-color success_color             #c2cb98;
+@define-color warning_color             #e2c0a5;
+@define-color error_color               #ffb4ab;
+
+@define-color window_bg_color           #19120c;
+@define-color window_fg_color           #efe0d5;
+@define-color view_bg_color             #19120c;
+@define-color view_fg_color             #efe0d5;
+@define-color headerbar_bg_color        #312822;
+@define-color headerbar_fg_color        #efe0d5;
+@define-color headerbar_border_color    #51443a;
+@define-color headerbar_backdrop_color  #261e18;
+@define-color headerbar_shade_color     #51443a;
+@define-color sidebar_bg_color          #221a14;
+@define-color sidebar_fg_color          #efe0d5;
+@define-color card_bg_color             #261e18;
+@define-color card_fg_color             #efe0d5;
+@define-color popover_bg_color          #3c332c;
+@define-color popover_fg_color          #efe0d5;
+@define-color thumbnail_bg_color        #261e18;
+@define-color thumbnail_fg_color        #efe0d5;
+
+@define-color primary_color              #ffb878;
+@define-color on_primary_color           #4b2700;
+@define-color primary_container_color    #6b3b03;
+@define-color on_primary_container_color #ffdcc1;
+@define-color secondary_color            #e2c0a5;
+@define-color on_secondary_color         #412c19;
+@define-color secondary_container_color  #5a422d;
+@define-color on_secondary_container_color #ffdcc1;
+@define-color outline_color              #9e8e82;
+@define-color outline_variant_color      #51443a;
+@define-color on_surface                 #efe0d5;
+@define-color on_surface_variant         #d6c3b6;
+@define-color surface_bright             #413730;
+@define-color surface_container_lowest  #130d07;
+@define-color surface_container_low     #221a14;
+@define-color surface_container         #261e18;
+@define-color surface_container_high    #312822;
+@define-color surface_container_highest #3c332c;
+
+/* ══════════════════════════════════════════════════════════════
+ * 2. WINDOW & BACKGROUND
+ * ══════════════════════════════════════════════════════════════ */
+window,
+window.background,
+.background,
+dialog {
+  background-color: #19120c;
+  color: #efe0d5;
+}
+
+/* GTK3 containers don't inherit background — set them explicitly so nothing
+ * falls through to the theme's default grey. Specific widgets override below. */
+window > box,
+window > grid,
+window > stack,
+window > paned,
+window > box > box,
+window > box > grid,
+window > box > stack,
+window > box > paned,
+window > box > box > box,
+window > box > box > paned {
+  background-color: #19120c;
+  color: #efe0d5;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 3. HEADERBAR & TITLEBAR
+ * ══════════════════════════════════════════════════════════════ */
+headerbar,
+.titlebar,
+headerbar.titlebar,
+.titlebar.horizontal {
+  background-color: #312822;
+  background-image: none;
+  color: #efe0d5;
+  border-bottom: 1px solid #51443a;
+  box-shadow: none;
+}
+headerbar:backdrop,
+.titlebar:backdrop {
+  background-color: #261e18;
+  background-image: none;
+  color: #d6c3b6;
+  box-shadow: none;
+}
+headerbar .title,
+.titlebar .title {
+  color: #efe0d5;
+  font-weight: 600;
+}
+headerbar .subtitle,
+.titlebar .subtitle {
+  color: #d6c3b6;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 4. TOOLBAR — Thunar, Nemo primary-toolbar
+ * ══════════════════════════════════════════════════════════════ */
+toolbar,
+toolbar.primary-toolbar,
+.toolbar,
+.primary-toolbar {
+  background-color: #312822;
+  background-image: none;
+  color: #efe0d5;
+  box-shadow: none;
+}
+/* NOTE: border-bottom intentionally omitted here.
+ * Chromium/Brave reads the GTK3 toolbar widget's border-bottom to determine
+ * the separator thickness between the navigation bar and bookmarks bar.
+ * Setting it here causes a visible gap above the bookmarks bar in Brave.
+ * File managers (Thunar, Nemo) get their toolbar borders from their own
+ * specific overrides below, so they are unaffected. */
+toolbar:backdrop,
+.toolbar:backdrop,
+.primary-toolbar:backdrop {
+  background-color: #261e18;
+}
+toolbar button,
+toolbar > toolbutton,
+.toolbar button,
+.primary-toolbar button {
+  background-color: transparent;
+  background-image: none;
+  color: #efe0d5;
+  border: none;
+  box-shadow: none;
+}
+toolbar button:hover,
+.toolbar button:hover,
+.primary-toolbar button:hover {
+  background-color: alpha(white, 0.08);
+}
+toolbar button:active,
+.toolbar button:active {
+  background-color: alpha(white, 0.16);
+}
+
+/* GTK3 file manager headerbars/toolbars */
+.nemo-window headerbar,
+.nemo-window .titlebar,
+.thunar headerbar,
+.thunar .titlebar,
+.thunar-window headerbar,
+.thunar-window .titlebar,
+window.thunar,
+window.thunar-window,
+window.thunar-window.background,
+window.thunar-window.background.csd,
+window.nemo-window,
+window.nemo-window.background,
+window.nemo-window.background.csd,
+window.nemo-window headerbar,
+window.thunar-window headerbar,
+.nemo-window toolbar,
+.nemo-window toolbar.primary-toolbar,
+.thunar toolbar,
+.thunar toolbar.primary-toolbar,
+.thunar-window toolbar,
+.thunar-window toolbar.primary-toolbar,
+.thunar box,
+.thunar-window box,
+.thunar .standard-toolbar,
+.thunar-window .standard-toolbar,
+.thunar .location-toolbar,
+.thunar-window .location-toolbar,
+.nemo-window .primary-toolbar,
+.thunar .primary-toolbar,
+.thunar-window .primary-toolbar {
+  background-color: #261e18;
+  background-image: none;
+  color: #efe0d5;
+  border-color: #51443a;
+  box-shadow: none;
+}
+.thunar,
+.thunar-window,
+window.thunar,
+window.thunar-window,
+.thunar grid,
+.thunar-window grid,
+.thunar paned,
+.thunar-window paned,
+.thunar notebook,
+.thunar-window notebook,
+.thunar scrolledwindow,
+.thunar-window scrolledwindow {
+  background-color: #19120c;
+  background-image: none;
+  color: #efe0d5;
+}
+.thunar headerbar,
+.thunar-window headerbar,
+.thunar .titlebar,
+.thunar-window .titlebar,
+.thunar toolbar,
+.thunar-window toolbar,
+.thunar .standard-toolbar,
+.thunar-window .standard-toolbar,
+.thunar .location-toolbar,
+.thunar-window .location-toolbar,
+.thunar .primary-toolbar,
+.thunar-window .primary-toolbar {
+  background: #261e18;
+  background-color: #261e18;
+  background-image: none;
+  color: #efe0d5;
+  border-bottom: 1px solid #51443a;
+  box-shadow: none;
+}
+.nemo-window headerbar button,
+.nemo-window toolbar button,
+.thunar headerbar button,
+.thunar toolbar button,
+.thunar-window headerbar button,
+.thunar-window toolbar button,
+.thunar .standard-toolbar button,
+.thunar-window .standard-toolbar button,
+.thunar .location-toolbar button,
+.thunar-window .location-toolbar button,
+.nemo-window .linked > button,
+.thunar .linked > button,
+.thunar-window .linked > button {
+  background-color: #261e18;
+  background-image: none;
+  color: #efe0d5;
+  border-color: #51443a;
+  box-shadow: none;
+}
+.nemo-window headerbar button:hover,
+.nemo-window toolbar button:hover,
+.thunar headerbar button:hover,
+.thunar toolbar button:hover,
+.thunar-window headerbar button:hover,
+.thunar-window toolbar button:hover,
+.thunar .standard-toolbar button:hover,
+.thunar-window .standard-toolbar button:hover,
+.thunar .location-toolbar button:hover,
+.thunar-window .location-toolbar button:hover {
+  background-color: #413730;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 5. MENU BAR
+ * ══════════════════════════════════════════════════════════════ */
+menubar {
+  background-color: #312822;
+  background-image: none;
+  color: #efe0d5;
+}
+menubar > menuitem:hover,
+menubar > menuitem:selected {
+  background-color: alpha(#ffb878, 0.15);
+  color: #efe0d5;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 6. MENUS & POPOVERS
+ * ══════════════════════════════════════════════════════════════ */
+menu,
+.menu,
+.context-menu {
+  background-color: #3c332c;
+  color: #efe0d5;
+  border: 1px solid #51443a;
+}
+menuitem,
+.menuitem {
+  color: #efe0d5;
+}
+menuitem:hover,
+menuitem:selected {
+  background-color: alpha(#ffb878, 0.30);
+  color: #1c1b1f;
+}
+menuitem:disabled {
+  color: #d6c3b6;
+}
+menu separator,
+.menu separator {
+  background-color: #51443a;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 7. CONTENT VIEWS — the core fix for Nemo & Thunar content area
+ *
+ * scrolledwindow > * catches NemoIconContainer (EelCanvas/GtkLayout
+ * direct child of GtkScrolledWindow implementing GtkScrollable).
+ * nemo-canvas-item is the CSS name set by gtk_widget_class_set_css_name.
+ * @define-color base_color above also affects GtkLayout.realize().
+ * ══════════════════════════════════════════════════════════════ */
+scrolledwindow > *,
+scrolledwindow > viewport,
+scrolledwindow > viewport > *,
+scrolledwindow > treeview,
+scrolledwindow > iconview,
+viewport,
+viewport > *,
+nemo-canvas-item {
+  background-color: #19120c;
+  background-image: none;
+  color: #efe0d5;
+}
+
+treeview,
+treeview.view,
+iconview,
+iconview > cell {
+  background-color: #19120c;
+  color: #efe0d5;
+  background-image: none;
+}
+treeview.view:hover {
+  background-color: #261e18;
+}
+treeview.view:selected,
+treeview.view:selected:focus,
+iconview:selected,
+iconview:selected:focus,
+iconview > cell:selected {
+  background-color: #ffb878;
+  color: #4b2700;
+}
+treeview.view:selected:backdrop {
+  background-color: #261e18;
+  color: #efe0d5;
+}
+
+/* Explicit Nemo/Thunar content views */
+.nemo-window scrolledwindow,
+.nemo-window scrolledwindow > viewport,
+.nemo-window .view,
+.nemo-window treeview,
+.nemo-window treeview.view,
+.nemo-window iconview,
+.nemo-window iconview > cell,
+.nemo-window layout,
+.nemo-window viewport,
+.thunar scrolledwindow,
+.thunar scrolledwindow > viewport,
+.thunar .view,
+.thunar treeview,
+.thunar treeview.view,
+.thunar iconview,
+.thunar iconview > cell,
+.thunar layout,
+.thunar viewport,
+.thunar-window scrolledwindow,
+.thunar-window scrolledwindow > viewport,
+.thunar-window .view,
+.thunar-window treeview,
+.thunar-window treeview.view,
+.thunar-window iconview,
+.thunar-window iconview > cell,
+.thunar-window layout,
+.thunar-window viewport,
+standard-view,
+.standard-view {
+  background-color: #19120c;
+  background-image: none;
+  color: #efe0d5;
+  box-shadow: none;
+}
+.nemo-window nemo-canvas-item,
+.thunar standard-view,
+.thunar-window standard-view,
+.thunar .standard-view,
+.thunar-window .standard-view {
+  background-color: #19120c;
+  background-image: none;
+  color: #efe0d5;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 8. SIDEBAR
+ * ══════════════════════════════════════════════════════════════ */
+.sidebar,
+.navigation-sidebar,
+placessidebar,
+placessidebar list,
+placessidebar > viewport,
+nemo-places-sidebar,
+nemo-places-sidebar list,
+places-treeview {
+  background-color: #221a14;
+  color: #efe0d5;
+  background-image: none;
+}
+.sidebar row,
+.navigation-sidebar row,
+placessidebar row {
+  background-color: transparent;
+  color: #efe0d5;
+}
+.sidebar row:hover,
+.navigation-sidebar row:hover,
+placessidebar row:hover {
+  background-color: alpha(#ffb878, 0.08);
+}
+.sidebar row:selected,
+.navigation-sidebar row:selected,
+placessidebar row:selected {
+  background-color: #ffb878;
+  color: #4b2700;
+}
+
+/* Explicit Nemo/Thunar sidebars */
+.nemo-window .sidebar,
+.nemo-window placessidebar,
+.nemo-window nemo-places-sidebar,
+.thunar .sidebar,
+.thunar .shortcuts-pane,
+.thunar-window .sidebar,
+.thunar-window .shortcuts-pane {
+  background-color: #221a14;
+  background-image: none;
+  color: #efe0d5;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 9. STATUS BAR
+ * ══════════════════════════════════════════════════════════════ */
+statusbar,
+.statusbar {
+  background-color: #221a14;
+  color: #d6c3b6;
+  border-top: 1px solid #51443a;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 10. PATH BAR
+ * ══════════════════════════════════════════════════════════════ */
+path-bar,
+path-bar > button,
+path-bar > button.text-button,
+path-bar > button.image-button {
+  background-color: #261e18;
+  background-image: none;
+  color: #efe0d5;
+  box-shadow: none;
+}
+path-bar > button:hover {
+  background-color: #312822;
+}
+path-bar > button:checked,
+path-bar > button:active {
+  background-color: #ffb878;
+  background-image: none;
+  color: #4b2700;
+}
+
+.nemo-window path-bar,
+.nemo-window path-bar > button,
+.thunar path-bar,
+.thunar path-bar > button,
+.thunar-window path-bar,
+.thunar-window path-bar > button {
+  background-color: #312822;
+  background-image: none;
+  color: #efe0d5;
+  border-color: #51443a;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 11. ENTRIES (location bar, search)
+ * ══════════════════════════════════════════════════════════════ */
+entry,
+spinbutton {
+  background-color: #261e18;
+  color: #efe0d5;
+  border: 1px solid #51443a;
+  box-shadow: none;
+  background-image: none;
+}
+entry:focus,
+spinbutton:focus {
+  border-color: #ffb878;
+}
+entry:disabled {
+  background-color: #221a14;
+  color: #d6c3b6;
+}
+
+.nemo-window entry,
+.thunar entry,
+.thunar-window entry,
+.nemo-window .linked > entry,
+.thunar .linked > entry,
+.thunar-window .linked > entry {
+  background-color: #312822;
+  background-image: none;
+  color: #efe0d5;
+  border-color: #51443a;
+  box-shadow: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 12. BUTTONS
+ * ══════════════════════════════════════════════════════════════ */
+button {
+  background-color: #312822;
+  background-image: none;
+  color: #efe0d5;
+  border: 1px solid #51443a;
+  box-shadow: none;
+}
+button:hover {
+  background-color: #413730;
+}
+button:active,
+button:checked {
+  background-color: #ffb878;
+  color: #4b2700;
+  border-color: #ffb878;
+}
+button:disabled {
+  background-color: #221a14;
+  color: #d6c3b6;
+}
+button.suggested-action {
+  background-color: #ffb878;
+  color: #4b2700;
+  border-color: #ffb878;
+}
+button.destructive-action {
+  background-color: #ffb4ab;
+  color: #690005;
+}
+button.flat,
+button.flat:hover,
+button.flat:active {
+  border: none;
+  box-shadow: none;
+}
+button.flat {
+  background-color: transparent;
+  color: #efe0d5;
+}
+button.flat:hover {
+  background-color: alpha(white, 0.08);
+}
+button.flat:active,
+button.flat:checked {
+  background-color: #ffb878;
+  color: #4b2700;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 13. NOTEBOOK TABS
+ * ══════════════════════════════════════════════════════════════ */
+notebook > header {
+  background-color: #312822;
+  border-bottom: 1px solid #51443a;
+}
+notebook > header tab {
+  background-color: transparent;
+  color: #d6c3b6;
+}
+notebook > header tab:checked {
+  background-color: #261e18;
+  color: #efe0d5;
+  border-bottom: 2px solid #ffb878;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 14. SCROLLBAR
+ * ══════════════════════════════════════════════════════════════ */
+scrollbar {
+  background-color: transparent;
+}
+scrollbar slider {
+  background-color: alpha(#efe0d5, 0.3);
+  border-radius: 10px;
+  min-width: 6px;
+  min-height: 6px;
+}
+scrollbar slider:hover {
+  background-color: alpha(#efe0d5, 0.5);
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 14b. SCROLL EDGE (overshoot / undershoot)
+ * GTK3: overshoot/undershoot are node TYPES, not classes.
+ * Use "overshoot.top" not ".overshoot.top" (no leading dot).
+ * adw-gtk3-dark uses @window_fg_color radial gradient (white flash).
+ * Replace with warm primary tint so it matches our palette.
+ * ══════════════════════════════════════════════════════════════ */
+overshoot.top {
+  background-color: transparent;
+  background-image: -gtk-gradient(radial, center top, 0, center top, 0.5,
+    to(alpha(#ffb878, 0.18)), to(alpha(#ffb878, 0)));
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  box-shadow: none;
+}
+overshoot.bottom {
+  background-color: transparent;
+  background-image: -gtk-gradient(radial, center bottom, 0, center bottom, 0.5,
+    to(alpha(#ffb878, 0.18)), to(alpha(#ffb878, 0)));
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  box-shadow: none;
+}
+overshoot.left {
+  background-color: transparent;
+  background-image: -gtk-gradient(radial, left center, 0, left center, 0.5,
+    to(alpha(#ffb878, 0.18)), to(alpha(#ffb878, 0)));
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  box-shadow: none;
+}
+overshoot.right {
+  background-color: transparent;
+  background-image: -gtk-gradient(radial, right center, 0, right center, 0.5,
+    to(alpha(#ffb878, 0.18)), to(alpha(#ffb878, 0)));
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  box-shadow: none;
+}
+undershoot.top {
+  background-color: transparent;
+  background-image: linear-gradient(to bottom, alpha(#51443a, 0.2), transparent);
+  box-shadow: none;
+}
+undershoot.bottom {
+  background-color: transparent;
+  background-image: linear-gradient(to top, alpha(#51443a, 0.2), transparent);
+  box-shadow: none;
+}
+undershoot.left {
+  background-color: transparent;
+  background-image: linear-gradient(to right, alpha(#51443a, 0.2), transparent);
+  box-shadow: none;
+}
+undershoot.right {
+  background-color: transparent;
+  background-image: linear-gradient(to left, alpha(#51443a, 0.2), transparent);
+  box-shadow: none;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 15. SELECTION
+ * ══════════════════════════════════════════════════════════════ */
+selection {
+  background-color: #ffb878;
+  color: #4b2700;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 16. FRAME & SEPARATOR
+ * ══════════════════════════════════════════════════════════════ */
+separator,
+.separator {
+  background-color: #51443a;
+}
+frame > border {
+  border-color: #51443a;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 17. INFOBAR
+ * ══════════════════════════════════════════════════════════════ */
+infobar.info    > revealer > box { background-color: #312822; color: #efe0d5; }
+infobar.warning > revealer > box { background-color: #e2c0a5;  color: #19120c; }
+infobar.error   > revealer > box { background-color: #ffb4ab;          color: #690005; }
+
+/* ══════════════════════════════════════════════════════════════
+ * 18. TOOLTIP
+ * ══════════════════════════════════════════════════════════════ */
+tooltip {
+  background-color: #413730;
+  color: #efe0d5;
+  border: 1px solid #51443a;
+}
+
+/* ══════════════════════════════════════════════════════════════
+ * 19. LABEL
+ * ══════════════════════════════════════════════════════════════ */
+label {
+  color: #efe0d5;
+}
+label:disabled {
+  color: #d6c3b6;
+}
+
+/* Chromium/Brave: zero out headerbar border-bottom — GTK CSS classes match WM class */
+window.background.google-chrome headerbar,
+window.background.google-chrome headerbar:backdrop,
+window.background.google-chrome .titlebar,
+window.background.brave-browser headerbar,
+window.background.brave-browser headerbar:backdrop,
+window.background.brave-browser .titlebar,
+window.background.chromium headerbar,
+window.background.chromium headerbar:backdrop,
+window.background.chromium .titlebar {
+  border-bottom: none;
+}

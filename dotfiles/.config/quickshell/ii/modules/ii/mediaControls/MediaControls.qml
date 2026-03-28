@@ -1,0 +1,263 @@
+pragma ComponentBehavior: Bound
+import qs
+import qs.services
+import qs.modules.common
+import qs.modules.common.widgets
+import qs.modules.common.functions
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Io
+import Quickshell.Services.Mpris
+import Quickshell.Wayland
+import Quickshell.Hyprland
+
+Scope {
+    id: root
+    property bool visible: false
+    readonly property MprisPlayer activePlayer: MprisController.activePlayer
+    readonly property var realPlayers: MprisController.players
+    readonly property var meaningfulPlayers: filterDuplicatePlayers(realPlayers)
+    readonly property real osdWidth: Appearance.sizes.osdWidth
+    readonly property real widgetWidth: Appearance.sizes.mediaControlsWidth
+    readonly property real widgetHeight: Appearance.sizes.mediaControlsHeight
+    property real popupRounding: Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1
+    property list<real> visualizerPoints: []
+
+    function filterDuplicatePlayers(players) {
+        let filtered = [];
+        let used = new Set();
+
+        for (let i = 0; i < players.length; ++i) {
+            if (used.has(i))
+                continue;
+            let p1 = players[i];
+            let group = [i];
+
+            for (let j = i + 1; j < players.length; ++j) {
+                let p2 = players[j];
+                const p1kde = (p1?.dbusName ?? "").toLowerCase().includes("kdeconnect");
+                const p2kde = (p2?.dbusName ?? "").toLowerCase().includes("kdeconnect");
+                if (p1kde !== p2kde) continue; // never merge KDE Connect with local sources
+                if (p1.trackTitle && p2.trackTitle && (p1.trackTitle.includes(p2.trackTitle) || p2.trackTitle.includes(p1.trackTitle))) {
+                    group.push(j);
+                }
+            }
+
+            let chosenIdx = group.find(idx => players[idx] === root.activePlayer);
+            if (chosenIdx !== undefined) {
+                const chosenPlayer = players[chosenIdx];
+                const chosenArt = `${chosenPlayer?.trackArtUrl ?? ""}`.trim();
+                if (chosenArt.length === 0) {
+                    const artBearingIdx = group.find(idx => {
+                        const candidate = players[idx];
+                        const art = `${candidate?.trackArtUrl ?? ""}`.trim();
+                        return art.length > 0;
+                    });
+                    if (artBearingIdx !== undefined)
+                        chosenIdx = artBearingIdx;
+                }
+            }
+            if (chosenIdx === undefined)
+                chosenIdx = group.find(idx => players[idx].trackArtUrl && players[idx].trackArtUrl.length > 0);
+            if (chosenIdx === undefined)
+                chosenIdx = group[0];
+
+            const chosen = players[chosenIdx];
+            const isKde = (chosen?.dbusName ?? "").toLowerCase().includes("kdeconnect");
+            if (isKde && !((chosen?.trackTitle ?? "").length > 0)) {
+                group.forEach(idx => used.add(idx));
+                continue;
+            }
+            filtered.push(chosen);
+            group.forEach(idx => used.add(idx));
+        }
+        return filtered.sort((a, b) => {
+            if (a === root.activePlayer) return -1;
+            if (b === root.activePlayer) return 1;
+            const aIsKdeConnect = (a?.dbusName ?? "").toLowerCase().includes("kdeconnect");
+            const bIsKdeConnect = (b?.dbusName ?? "").toLowerCase().includes("kdeconnect");
+            if (aIsKdeConnect === bIsKdeConnect) return 0;
+            return aIsKdeConnect ? 1 : -1;
+        });
+    }
+
+    Process {
+        id: cavaProc
+        running: mediaControlsLoader.active
+        onRunningChanged: {
+            if (!cavaProc.running) {
+                root.visualizerPoints = [];
+            }
+        }
+        command: ["cava", "-p", `${FileUtils.trimFileProtocol(Directories.scriptPath)}/cava/raw_output_config.txt`]
+        stdout: SplitParser {
+            onRead: data => {
+                // Parse `;`-separated values into the visualizerPoints array
+                let points = data.split(";").map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
+                root.visualizerPoints = points;
+            }
+        }
+    }
+
+    Loader {
+        id: mediaControlsLoader
+        active: GlobalStates.mediaControlsOpen
+        onActiveChanged: {
+            if (!mediaControlsLoader.active && root.realPlayers.length === 0) {
+                GlobalStates.mediaControlsOpen = false;
+            }
+        }
+
+        sourceComponent: PanelWindow {
+            id: panelWindow
+            visible: true
+
+            exclusionMode: ExclusionMode.Ignore
+            exclusiveZone: 0
+            implicitWidth: root.widgetWidth
+            implicitHeight: playerColumnLayout.implicitHeight
+            color: "transparent"
+            WlrLayershell.namespace: "quickshell:mediaControls"
+
+            anchors {
+                top: !Config.options.bar.bottom || Config.options.bar.vertical
+                bottom: Config.options.bar.bottom && !Config.options.bar.vertical
+                left: true
+                right: false
+            }
+            margins {
+                top: Config.options.bar.vertical ? ((panelWindow.screen.height / 2) - widgetHeight * 1.5) : Appearance.sizes.barHeight
+                bottom: Appearance.sizes.barHeight
+                left: Appearance.sizes.barHeight + 4
+                right: Appearance.sizes.barHeight
+            }
+
+            mask: Region {
+                item: playerColumnLayout
+            }
+
+            Component.onCompleted: {
+                GlobalFocusGrab.addDismissable(panelWindow);
+            }
+            Component.onDestruction: {
+                GlobalFocusGrab.removeDismissable(panelWindow);
+            }
+            Connections {
+                target: GlobalFocusGrab
+                function onDismissed() {
+                    GlobalStates.mediaControlsOpen = false;
+                }
+            }
+
+            ColumnLayout {
+                id: playerColumnLayout
+                anchors.fill: parent
+                spacing: -Appearance.sizes.elevationMargin // Shadow overlap okay
+
+                Repeater {
+                    model: ScriptModel {
+                        values: root.meaningfulPlayers
+                    }
+                    delegate: PlayerControl {
+                        required property MprisPlayer modelData
+                        player: modelData
+                        visualizerPoints: root.visualizerPoints
+                        implicitWidth: root.widgetWidth
+                        implicitHeight: root.widgetHeight
+                        radius: root.popupRounding
+                    }
+                }
+
+                Item {
+                    // No player placeholder
+                    Layout.alignment: {
+                        if (panelWindow.anchors.left)
+                            return Qt.AlignLeft;
+                        if (panelWindow.anchors.right)
+                            return Qt.AlignRight;
+                        return Qt.AlignHCenter;
+                    }
+                    Layout.leftMargin: Appearance.sizes.hyprlandGapsOut
+                    Layout.rightMargin: Appearance.sizes.hyprlandGapsOut
+                    visible: root.meaningfulPlayers.length === 0
+                    implicitWidth: placeholderBackground.implicitWidth + Appearance.sizes.elevationMargin
+                    implicitHeight: placeholderBackground.implicitHeight + Appearance.sizes.elevationMargin
+
+                    StyledRectangularShadow {
+                        target: placeholderBackground
+                    }
+
+                    Rectangle {
+                        id: placeholderBackground
+                        anchors.centerIn: parent
+                        color: Appearance.colors.colLayer0
+                        radius: root.popupRounding
+                        property real padding: 20
+                        implicitWidth: placeholderLayout.implicitWidth + padding * 2
+                        implicitHeight: placeholderLayout.implicitHeight + padding * 2
+
+                        ColumnLayout {
+                            id: placeholderLayout
+                            anchors.centerIn: parent
+
+                            StyledText {
+                                text: Translation.tr("No active player")
+                                font.pixelSize: Appearance.font.pixelSize.large
+                            }
+                            StyledText {
+                                color: Appearance.colors.colSubtext
+                                text: Translation.tr("Make sure your player has MPRIS support\nor try turning off duplicate player filtering")
+                                font.pixelSize: Appearance.font.pixelSize.small
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    IpcHandler {
+        target: "mediaControls"
+
+        function toggle(): void {
+            mediaControlsLoader.active = !mediaControlsLoader.active;
+            if (mediaControlsLoader.active)
+                Notifications.timeoutAll();
+        }
+
+        function close(): void {
+            mediaControlsLoader.active = false;
+        }
+
+        function open(): void {
+            mediaControlsLoader.active = true;
+            Notifications.timeoutAll();
+        }
+    }
+
+    GlobalShortcut {
+        name: "mediaControlsToggle"
+        description: "Toggles media controls on press"
+
+        onPressed: {
+            GlobalStates.mediaControlsOpen = !GlobalStates.mediaControlsOpen;
+        }
+    }
+    GlobalShortcut {
+        name: "mediaControlsOpen"
+        description: "Opens media controls on press"
+
+        onPressed: {
+            GlobalStates.mediaControlsOpen = true;
+        }
+    }
+    GlobalShortcut {
+        name: "mediaControlsClose"
+        description: "Closes media controls on press"
+
+        onPressed: {
+            GlobalStates.mediaControlsOpen = false;
+        }
+    }
+}
