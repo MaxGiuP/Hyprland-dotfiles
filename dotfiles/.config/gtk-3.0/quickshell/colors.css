@@ -156,13 +156,15 @@ toolbar.primary-toolbar,
   background-image: none;
   color: #efe0d5;
   box-shadow: none;
+  /* border-bottom-width is 0 (default), but border-bottom-color still defaults
+   * to currentColor.  Chrome/Brave read border-bottom-color from the GTK3
+   * toolbar widget for the toolbar↔bookmarks separator colour, so we must
+   * explicitly make it transparent. */
+  border-color: transparent;
 }
-/* NOTE: border-bottom intentionally omitted here.
- * Chromium/Brave reads the GTK3 toolbar widget's border-bottom to determine
- * the separator thickness between the navigation bar and bookmarks bar.
- * Setting it here causes a visible gap above the bookmarks bar in Brave.
- * File managers (Thunar, Nemo) get their toolbar borders from their own
- * specific overrides below, so they are unaffected. */
+/* NOTE: no border-bottom set — only border-color: transparent to zero the
+ * colour so Chromium doesn't draw a visible toolbar↔bookmarks separator.
+ * File managers (Thunar, Nemo) override their toolbar borders below. */
 toolbar:backdrop,
 .toolbar:backdrop,
 .primary-toolbar:backdrop {
@@ -331,6 +333,7 @@ menuitem:disabled {
 menu separator,
 .menu separator {
   background-color: #51443a;
+  min-height: 1px;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -701,9 +704,17 @@ selection {
 /* ══════════════════════════════════════════════════════════════
  * 16. FRAME & SEPARATOR
  * ══════════════════════════════════════════════════════════════ */
+/* NOTE: min-width/height intentionally 0.
+ * Chrome/Brave in GTK3 mode sample GtkSeparator min-height via
+ * GetContentsSeparatorHeight() to determine the toolbar↔content separator
+ * height.  The adw-gtk3 theme sets min-height: 1px which causes a visible
+ * gap.  Menu and paned separators have more-specific rules that restore
+ * their own sizing. */
 separator,
 .separator {
-  background-color: #51443a;
+  background-color: transparent;
+  min-width: 0;
+  min-height: 0;
 }
 frame > border {
   border-color: #51443a;
@@ -735,7 +746,30 @@ label:disabled {
   color: #d6c3b6;
 }
 
-/* Chromium/Brave: zero out headerbar border-bottom — GTK CSS classes match WM class */
+/* ── Chromium / Brave separator fixes (GTK3 user CSS) ─────────────────────────
+ * 1. button#button border-color: Chrome/Brave sample this to colour the
+ *    toolbar-content separator.  Generated button{} sets a visible colour;
+ *    this higher-specificity rule resets it to transparent.
+ * 2. .frame border-color: Chrome/Brave call GetBorderColor("box.frame") for
+ *    kColorNativeBoxFrameBorder → kColorToolbarSeparator →
+ *    kColorToolbarContentAreaSeparator.  Zeroing this makes the
+ *    toolbar↔content separator transparent.  Targets only widgets that have
+ *    the CSS class "frame" added explicitly (like Chrome's hidden GtkBox),
+ *    not GtkFrame whose CSS node is "frame" (matched by frame > border).
+ * 3. headerbar border-bottom: zeroed so no height is added to the separator.
+ */
+button#button {
+  border-color: transparent;
+  box-shadow: none;
+}
+box.frame {
+  background-color: @surface_container_high;
+  border-color: @surface_container_high;
+}
+frame > border {
+  background-color: @surface_container_high;
+  border-color: @surface_container_high;
+}
 window.background.google-chrome headerbar,
 window.background.google-chrome headerbar:backdrop,
 window.background.google-chrome .titlebar,

@@ -369,24 +369,28 @@ toolbarview > .bottom-bar:backdrop {
  * background sub-properties. 'background: none' from libadwaita APPLICATION
  * CSS would win over 'background-color: x !important' in certain GTK4 cascade
  * edge cases, but 'background: x !important' beats it unambiguously.       */
+/* NOTE: background uses container_high (same as toolbar) intentionally.
+ * Chrome/Brave sample the GTK headerbar background for kColorFrameActive, which
+ * feeds kColorTabBackgroundInactiveFrameActive and then
+ * kColorBookmarkBarSeparatorChromeRefresh.  If headerbar bg ≠ toolbar bg the
+ * separator becomes visible.  container_high matches the toolbar, making the
+ * separator blend in. */
 headerbar,
 .titlebar,
 headerbar.titlebar,
 .titlebar.horizontal,
 adw-header-bar {
-  background: #221a14 !important;
-  background-color: #221a14 !important;
+  background: #312822 !important;
+  background-color: #312822 !important;
   background-image: none !important;
   border-image: none !important;
   color: #efe0d5 !important;
-  border-bottom: 1px solid alpha(#51443a, 0.5) !important;
-  box-shadow: none !important;
 }
 headerbar:backdrop,
 .titlebar:backdrop,
 adw-header-bar:backdrop {
-  background: #221a14 !important;
-  background-color: #221a14 !important;
+  background: #312822 !important;
+  background-color: #312822 !important;
   background-image: none !important;
   border-image: none !important;
   color: #d6c3b6 !important;
@@ -394,10 +398,11 @@ adw-header-bar:backdrop {
 }
 
 /* tabbar — used in GNOME Web, Text Editor, etc. */
+/* NOTE: border-bottom intentionally omitted — tabbar lives inside toolbarview > .top-bar;
+ * the .top-bar already carries the separator. A second border here creates a double line. */
 tabbar .box {
   background-color: #261e18 !important;
   color: #efe0d5 !important;
-  border-bottom: 1px solid #51443a !important;
 }
 tabbar .box:backdrop {
   background-color: #261e18 !important;
@@ -435,14 +440,16 @@ actionbar > revealer > box:backdrop {
 
 /* toolbarview bars — the GNOME 45+ replacement for headerbar.
  * Use both direct-child (>) and descendant ( ) selectors to catch
- * Nautilus AdwToolbarView and any intermediate wrappers. */
+ * Nautilus AdwToolbarView and any intermediate wrappers.
+ * NOTE: border-bottom intentionally omitted — libadwaita handles the header/content
+ * boundary via undershoot shadow on scroll. A hard border here creates a visible gap
+ * in GNOME Web, Epiphany, and any other AdwToolbarView app. */
 toolbarview > .top-bar,
 toolbarview > .top-bar.raised,
 toolbarview .top-bar,
 .top-bar {
   background: #261e18 !important;
   color: #efe0d5 !important;
-  border-bottom: 1px solid #51443a !important;
 }
 toolbarview > .top-bar:backdrop,
 toolbarview > .top-bar.raised:backdrop,
@@ -463,12 +470,15 @@ toolbarview .bottom-bar,
   background-color: #261e18 !important;
 }
 
-/* toolbar (GTK3) */
+/* toolbar (GTK3 & GTK4) */
+/* NOTE: must match container_high — Chrome/Brave in GTK4 mode read GetBgColor("toolbar#toolbar")
+ * for kColorNativeToolbarBackground.  The separator fixes use @surface_container_high, so both
+ * must be the same value or the separator colour ≠ toolbar colour → visible line.
+ * The GTK3 toolkit section (gtk3_colors_css) already uses container_high; this keeps GTK4 aligned. */
 toolbar {
-  background-color: #261e18 !important;
+  background-color: #312822 !important;
   color: #efe0d5 !important;
   background-image: none !important;
-  border-bottom: 1px solid #51443a !important;
 }
 
 headerbar .title,
@@ -1411,10 +1421,15 @@ frame > border,
   border: 1px solid @outline_variant_color;
   border-radius: 6px;
 }
+/* NOTE: min-width/height intentionally 0.
+ * Chrome/Brave in GTK4 mode sample a bare GtkSeparator's minimum size via
+ * GetContentsSeparatorHeight() to determine the toolbar↔content separator height.
+ * min-height: 1px was telling Chrome to render a 1px gap.  Menu separators and
+ * paned separators have more-specific rules that keep their own sizing. */
 separator {
   background-color: transparent;
-  min-width: 1px;
-  min-height: 1px;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════

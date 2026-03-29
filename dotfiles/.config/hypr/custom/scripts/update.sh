@@ -263,6 +263,66 @@ run_aur_updates
 section "${T[FLATPAK]}"
 run_pkg "flatpak" flatpak update -y
 
+# ── quickshell (rebuild from source) ─────────────────────────────────────────
+rebuild_quickshell() {
+    section "quickshell — source rebuild"
+
+    # Detect which package owns /usr/bin/quickshell
+    local qs_pkg
+    qs_pkg=$(pacman -Qo /usr/bin/quickshell 2>/dev/null | awk '{print $5}')
+    if [ -z "$qs_pkg" ]; then
+        skip "quickshell"
+        return 0
+    fi
+    echo -e "  ${DIM}Detected: ${qs_pkg}${R}"
+
+    # Find build directory: ~/quickshell-git, ~/quickshell, or yay cache
+    local build_dir=""
+    for candidate in "$HOME/$qs_pkg" "$HOME/quickshell-git" "$HOME/quickshell" \
+                     "$HOME/.cache/yay/$qs_pkg"; do
+        if [ -f "$candidate/PKGBUILD" ]; then
+            build_dir="$candidate"
+            break
+        fi
+    done
+
+    # Check upstream source for new commits if the src dir exists
+    local src_dir="$build_dir/quickshell"
+    if [ -n "$build_dir" ] && [ -d "$src_dir/.git" ]; then
+        echo -e "  ${DIM}Fetching upstream...${R}"
+        git -C "$src_dir" fetch origin --quiet 2>/dev/null || true
+
+        local behind
+        behind=$(git -C "$src_dir" rev-list HEAD..@{u} --count 2>/dev/null || echo "0")
+        if [ "$behind" -eq 0 ]; then
+            echo -e "  ${PASS}  ${GREEN}quickshell already up to date${R}"
+            return 0
+        fi
+        echo -e "  ${WARN}  ${YELLOW}${behind} new commit(s) — rebuilding...${R}"
+        git -C "$src_dir" log --oneline HEAD..@{u} 2>/dev/null | while read -r line; do
+            echo -e "  ${DIM}    • $line${R}"
+        done
+    fi
+
+    # Rebuild: use local PKGBUILD dir if found, otherwise fall back to yay
+    if [ -n "$build_dir" ]; then
+        if (cd "$build_dir" && makepkg -si --noconfirm); then
+            ok "quickshell"
+        else
+            fail "quickshell"
+        fi
+    else
+        echo -e "  ${DIM}No local PKGBUILD found — using yay${R}"
+        if yay -S "$qs_pkg" --noconfirm; then
+            ok "quickshell"
+        else
+            fail "quickshell"
+        fi
+    fi
+}
+
+rebuild_quickshell
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo
 echo -e "  ${BOLD}${BLUE}┌──────────────────────────────────────────────────────────┐${R}"

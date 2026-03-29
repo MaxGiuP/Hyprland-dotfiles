@@ -480,24 +480,28 @@ toolbarview > .bottom-bar:backdrop {
  * background sub-properties. 'background: none' from libadwaita APPLICATION
  * CSS would win over 'background-color: x !important' in certain GTK4 cascade
  * edge cases, but 'background: x !important' beats it unambiguously.       */
+/* NOTE: background uses container_high (same as toolbar) intentionally.
+ * Chrome/Brave sample the GTK headerbar background for kColorFrameActive, which
+ * feeds kColorTabBackgroundInactiveFrameActive and then
+ * kColorBookmarkBarSeparatorChromeRefresh.  If headerbar bg ≠ toolbar bg the
+ * separator becomes visible.  container_high matches the toolbar, making the
+ * separator blend in. */
 headerbar,
 .titlebar,
 headerbar.titlebar,
 .titlebar.horizontal,
 adw-header-bar {
-  background: ${container_low} !important;
-  background-color: ${container_low} !important;
+  background: ${container_high} !important;
+  background-color: ${container_high} !important;
   background-image: none !important;
   border-image: none !important;
   color: ${on_surface} !important;
-  border-bottom: 1px solid alpha(${outline_variant}, 0.5) !important;
-  box-shadow: none !important;
 }
 headerbar:backdrop,
 .titlebar:backdrop,
 adw-header-bar:backdrop {
-  background: ${container_low} !important;
-  background-color: ${container_low} !important;
+  background: ${container_high} !important;
+  background-color: ${container_high} !important;
   background-image: none !important;
   border-image: none !important;
   color: ${on_surface_variant} !important;
@@ -505,10 +509,11 @@ adw-header-bar:backdrop {
 }
 
 /* tabbar — used in GNOME Web, Text Editor, etc. */
+/* NOTE: border-bottom intentionally omitted — tabbar lives inside toolbarview > .top-bar;
+ * the .top-bar already carries the separator. A second border here creates a double line. */
 tabbar .box {
   background-color: ${container} !important;
   color: ${on_surface} !important;
-  border-bottom: 1px solid ${outline_variant} !important;
 }
 tabbar .box:backdrop {
   background-color: ${container} !important;
@@ -546,14 +551,16 @@ actionbar > revealer > box:backdrop {
 
 /* toolbarview bars — the GNOME 45+ replacement for headerbar.
  * Use both direct-child (>) and descendant ( ) selectors to catch
- * Nautilus AdwToolbarView and any intermediate wrappers. */
+ * Nautilus AdwToolbarView and any intermediate wrappers.
+ * NOTE: border-bottom intentionally omitted — libadwaita handles the header/content
+ * boundary via undershoot shadow on scroll. A hard border here creates a visible gap
+ * in GNOME Web, Epiphany, and any other AdwToolbarView app. */
 toolbarview > .top-bar,
 toolbarview > .top-bar.raised,
 toolbarview .top-bar,
 .top-bar {
   background: ${container} !important;
   color: ${on_surface} !important;
-  border-bottom: 1px solid ${outline_variant} !important;
 }
 toolbarview > .top-bar:backdrop,
 toolbarview > .top-bar.raised:backdrop,
@@ -574,12 +581,15 @@ toolbarview .bottom-bar,
   background-color: ${container} !important;
 }
 
-/* toolbar (GTK3) */
+/* toolbar (GTK3 & GTK4) */
+/* NOTE: must match container_high — Chrome/Brave in GTK4 mode read GetBgColor("toolbar#toolbar")
+ * for kColorNativeToolbarBackground.  The separator fixes use @surface_container_high, so both
+ * must be the same value or the separator colour ≠ toolbar colour → visible line.
+ * The GTK3 toolkit section (gtk3_colors_css) already uses container_high; this keeps GTK4 aligned. */
 toolbar {
-  background-color: ${container} !important;
+  background-color: ${container_high} !important;
   color: ${on_surface} !important;
   background-image: none !important;
-  border-bottom: 1px solid ${outline_variant} !important;
 }
 
 headerbar .title,
@@ -1522,10 +1532,15 @@ frame > border,
   border: 1px solid @outline_variant_color;
   border-radius: 6px;
 }
+/* NOTE: min-width/height intentionally 0.
+ * Chrome/Brave in GTK4 mode sample a bare GtkSeparator's minimum size via
+ * GetContentsSeparatorHeight() to determine the toolbar↔content separator height.
+ * min-height: 1px was telling Chrome to render a 1px gap.  Menu separators and
+ * paned separators have more-specific rules that keep their own sizing. */
 separator {
   background-color: transparent;
-  min-width: 1px;
-  min-height: 1px;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -2674,13 +2689,15 @@ toolbar.primary-toolbar,
   background-image: none;
   color: ${on_surface};
   box-shadow: none;
+  /* border-bottom-width is 0 (default), but border-bottom-color still defaults
+   * to currentColor.  Chrome/Brave read border-bottom-color from the GTK3
+   * toolbar widget for the toolbar↔bookmarks separator colour, so we must
+   * explicitly make it transparent. */
+  border-color: transparent;
 }
-/* NOTE: border-bottom intentionally omitted here.
- * Chromium/Brave reads the GTK3 toolbar widget's border-bottom to determine
- * the separator thickness between the navigation bar and bookmarks bar.
- * Setting it here causes a visible gap above the bookmarks bar in Brave.
- * File managers (Thunar, Nemo) get their toolbar borders from their own
- * specific overrides below, so they are unaffected. */
+/* NOTE: no border-bottom set — only border-color: transparent to zero the
+ * colour so Chromium doesn't draw a visible toolbar↔bookmarks separator.
+ * File managers (Thunar, Nemo) override their toolbar borders below. */
 toolbar:backdrop,
 .toolbar:backdrop,
 .primary-toolbar:backdrop {
@@ -2849,6 +2866,7 @@ menuitem:disabled {
 menu separator,
 .menu separator {
   background-color: ${outline_variant};
+  min-height: 1px;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -3219,9 +3237,17 @@ selection {
 /* ══════════════════════════════════════════════════════════════
  * 16. FRAME & SEPARATOR
  * ══════════════════════════════════════════════════════════════ */
+/* NOTE: min-width/height intentionally 0.
+ * Chrome/Brave in GTK3 mode sample GtkSeparator min-height via
+ * GetContentsSeparatorHeight() to determine the toolbar↔content separator
+ * height.  The adw-gtk3 theme sets min-height: 1px which causes a visible
+ * gap.  Menu and paned separators have more-specific rules that restore
+ * their own sizing. */
 separator,
 .separator {
-  background-color: ${outline_variant};
+  background-color: transparent;
+  min-width: 0;
+  min-height: 0;
 }
 frame > border {
   border-color: ${outline_variant};
@@ -3258,9 +3284,28 @@ GTK3CSS
 
 # ── Write quickshell sub-files ─────────────────────────────────────────────────
 { printf '%s\n' "$gtk3_colors_css" | sed 's/ !important//g'
-  # Recent Chromium/Brave builds read headerbar border-bottom for the toolbar separator
-  # height (older builds used `toolbar` border-bottom, which is intentionally omitted above).
-  printf '\n/* Chromium/Brave: zero out headerbar border-bottom — GTK CSS classes match WM class */\nwindow.background.google-chrome headerbar,\nwindow.background.google-chrome headerbar:backdrop,\nwindow.background.google-chrome .titlebar,\nwindow.background.brave-browser headerbar,\nwindow.background.brave-browser headerbar:backdrop,\nwindow.background.brave-browser .titlebar,\nwindow.background.chromium headerbar,\nwindow.background.chromium headerbar:backdrop,\nwindow.background.chromium .titlebar {\n  border-bottom: none;\n}\n'
+  # Chromium/Brave separator fixes — must live in user CSS (priority 800) so they
+  # outrank the theme (priority 200) regardless of specificity.
+  #
+  # 1. button#button: Chrome/Brave create a GtkButton named "button" and sample its
+  #    border-color to determine kColorToolbarContentAreaSeparator.  Our generated
+  #    `button {}` rule sets a visible border; this higher-specificity rule resets it
+  #    to transparent so no coloured line is drawn.
+  #
+  # 2. headerbar border-bottom: Recent builds read headerbar's border-bottom for the
+  #    separator height (older builds used `toolbar`, already intentionally omitted).
+  printf '\n/* ── Chromium / Brave separator fixes (GTK3 user CSS) ─────────────────────────
+ * 1. button#button border-color: Chrome/Brave sample this to colour the
+ *    toolbar-content separator.  Generated button{} sets a visible colour;
+ *    this higher-specificity rule resets it to transparent.
+ * 2. .frame border-color: Chrome/Brave call GetBorderColor("box.frame") for
+ *    kColorNativeBoxFrameBorder → kColorToolbarSeparator →
+ *    kColorToolbarContentAreaSeparator.  Zeroing this makes the
+ *    toolbar↔content separator transparent.  Targets only widgets that have
+ *    the CSS class "frame" added explicitly (like Chrome'"'"'s hidden GtkBox),
+ *    not GtkFrame whose CSS node is "frame" (matched by frame > border).
+ * 3. headerbar border-bottom: zeroed so no height is added to the separator.
+ */\nbutton#button {\n  border-color: transparent;\n  box-shadow: none;\n}\nbox.frame {\n  background-color: @surface_container_high;\n  border-color: @surface_container_high;\n}\nframe > border {\n  background-color: @surface_container_high;\n  border-color: @surface_container_high;\n}\nwindow.background.google-chrome headerbar,\nwindow.background.google-chrome headerbar:backdrop,\nwindow.background.google-chrome .titlebar,\nwindow.background.brave-browser headerbar,\nwindow.background.brave-browser headerbar:backdrop,\nwindow.background.brave-browser .titlebar,\nwindow.background.chromium headerbar,\nwindow.background.chromium headerbar:backdrop,\nwindow.background.chromium .titlebar {\n  border-bottom: none;\n}\n'
 } > "$gtk3_dir/quickshell/colors.css"
 printf '%s\n' "$colors_css"      > "$gtk4_dir/quickshell/colors.css"
 printf '%s\n' "/* geometry — GTK4 only */" > "$gtk3_dir/quickshell/geometry.css"
@@ -3382,6 +3427,60 @@ write_gtk4_useronly() {
 button#button {
   border-color: transparent;
   box-shadow: none;
+}
+
+/* Chromium and Brave also create standalone named sample widgets when reading
+ * GTK colors. These can sit outside the browser window node, so browser scoped
+ * selectors do not affect what Chromium samples. Override the named widgets
+ * directly so sampled separator colors stay transparent. */
+toolbar#toolbar {
+  border: none;
+  border-bottom: 0 solid transparent;
+  border-color: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+headerbar#headerbar,
+headerbar.titlebar#headerbar,
+.titlebar#headerbar {
+  border: none;
+  border-bottom: 0 solid transparent;
+  border-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  --headerbar-border-color: transparent;
+  --headerbar-shade-color: transparent;
+}
+
+separator#separator {
+  background: transparent;
+  background-color: transparent;
+  color: transparent;
+  border: none;
+  border-color: transparent;
+  box-shadow: none;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Chrome/Brave call GetBorderColor("box.frame") for kColorNativeBoxFrameBorder
+ * → kColorToolbarSeparator → kColorToolbarContentAreaSeparator (Linux path).
+ * Chrome/Brave also call GetBorderColor("frame border") for kColorTabContentSeparator.
+ *
+ * On GTK 4.20+, gtk_render_frame() returns all-transparent for libadwaita themes,
+ * so Chrome falls back to GetBgColorFromStyleContext() — the widget BACKGROUND colour.
+ * We must set background-color (not just border-color) to the toolbar colour.
+ *
+ * Using "box.frame" (type + class compound) targets the Chrome GtkBox sampling widget
+ * specifically and does NOT match regular GtkFrame widgets. CSS node type for GtkFrame is "frame". */
+box.frame {
+  background-color: @surface_container_high;
+  border-color: @surface_container_high;
+}
+frame > border {
+  background-color: @surface_container_high;
+  border-color: @surface_container_high;
 }
 
 .background.google-chrome frame,
