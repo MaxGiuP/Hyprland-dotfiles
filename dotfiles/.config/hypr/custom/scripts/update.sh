@@ -33,6 +33,54 @@ is_rate_limited() {
     grep -qiE 'status 429|rate limit' <<<"${1:-}"
 }
 
+detect_quickshell_pkg() {
+    pacman -Qo /usr/bin/quickshell 2>/dev/null | awk '{print $(NF-1)}'
+}
+
+find_quickshell_build_dir() {
+    local qs_pkg="$1"
+    local candidate found
+    local -a candidates=(
+        "$HOME/$qs_pkg"
+        "$HOME/quickshell-git"
+        "$HOME/quickshell"
+        "$HOME/.cache/yay/$qs_pkg"
+        "$HOME/Downloads/dots-hyprland/sdata/dist-arch/$qs_pkg"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate/PKGBUILD" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    found=$(find "$HOME" -maxdepth 6 -path "*/$qs_pkg/PKGBUILD" -print -quit 2>/dev/null || true)
+    if [ -n "$found" ]; then
+        dirname "$found"
+        return 0
+    fi
+
+    return 1
+}
+
+find_quickshell_git_dir() {
+    local build_dir="$1"
+    local candidate
+
+    for candidate in \
+        "$build_dir/quickshell" \
+        "$build_dir/src/quickshell" \
+        "$build_dir/src/quickshell-git"; do
+        if [ -d "$candidate/.git" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
 # ── Count updates ─────────────────────────────────────────────────────────────
 count_updates() {
     local n=0 p=0 a=0 f=0 helper=""
@@ -165,7 +213,7 @@ run_aur_updates() {
     section "$title"
 
     for attempt in 1 2 3; do
-        output=$("$helper" -Sua --noconfirm 2>&1)
+        output=$("$helper" -Sua --devel --noconfirm 2>&1)
         rc=$?
         [ -n "$output" ] && printf '%s\n' "$output"
 
@@ -267,57 +315,91 @@ run_pkg "flatpak" flatpak update -y
 rebuild_quickshell() {
     section "quickshell — source rebuild"
 
-    # Detect which package owns /usr/bin/quickshell
-    local qs_pkg
-    qs_pkg=$(pacman -Qo /usr/bin/quickshell 2>/dev/null | awk '{print $5}')
+    local qs_pkg build_dir git_dir helper compat_output behind rebuild_needed rebuild_reason
+    qs_pkg=$(detect_quickshell_pkg)
     if [ -z "$qs_pkg" ]; then
         skip "quickshell"
         return 0
     fi
     echo -e "  ${DIM}Detected: ${qs_pkg}${R}"
 
-    # Find build directory: ~/quickshell-git, ~/quickshell, or yay cache
-    local build_dir=""
-    for candidate in "$HOME/$qs_pkg" "$HOME/quickshell-git" "$HOME/quickshell" \
-                     "$HOME/.cache/yay/$qs_pkg"; do
-        if [ -f "$candidate/PKGBUILD" ]; then
-            build_dir="$candidate"
-            break
-        fi
-    done
-
-    # Check upstream source for new commits if the src dir exists
-    local src_dir="$build_dir/quickshell"
-    if [ -n "$build_dir" ] && [ -d "$src_dir/.git" ]; then
-        echo -e "  ${DIM}Fetching upstream...${R}"
-        git -C "$src_dir" fetch origin --quiet 2>/dev/null || true
-
-        local behind
-        behind=$(git -C "$src_dir" rev-list HEAD..@{u} --count 2>/dev/null || echo "0")
-        if [ "$behind" -eq 0 ]; then
-            echo -e "  ${PASS}  ${GREEN}quickshell already up to date${R}"
-            return 0
-        fi
-        echo -e "  ${WARN}  ${YELLOW}${behind} new commit(s) — rebuilding...${R}"
-        git -C "$src_dir" log --oneline HEAD..@{u} 2>/dev/null | while read -r line; do
-            echo -e "  ${DIM}    • $line${R}"
-        done
+    build_dir=$(find_quickshell_build_dir "$qs_pkg" 2>/dev/null || true)
+    if [ -n "$build_dir" ]; then
+        echo -e "  ${DIM}PKGBUILD: ${build_dir}${R}"
     fi
 
-    # Rebuild: use local PKGBUILD dir if found, otherwise fall back to yay
+    rebuild_needed=0
+    rebuild_reason=""
+
+    if command -v quickshell >/dev/null 2>&1; then
+        compat_output=$(quickshell --private-check-compat 2>&1 || true)
+        if [ -n "$compat_output" ]; then
+            printf '%s\n' "$compat_output"
+        fi
+        if ! quickshell --private-check-compat >/dev/null 2>&1; then
+            rebuild_needed=1
+            rebuild_reason="Qt compatibility mismatch"
+        fi
+    fi
+
+    git_dir=""
     if [ -n "$build_dir" ]; then
-        if (cd "$build_dir" && makepkg -si --noconfirm); then
-            ok "quickshell"
+        git_dir=$(find_quickshell_git_dir "$build_dir" 2>/dev/null || true)
+    fi
+
+    if [ -n "$git_dir" ]; then
+        echo -e "  ${DIM}Fetching upstream...${R}"
+        git -C "$git_dir" fetch origin --quiet 2>/dev/null || true
+
+        behind=$(git -C "$git_dir" rev-list HEAD..@{u} --count 2>/dev/null || echo "0")
+        if [ "$behind" -gt 0 ]; then
+            rebuild_needed=1
+            if [ -n "$rebuild_reason" ]; then
+                rebuild_reason="${rebuild_reason}; ${behind} new upstream commit(s)"
+            else
+                rebuild_reason="${behind} new upstream commit(s)"
+            fi
+            echo -e "  ${WARN}  ${YELLOW}${behind} new commit(s) detected${R}"
+            git -C "$git_dir" log --oneline HEAD..@{u} 2>/dev/null | while read -r line; do
+                echo -e "  ${DIM}    • $line${R}"
+            done
+        fi
+    fi
+
+    if [ "$rebuild_needed" -eq 0 ]; then
+        echo -e "  ${PASS}  ${GREEN}quickshell compatibility OK — no rebuild needed${R}"
+        return 0
+    fi
+
+    echo -e "  ${WARN}  ${YELLOW}Rebuilding quickshell: ${rebuild_reason}${R}"
+
+    if [ -n "$build_dir" ]; then
+        if (cd "$build_dir" && makepkg -sif --noconfirm); then
+            :
         else
             fail "quickshell"
+            return 1
         fi
     else
-        echo -e "  ${DIM}No local PKGBUILD found — using yay${R}"
-        if yay -S "$qs_pkg" --noconfirm; then
-            ok "quickshell"
+        helper=$(preferred_aur_helper 2>/dev/null || true)
+        if [ -z "$helper" ]; then
+            fail "quickshell"
+            return 1
+        fi
+        echo -e "  ${DIM}No local PKGBUILD found — using ${helper}${R}"
+        if "$helper" -S "$qs_pkg" --devel --rebuild --noconfirm; then
+            :
         else
             fail "quickshell"
+            return 1
         fi
+    fi
+
+    if command -v quickshell >/dev/null 2>&1 && quickshell --private-check-compat >/dev/null 2>&1; then
+        ok "quickshell"
+    else
+        fail "quickshell"
+        return 1
     fi
 }
 
