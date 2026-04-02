@@ -20,6 +20,8 @@ Singleton {
     property bool overlayOpen: false
     property bool drawerOpen: false
     property string drawerScreen: ""
+    property string sidebarRightScreen: ""
+    property string sidebarLeftScreen: ""
     property bool overviewDrawerMode: false
     property bool overviewOpen: false
     property bool regionSelectorOpen: false
@@ -69,6 +71,66 @@ Singleton {
         root.drawerOpen = true
     }
 
+    function resolvedSidebarLeftScreen(preferredScreen = "") {
+        return preferredScreen
+            || root.sidebarLeftScreen
+            || HyprlandData.monitors.find(m => m.focused)?.name
+            || Hyprland.focusedMonitor?.name
+            || Quickshell.screens[0]?.name
+            || ""
+    }
+
+    function openSidebarLeft(preferredScreen = "") {
+        root.sidebarLeftScreen = root.resolvedSidebarLeftScreen(preferredScreen)
+        root.sidebarLeftOpen = true
+    }
+
+    function closeSidebarLeft() {
+        root.sidebarLeftOpen = false
+        root.sidebarLeftScreen = ""
+    }
+
+    function toggleSidebarLeft(preferredScreen = "") {
+        const targetScreen = root.resolvedSidebarLeftScreen(preferredScreen)
+        if (root.sidebarLeftOpen && root.sidebarLeftScreen === targetScreen) {
+            root.closeSidebarLeft()
+            return
+        }
+
+        root.sidebarLeftScreen = targetScreen
+        root.sidebarLeftOpen = true
+    }
+
+    function resolvedSidebarRightScreen(preferredScreen = "") {
+        return preferredScreen
+            || root.sidebarRightScreen
+            || HyprlandData.monitors.find(m => m.focused)?.name
+            || Hyprland.focusedMonitor?.name
+            || Quickshell.screens[0]?.name
+            || ""
+    }
+
+    function openSidebarRight(preferredScreen = "") {
+        root.sidebarRightScreen = root.resolvedSidebarRightScreen(preferredScreen)
+        root.sidebarRightOpen = true
+    }
+
+    function closeSidebarRight() {
+        root.sidebarRightOpen = false
+        root.sidebarRightScreen = ""
+    }
+
+    function toggleSidebarRight(preferredScreen = "") {
+        const targetScreen = root.resolvedSidebarRightScreen(preferredScreen)
+        if (root.sidebarRightOpen && root.sidebarRightScreen === targetScreen) {
+            root.closeSidebarRight()
+            return
+        }
+
+        root.sidebarRightScreen = targetScreen
+        root.sidebarRightOpen = true
+    }
+
     function toggleOverviewDrawer() {
         if (root.overviewOpen && root.overviewDrawerMode) {
             root.overviewOpen = false
@@ -79,9 +141,22 @@ Singleton {
     }
 
     onSidebarRightOpenChanged: {
-        if (GlobalStates.sidebarRightOpen) {
+        if (sidebarRightOpen) {
+            if (!sidebarRightScreen)
+                sidebarRightScreen = resolvedSidebarRightScreen()
             Notifications.timeoutAll();
             Notifications.markAllRead();
+        } else {
+            sidebarRightScreen = ""
+        }
+    }
+
+    onSidebarLeftOpenChanged: {
+        if (sidebarLeftOpen) {
+            if (!sidebarLeftScreen)
+                sidebarLeftScreen = resolvedSidebarLeftScreen()
+        } else {
+            sidebarLeftScreen = ""
         }
     }
 

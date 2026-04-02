@@ -11,73 +11,112 @@ Scope {
     id: root
     property int sidebarWidth: Appearance.sizes.sidebarWidth
 
-    function focusSidebarContent() {
-        sidebarContentLoader.forceActiveFocus();
-        sidebarContentLoader.item?.forceActiveFocus();
-    }
+    Variants {
+        model: Quickshell.screens
 
-    PanelWindow {
-        id: panelWindow
-        visible: GlobalStates.sidebarRightOpen
+        Scope {
+            id: screenScope
+            required property ShellScreen modelData
+            property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
+            property bool sidebarOpen: GlobalStates.sidebarRightOpen && monitor?.name === GlobalStates.sidebarRightScreen
 
-        function hide() {
-            GlobalStates.sidebarRightOpen = false;
-        }
+            PanelWindow {
+                id: panelWindow
+                screen: screenScope.modelData
+                visible: true
 
-        exclusiveZone: 0
-        implicitWidth: sidebarWidth
-        WlrLayershell.namespace: "quickshell:sidebarRight"
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
-        color: "transparent"
+                function hide() {
+                    GlobalStates.closeSidebarRight();
+                }
 
-        anchors {
-            top: true
-            right: true
-            bottom: true
-        }
+                exclusiveZone: 0
+                exclusionMode: ExclusionMode.Normal
+                implicitWidth: root.sidebarWidth
+                implicitHeight: screen?.height ?? 2160
+                WlrLayershell.namespace: "quickshell:sidebarRight"
+                WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+                color: "transparent"
+                mask: Region { item: sidebarContentLoader }
 
-        onVisibleChanged: {
-            if (visible) {
-                GlobalFocusGrab.addDismissable(panelWindow);
-                Qt.callLater(root.focusSidebarContent);
-            } else {
-                GlobalFocusGrab.removeDismissable(panelWindow);
-            }
-        }
-        Connections {
-            target: GlobalFocusGrab
-            function onDismissed() {
-                panelWindow.hide();
-            }
-        }
+                anchors {
+                    top: true
+                    right: true
+                }
 
-        Loader {
-            id: sidebarContentLoader
-            active: GlobalStates.sidebarRightOpen || Config?.options.sidebar.keepRightSidebarLoaded
-            anchors {
-                fill: parent
-                margins: Appearance.sizes.hyprlandGapsOut
-                leftMargin: Appearance.sizes.elevationMargin
-            }
-            width: sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
-            height: parent.height - Appearance.sizes.hyprlandGapsOut * 2
+                Connections {
+                    target: screenScope
+                    function onSidebarOpenChanged() {
+                        if (screenScope.sidebarOpen) {
+                            GlobalFocusGrab.addDismissable(panelWindow);
+                            Qt.callLater(() => {
+                                sidebarContentLoader.forceActiveFocus();
+                                sidebarContentLoader.item?.forceActiveFocus();
+                            });
+                        } else {
+                            GlobalFocusGrab.removeDismissable(panelWindow);
+                        }
+                    }
+                }
+                Connections {
+                    target: GlobalFocusGrab
+                    function onDismissed() {
+                        panelWindow.hide();
+                    }
+                }
 
-            focus: GlobalStates.sidebarRightOpen
-            activeFocusOnTab: true
-            TapHandler {
-                acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                onPressedChanged: {
-                    if (pressed)
-                        root.focusSidebarContent();
+                Loader {
+                    id: sidebarContentLoader
+                    active: screenScope.sidebarOpen || sidebarContentLoader.x < root.sidebarWidth || Config?.options.sidebar.keepRightSidebarLoaded
+                    x: root.sidebarWidth
+                    y: Appearance.sizes.hyprlandGapsOut
+                    width: root.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
+                    height: parent.height - Appearance.sizes.barHeight - Appearance.sizes.hyprlandGapsOut
+
+                    states: State {
+                        name: "open"
+                        when: screenScope.sidebarOpen
+                        PropertyChanges { target: sidebarContentLoader; x: Appearance.sizes.elevationMargin }
+                    }
+                    transitions: [
+                        Transition {
+                            to: "open"
+                            NumberAnimation {
+                                property: "x"
+                                duration: 300
+                                easing.type: Easing.OutCubic
+                            }
+                        },
+                        Transition {
+                            from: "open"
+                            to: ""
+                            NumberAnimation {
+                                property: "x"
+                                duration: 200
+                                easing.type: Easing.InCubic
+                            }
+                        }
+                    ]
+
+                    focus: screenScope.sidebarOpen
+                    activeFocusOnTab: true
+                    TapHandler {
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                        onPressedChanged: {
+                            if (pressed) {
+                                sidebarContentLoader.forceActiveFocus();
+                                sidebarContentLoader.item?.forceActiveFocus();
+                            }
+                        }
+                    }
+                    Keys.onPressed: event => {
+                        if (event.key === Qt.Key_Escape) {
+                            panelWindow.hide();
+                        }
+                    }
+
+                    sourceComponent: SidebarRightContent {}
                 }
             }
-            Keys.onPressed: event => {
-                if (event.key === Qt.Key_Escape) {
-                    panelWindow.hide();
-                }
-            }
-
-            sourceComponent: SidebarRightContent {}
         }
     }
 
@@ -85,15 +124,15 @@ Scope {
         target: "sidebarRight"
 
         function toggle(): void {
-            GlobalStates.sidebarRightOpen = !GlobalStates.sidebarRightOpen;
+            GlobalStates.toggleSidebarRight();
         }
 
         function close(): void {
-            GlobalStates.sidebarRightOpen = false;
+            GlobalStates.closeSidebarRight();
         }
 
         function open(): void {
-            GlobalStates.sidebarRightOpen = true;
+            GlobalStates.openSidebarRight();
         }
     }
 
@@ -102,7 +141,7 @@ Scope {
         description: "Toggles right sidebar on press"
 
         onPressed: {
-            GlobalStates.sidebarRightOpen = !GlobalStates.sidebarRightOpen;
+            GlobalStates.toggleSidebarRight();
         }
     }
     GlobalShortcut {
@@ -110,7 +149,7 @@ Scope {
         description: "Opens right sidebar on press"
 
         onPressed: {
-            GlobalStates.sidebarRightOpen = true;
+            GlobalStates.openSidebarRight();
         }
     }
     GlobalShortcut {
@@ -118,7 +157,7 @@ Scope {
         description: "Closes right sidebar on press"
 
         onPressed: {
-            GlobalStates.sidebarRightOpen = false;
+            GlobalStates.closeSidebarRight();
         }
     }
 }

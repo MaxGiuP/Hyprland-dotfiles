@@ -84,7 +84,7 @@ Item { // Bar content region
         onMovedAway: GlobalStates.osdBrightnessOpen = false
         onPressed: event => {
             if (event.button === Qt.LeftButton)
-                GlobalStates.sidebarLeftOpen = !GlobalStates.sidebarLeftOpen;
+                GlobalStates.toggleSidebarLeft(root.screen?.name ?? "");
         }
 
         // Visual content
@@ -104,6 +104,7 @@ Item { // Bar content region
 
             LeftSidebarButton { // Left sidebar button
                 id: leftSidebarButton
+                preferredScreen: root.screen?.name ?? ""
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: Appearance.rounding.screenRounding
                 colBackground: barLeftSideMouseArea.hovered ? Appearance.colors.colLayer1Hover : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
@@ -196,7 +197,7 @@ Item { // Bar content region
             implicitHeight: rightCenterGroupContent.implicitHeight
 
             onPressed: {
-                GlobalStates.sidebarRightOpen = !GlobalStates.sidebarRightOpen;
+                GlobalStates.toggleSidebarRight(root.screen?.name ?? "");
             }
 
             BarGroup {
@@ -241,7 +242,7 @@ Item { // Bar content region
         onMovedAway: GlobalStates.osdVolumeOpen = false;
         onPressed: event => {
             if (event.button === Qt.LeftButton) {
-                GlobalStates.sidebarRightOpen = !GlobalStates.sidebarRightOpen;
+                GlobalStates.toggleSidebarRight(root.screen?.name ?? "");
             }
         }
 
@@ -278,7 +279,7 @@ Item { // Bar content region
                 colBackgroundToggled: Appearance.colors.colSecondaryContainer
                 colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
                 colRippleToggled: Appearance.colors.colSecondaryContainerActive
-                toggled: GlobalStates.sidebarRightOpen
+                toggled: GlobalStates.sidebarRightOpen && GlobalStates.sidebarRightScreen === (root.screen?.name ?? "")
                 property color colText: toggled ? Appearance.m3colors.m3onSecondaryContainer : Appearance.colors.colOnLayer0
 
                 Behavior on colText {
@@ -286,7 +287,7 @@ Item { // Bar content region
                 }
 
                 onPressed: {
-                    GlobalStates.sidebarRightOpen = !GlobalStates.sidebarRightOpen;
+                    GlobalStates.toggleSidebarRight(root.screen?.name ?? "");
                 }
 
                 RowLayout {
@@ -298,7 +299,7 @@ Item { // Bar content region
 
 
                     Revealer {
-                        reveal: Audio.sink?.audio?.muted ?? false
+                        reveal: Audio.muted
                         Layout.fillHeight: true
                         Layout.rightMargin: reveal ? indicatorsRowLayout.realSpacing : 0
                         Behavior on Layout.rightMargin {
@@ -311,7 +312,7 @@ Item { // Bar content region
                         }
                     }
                     Revealer {
-                        reveal: Audio.source?.audio?.muted ?? false
+                        reveal: Audio.micMuted
                         Layout.fillHeight: true
                         Layout.rightMargin: reveal ? indicatorsRowLayout.realSpacing : 0
                         Behavior on Layout.rightMargin {

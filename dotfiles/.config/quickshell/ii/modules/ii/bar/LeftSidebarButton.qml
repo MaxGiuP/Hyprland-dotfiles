@@ -8,6 +8,7 @@ RippleButton {
     id: root
 
     property bool showPing: false
+    property string preferredScreen: ""
 
     property bool aiChatEnabled: (Config.options?.policies?.ai ?? 1) !== 0
     property bool translatorEnabled: Config.options?.sidebar?.translator?.enable ?? false
@@ -22,10 +23,10 @@ RippleButton {
     colBackgroundToggled: Appearance.colors.colSecondaryContainer
     colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
     colRippleToggled: Appearance.colors.colSecondaryContainerActive
-    toggled: GlobalStates.sidebarLeftOpen
+    toggled: GlobalStates.sidebarLeftOpen && GlobalStates.sidebarLeftScreen === preferredScreen
 
     onPressed: {
-        GlobalStates.sidebarLeftOpen = !GlobalStates.sidebarLeftOpen;
+        GlobalStates.toggleSidebarLeft(preferredScreen);
     }
 
     Connections {
