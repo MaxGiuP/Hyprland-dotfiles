@@ -4,7 +4,6 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.functions
 import QtQuick
-import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -18,79 +17,34 @@ Scope {
 
     // Keep lock surface visible until lockpad unlock animation finishes.
     property int unlockReleaseDelayMs: 1500
-
-    // Blur progression: 0 = sharp, 1 = full configured blur.
-    property real blurProgress: 0.0
-    property real blurStrength: 0.68
-    property string screenshotVersion: "0"
-    property bool pendingLock: false
-
-    Behavior on blurProgress {
-        NumberAnimation {
-            duration: 420
-            easing.type: Easing.OutCubic
-        }
-    }
+    property int lockBlurInDelayMs: 0
+    property int lockBlurInDurationMs: 0
+    property int unlockBlurOutDelayMs: 0
+    property int unlockBlurOutDurationMs: 0
 
     property Component sessionLockSurface: WlSessionLockSurface {
         id: sessionLockSurface
-        // Transparent lock surface so screenshot layer controls visuals.
         color: "transparent"
-
-        Item {
-            anchors.fill: parent
-
-            Image {
-                id: screenshotBg
-                anchors.centerIn: parent
-                width: parent.width * Config.options.lock.blur.extraZoom
-                height: parent.height * Config.options.lock.blur.extraZoom
-                fillMode: Image.PreserveAspectCrop
-                cache: false
-                source: GlobalStates.screenLocked
-                    ? ("file:///tmp/quickshell/lock/screenshot-"
-                        + (sessionLockSurface.screen?.name ?? "")
-                        + ".png?v=" + root.screenshotVersion)
-                    : ""
-            }
-
-            FastBlur {
-                anchors.fill: parent
-                source: screenshotBg
-                radius: Config.options.lock.blur.enable
-                    ? (Config.options.lock.blur.radius * root.blurProgress * root.blurStrength)
-                    : 0
-            }
-        }
-
         Loader {
+            id: lockSurfaceLoader
             active: GlobalStates.screenLocked
             anchors.fill: parent
             sourceComponent: root.lockSurface
-        }
-    }
 
-    function captureScreens() {
-        if (captureProc.running)
-            return;
+            function syncCaptureScreen() {
+                if (!item || !("captureScreen" in item))
+                    return;
 
-        captureProc.exec({
-            command: ["bash", "-c",
-                "mkdir -p /tmp/quickshell/lock"
-                + " && for o in $(hyprctl monitors -j | jq -r '.[].name');"
-                + " do grim -o \"$o\" \"/tmp/quickshell/lock/screenshot-$o.png\" &"
-                + " done; wait"
-            ]
-        });
-    }
+                item.captureScreen = sessionLockSurface.screen;
+            }
 
-    Process {
-        id: captureProc
-        onExited: () => {
-            root.screenshotVersion = Date.now().toString();
-            if (root.pendingLock) {
-                root.pendingLock = false;
-                GlobalStates.screenLocked = true;
+            onLoaded: syncCaptureScreen()
+
+            Connections {
+                target: sessionLockSurface
+                function onScreenChanged() {
+                    lockSurfaceLoader.syncCaptureScreen();
+                }
             }
         }
     }
@@ -111,6 +65,67 @@ Scope {
         });
     }
 
+    function stopBlurAnimation() {
+        blurDelayTimer.stop();
+        blurAnim.stop();
+    }
+
+    function animateBlurTo(targetProgress, durationMs, easingType) {
+        root.stopBlurAnimation();
+
+        if (durationMs <= 0) {
+            GlobalStates.screenLockBlurProgress = targetProgress;
+            return;
+        }
+
+        blurAnim.from = GlobalStates.screenLockBlurProgress;
+        blurAnim.to = targetProgress;
+        blurAnim.duration = durationMs;
+        blurAnim.easing.type = easingType;
+        blurAnim.restart();
+    }
+
+    function scheduleBlurAnimation(targetProgress, delayMs, durationMs, easingType) {
+        root.stopBlurAnimation();
+
+        if (delayMs <= 0) {
+            root.animateBlurTo(targetProgress, durationMs, easingType);
+            return;
+        }
+
+        blurDelayTimer.pendingTarget = targetProgress;
+        blurDelayTimer.pendingDuration = durationMs;
+        blurDelayTimer.pendingEasingType = easingType;
+        blurDelayTimer.interval = delayMs;
+        blurDelayTimer.restart();
+    }
+
+    function startLockBlurIntro() {
+        GlobalStates.screenLockBlurProgress = 0;
+        root.scheduleBlurAnimation(1, root.lockBlurInDelayMs, root.lockBlurInDurationMs, Easing.OutCubic);
+    }
+
+    function startLockBlurOutro() {
+        root.scheduleBlurAnimation(0, root.unlockBlurOutDelayMs, root.unlockBlurOutDurationMs, Easing.InCubic);
+    }
+
+    Timer {
+        id: blurDelayTimer
+        property real pendingTarget: 0
+        property int pendingDuration: 0
+        property int pendingEasingType: Easing.Linear
+        repeat: false
+        onTriggered: {
+            root.animateBlurTo(pendingTarget, pendingDuration, pendingEasingType);
+        }
+    }
+
+    NumberAnimation {
+        id: blurAnim
+        target: GlobalStates
+        property: "screenLockBlurProgress"
+    }
+
     LockContext {
         id: lockContext
 
@@ -118,9 +133,14 @@ Scope {
             target: GlobalStates
             function onScreenLockedChanged() {
                 if (GlobalStates.screenLocked) {
+                    GlobalStates.screenLockHideBar = false;
                     lockContext.reset();
                     lockContext.tryFingerUnlock();
-                    root.blurProgress = 1.0;
+                    root.startLockBlurIntro();
+                } else {
+                    root.stopBlurAnimation();
+                    GlobalStates.screenLockBlurProgress = 0;
+                    GlobalStates.screenLockHideBar = false;
                 }
             }
         }
@@ -137,8 +157,7 @@ Scope {
             if (Config.options.lock.security.unlockKeyring)
                 root.unlockKeyring();
 
-            // Progressive unblur while lockpad unlock animation runs.
-            root.blurProgress = 0.0;
+            root.startLockBlurOutro();
             unlockReleaseTimer.start();
         }
     }
@@ -150,12 +169,13 @@ Scope {
         onTriggered: {
             GlobalStates.screenLocked = false;
             lockContext.reset();
+            root.stopBlurAnimation();
+            GlobalStates.screenLockBlurProgress = 0;
+            GlobalStates.screenLockHideBar = false;
             if (lockContext.alsoInhibitIdle) {
                 lockContext.alsoInhibitIdle = false;
                 Idle.toggleInhibit(true);
             }
-            root.blurProgress = 0.0;
-            root.pendingLock = false;
         }
     }
 
@@ -166,15 +186,17 @@ Scope {
     }
 
     function lock() {
-        root.blurProgress = 0.0;
-        root.pendingLock = true;
+        if (GlobalStates.screenLocked)
+            return;
 
         if (Config.options.lock.useHyprlock) {
             Quickshell.execDetached(["bash", "-c", "pidof hyprlock || hyprlock"]);
             return;
         }
 
-        root.captureScreens();
+        GlobalStates.screenLockBlurProgress = 0;
+        GlobalStates.screenLockHideBar = false;
+        GlobalStates.screenLocked = true;
     }
 
     IpcHandler {

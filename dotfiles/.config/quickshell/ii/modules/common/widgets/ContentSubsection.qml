@@ -7,7 +7,7 @@ ColumnLayout {
     id: root
     property string title: ""
     property string tooltip: ""
-    default property alias data: sectionContent.data
+    override default property alias contentChildren: sectionContent.children
 
     Layout.fillWidth: true
     Layout.topMargin: 4

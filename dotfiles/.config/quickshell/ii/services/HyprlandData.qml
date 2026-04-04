@@ -12,6 +12,7 @@ import Quickshell.Hyprland
  */
 Singleton {
     id: root
+    property var browserFullscreenRestoreState: ({})
     property var windowList: []
     property var addresses: []
     property var windowByAddress: ({})
@@ -42,6 +43,67 @@ Singleton {
         }
         const address = `0x${toplevel?.HyprlandToplevel?.address}`;
         return root.windowByAddress[address];
+    }
+
+    function isTrackedBrowserWindow(win) {
+        const klass = `${win?.class ?? ""}`;
+        return /^(Brave-browser|brave-browser|Google-chrome|google-chrome|Chromium|chromium|chromium-browser)$/.test(klass);
+    }
+
+    function isVideoFullscreenState(state) {
+        return state === 2 || state === 3;
+    }
+
+    function normalizedRestoreState(state) {
+        return (state === 1 || state === 3) ? 1 : 0;
+    }
+
+    function restoreBrowserWindowState(address, restoreState) {
+        const normalizedState = restoreState === 1 ? 1 : 0;
+        Quickshell.execDetached([
+            "hyprctl",
+            "--batch",
+            `dispatch focuswindow address:${address}; dispatch fullscreenstate ${normalizedState} ${normalizedState} set`
+        ]);
+    }
+
+    function syncBrowserFullscreenStates(previousByAddress, nextByAddress) {
+        const pendingStates = Object.assign({}, root.browserFullscreenRestoreState ?? {});
+
+        for (const [address, nextWindow] of Object.entries(nextByAddress)) {
+            if (!root.isTrackedBrowserWindow(nextWindow)) {
+                delete pendingStates[address];
+                continue;
+            }
+
+            const previousWindow = previousByAddress?.[address];
+            if (!previousWindow)
+                continue;
+
+            const previousState = Number(previousWindow.fullscreen ?? 0);
+            const nextState = Number(nextWindow.fullscreen ?? 0);
+            const wasFullscreen = root.isVideoFullscreenState(previousState);
+            const isFullscreen = root.isVideoFullscreenState(nextState);
+
+            if (!wasFullscreen && isFullscreen) {
+                pendingStates[address] = root.normalizedRestoreState(previousState);
+                continue;
+            }
+
+            if (wasFullscreen && !isFullscreen) {
+                const restoreState = pendingStates[address];
+                if (restoreState !== undefined && nextState !== restoreState)
+                    root.restoreBrowserWindowState(address, restoreState);
+                delete pendingStates[address];
+            }
+        }
+
+        for (const address of Object.keys(pendingStates)) {
+            if (!nextByAddress[address])
+                delete pendingStates[address];
+        }
+
+        root.browserFullscreenRestoreState = pendingStates;
     }
 
     // Internals
@@ -79,6 +141,10 @@ Singleton {
         }, null);
     }
 
+    function windowIsFullscreen(win) {
+        return Number(win?.fullscreen ?? 0) !== 0;
+    }
+
     function activeWorkspaceHasFullscreenForMonitor(monitorName) {
         if (!monitorName)
             return false;
@@ -87,6 +153,16 @@ Singleton {
         const activeWorkspaceId = monitor?.activeWorkspace?.id;
         if (activeWorkspaceId == null)
             return false;
+
+        const monitorId = monitor?.id;
+
+        if (root.windowList.some(win =>
+            win.workspace?.id === activeWorkspaceId
+            && (monitorId == null || win.monitor === monitorId)
+            && root.windowIsFullscreen(win)
+        )) {
+            return true;
+        }
 
         return root.workspaces.some(workspace =>
             workspace.monitor === monitorName &&
@@ -115,12 +191,14 @@ Singleton {
         stdout: StdioCollector {
             id: clientsCollector
             onStreamFinished: {
+                const previousByAddress = root.windowByAddress;
                 root.windowList = JSON.parse(clientsCollector.text)
                 let tempWinByAddress = {};
                 for (var i = 0; i < root.windowList.length; ++i) {
                     var win = root.windowList[i];
                     tempWinByAddress[win.address] = win;
                 }
+                root.syncBrowserFullscreenStates(previousByAddress, tempWinByAddress);
                 root.windowByAddress = tempWinByAddress;
                 root.addresses = root.windowList.map(win => win.address);
             }

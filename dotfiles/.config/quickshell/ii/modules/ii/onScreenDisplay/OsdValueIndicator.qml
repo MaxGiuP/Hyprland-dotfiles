@@ -21,6 +21,7 @@ Item {
 
     StyledRectangularShadow {
         target: valueIndicator
+        offset: Qt.vector2d(0.0, 0.0)
     }
     Rectangle {
         id: valueIndicator
@@ -30,6 +31,8 @@ Item {
         }
         radius: Appearance.rounding.full
         color: Appearance.colors.colLayer0
+        border.width: 1
+        border.color: Appearance.colors.colLayer0Border
 
         implicitWidth: valueRow.implicitWidth
         implicitHeight: valueRow.implicitHeight

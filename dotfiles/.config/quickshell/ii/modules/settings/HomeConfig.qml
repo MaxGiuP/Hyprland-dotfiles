@@ -277,7 +277,7 @@ ContentPage {
                 configuration: StyledSlider.Configuration.M
                 usePercentTooltip: false
                 tooltipContent: `${Math.round(value * 100)}%`
-                onMoved: { if (Audio.sink?.audio) Audio.sink.audio.volume = value }
+                onMoved: Audio.setVolume(value)
             }
 
             StyledText {

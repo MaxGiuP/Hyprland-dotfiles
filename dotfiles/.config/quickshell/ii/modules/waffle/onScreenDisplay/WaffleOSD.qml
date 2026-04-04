@@ -47,8 +47,8 @@ Scope {
 
     // Listen to volume changes
     Connections {
-        target: Audio.sink?.audio ?? null
-        function onVolumeChanged() {
+        target: Audio
+        function onValueChanged() {
             if (Audio.ready)
                 root.triggerVolumeOSD();
         }

@@ -16,6 +16,26 @@ Singleton {
     property QtObject sizes
     property string syntaxHighlightingTheme
 
+    function configuredFontFamily(configuredFamily, fallbackFamily) {
+        const trimmed = typeof configuredFamily === "string" ? configuredFamily.trim() : ""
+        return trimmed.length > 0 ? trimmed : fallbackFamily
+    }
+
+    function configuredMonospaceFamily(configuredFamily) {
+        const family = root.configuredFontFamily(configuredFamily, "JetBrains Mono")
+        switch (family) {
+        case "JetBrains Mono NF":
+        case "JetBrainsMono NF":
+        case "JetBrainsMono Nerd Font":
+        case "JetBrainsMono Nerd Font Mono":
+        case "JetBrainsMono NFM":
+        case "JetBrains Mono Nerd Font":
+            return "JetBrains Mono"
+        default:
+            return family
+        }
+    }
+
     // Transparency. The quadratic functions were derived from analysis of hand-picked transparency values.
     ColorQuantizer {
         id: wallColorQuant
@@ -216,14 +236,14 @@ Singleton {
 
     font: QtObject {
         property QtObject family: QtObject {
-            property string main: Config.options.appearance.fonts.main
-            property string numbers: Config.options.appearance.fonts.numbers
-            property string title: Config.options.appearance.fonts.title
+            property string main: root.configuredFontFamily(Config.options.appearance.fonts.main, "Google Sans Flex")
+            property string numbers: root.configuredFontFamily(Config.options.appearance.fonts.numbers, "Google Sans Flex")
+            property string title: root.configuredFontFamily(Config.options.appearance.fonts.title, "Google Sans Flex")
             property string iconMaterial: "Material Symbols Rounded"
-            property string iconNerd: Config.options.appearance.fonts.iconNerd
-            property string monospace: Config.options.appearance.fonts.monospace
-            property string reading: Config.options.appearance.fonts.reading
-            property string expressive: Config.options.appearance.fonts.expressive
+            property string iconNerd: root.configuredFontFamily(Config.options.appearance.fonts.iconNerd, "JetBrains Mono NF")
+            property string monospace: root.configuredMonospaceFamily(Config.options.appearance.fonts.monospace)
+            property string reading: root.configuredFontFamily(Config.options.appearance.fonts.reading, "Readex Pro")
+            property string expressive: root.configuredFontFamily(Config.options.appearance.fonts.expressive, "Space Grotesk")
         }
         property QtObject variableAxes: QtObject {
             property var main: ({

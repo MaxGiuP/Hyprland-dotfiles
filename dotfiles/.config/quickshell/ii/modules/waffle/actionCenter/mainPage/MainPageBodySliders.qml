@@ -54,11 +54,9 @@ ColumnLayout {
         
         WSlider {
             Layout.fillWidth: true
-            value: Audio.sink.audio.volume
+            value: Audio.value
             scrollable: true
-            onMoved: {
-                Audio.sink.audio.volume = value;
-            }
+            onMoved: Audio.setVolume(value)
         }
 
         WPanelIconButton {

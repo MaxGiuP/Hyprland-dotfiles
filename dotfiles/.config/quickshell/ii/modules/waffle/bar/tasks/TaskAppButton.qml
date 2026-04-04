@@ -12,7 +12,7 @@ AppButton {
 
     required property var appEntry
     readonly property bool isSeparator: appEntry.appId === "SEPARATOR"
-    readonly property var desktopEntry: DesktopEntries.heuristicLookup(appEntry.appId)
+    readonly property var desktopEntry: TaskbarApps.resolveDesktopEntry(appEntry.appId)
     property bool active: root.appEntry.toplevels.some(t => t.activated)
     property bool hasWindows: appEntry.toplevels.length > 0
 
@@ -109,7 +109,7 @@ AppButton {
                 iconName: root.appEntry.pinned ? "pin-off" : "pin",
                 text: root.appEntry.pinned ? Translation.tr("Unpin from taskbar") : Translation.tr("Pin to taskbar"),
                 action: () => {
-                    TaskbarApps.togglePin(root.appEntry.appId);
+                    TaskbarApps.togglePin(root.desktopEntry?.id ?? root.appEntry.appId);
                 }
             },
             ...(root.appEntry.toplevels.length > 0 ? [{

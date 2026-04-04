@@ -1,7 +1,9 @@
 #!/usr/bin/env sh
-# Anything you want restarted/refreshed
-notify-send "Resumed"
-# /usr/bin/sh -lc "~/.config/hypr/custom/scripts/restart_quickshell.sh"
+set -eu
 
-# restart_quickshell.sh
-# Chiude tutti i processi quickshell e qs, poi avvia "qs -c ii".
+# Give Hyprland a moment to restore the Wayland session before re-checking
+# Quickshell. Starting only if missing avoids the daemonized restart crash.
+sleep 2
+"$HOME/.config/hypr/custom/scripts/ensure_quickshell.sh" ii
+sleep 0.5
+quickshell -c ii ipc call lock focus >/dev/null 2>&1 || true

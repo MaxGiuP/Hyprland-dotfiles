@@ -15,11 +15,22 @@ MouseArea {
     required property var notification
     property bool expanded: notification.actions.length > 0
     property string groupExpandControlMessage: ""
+    readonly property real timeoutBarReservedSpace: root.isPopup && ((notification?.timeoutDurationMs ?? 0) > 0) ? 8 : 0
 
     readonly property bool isPopup: notification?.popup ?? false
 
     signal groupExpandToggle
     hoverEnabled: true
+
+    onContainsMouseChanged: {
+        if (!root.isPopup)
+            return;
+
+        if (root.containsMouse)
+            Notifications.cancelTimeout(root.notification.notificationId);
+        else
+            Notifications.resumeTimeout(root.notification.notificationId);
+    }
 
     function handleLeftClick() {
         if (!Notifications.openNotificationSourceApp(root.notification?.notificationId)) return;
@@ -74,7 +85,7 @@ MouseArea {
         color: root.isPopup ? Looks.colors.bg0 : Looks.colors.bgPanelBody
         radius: root.isPopup ? Looks.radius.large : Looks.radius.medium
         property real padding: 12
-        implicitHeight: notificationContent.implicitHeight + padding * 2
+        implicitHeight: notificationContent.implicitHeight + padding * 2 + root.timeoutBarReservedSpace
         implicitWidth: notificationContent.implicitWidth + padding * 2
         border.width: 1
         border.color: root.isPopup ? Looks.colors.bg2Border : Looks.colors.bgPanelSeparator
@@ -85,8 +96,13 @@ MouseArea {
 
         ColumnLayout {
             id: notificationContent
-            anchors.fill: parent
-            anchors.margins: contentItem.padding
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.topMargin: contentItem.padding
+            anchors.leftMargin: contentItem.padding
+            anchors.rightMargin: contentItem.padding
+            anchors.bottomMargin: contentItem.padding + root.timeoutBarReservedSpace
             spacing: 19
 
             // Header
@@ -157,6 +173,21 @@ MouseArea {
             // "+1 notifications" button
             GroupExpandButton {
                 Layout.bottomMargin: 2
+            }
+        }
+
+        NotificationTimeoutBar {
+            notification: root.notification
+            fillColor: Looks.colors.accent
+            trackColor: Qt.rgba(Looks.colors.accent.r, Looks.colors.accent.g, Looks.colors.accent.b, 0.18)
+            outerRadius: parent.radius + 2
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+                leftMargin: 5
+                rightMargin: 5
+                bottomMargin: 0
             }
         }
     }

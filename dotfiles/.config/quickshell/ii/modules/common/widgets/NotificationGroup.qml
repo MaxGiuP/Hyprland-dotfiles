@@ -1,5 +1,6 @@
 import qs.services
 import qs.modules.common
+import qs.modules.common.widgets
 import qs.modules.common.functions
 import QtQuick
 import QtQuick.Layouts
@@ -19,6 +20,18 @@ MouseArea { // Notification group area
     property bool expanded: false
     property bool popup: false
     property real padding: 10
+    readonly property var countdownNotification: notifications.reduce((candidate, notif) => {
+        if (!(notif?.popup ?? false) || ((notif?.timeoutDurationMs ?? 0) <= 0))
+            return candidate;
+
+        if (candidate == null)
+            return notif;
+
+        const candidateRemaining = Number(candidate?.timeoutProgress ?? 0) * Number(candidate?.timeoutDurationMs ?? 0);
+        const notifRemaining = Number(notif?.timeoutProgress ?? 0) * Number(notif?.timeoutDurationMs ?? 0);
+        return notifRemaining < candidateRemaining ? notif : candidate;
+    }, null)
+    readonly property real timeoutBarReservedSpace: countdownNotification != null ? 8 : 0
     implicitHeight: background.implicitHeight
 
     property real dragConfirmThreshold: 70 // Drag further to discard notification
@@ -61,7 +74,7 @@ MouseArea { // Notification group area
             Notifications.cancelTimeout(notif.notificationId);
         });
         else root.notifications.forEach(notif => {
-            Notifications.timeoutNotification(notif.notificationId);
+            Notifications.resumeTimeout(notif.notificationId);
         });
     }
 
@@ -152,8 +165,8 @@ MouseArea { // Notification group area
         }
         clip: true
         implicitHeight: root.expanded ? 
-            row.implicitHeight + padding * 2 :
-            Math.min(80, row.implicitHeight + padding * 2)
+            row.implicitHeight + padding * 2 + root.timeoutBarReservedSpace :
+            Math.min(80, row.implicitHeight + padding * 2) + root.timeoutBarReservedSpace
 
         Behavior on implicitHeight {
             id: implicitHeightAnim
@@ -269,6 +282,19 @@ MouseArea { // Notification group area
                     }
                 }
 
+            }
+        }
+
+        NotificationTimeoutBar {
+            notification: root.countdownNotification
+            fillColor: Appearance.colors.colPrimary
+            outerRadius: parent.radius + 2
+            anchors {
+                left: parent.left
+                right: parent.right
+                bottom: parent.bottom
+                leftMargin: 5
+                rightMargin: 5
             }
         }
     }

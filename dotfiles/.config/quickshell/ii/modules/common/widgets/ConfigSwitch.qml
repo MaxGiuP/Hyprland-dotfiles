@@ -8,7 +8,7 @@ import qs.modules.common.widgets
 Item {
     id: root
 
-    default property alias contentData: button.data
+    override default property alias contentData: button.data
 
     property string buttonIcon
     property real iconSize: Appearance.font.pixelSize.larger

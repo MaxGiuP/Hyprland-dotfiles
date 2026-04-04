@@ -144,6 +144,39 @@ ContentPage {
                 }
             }
         }
+        ContentSubsection {
+            title: Translation.tr("Dock position")
+
+            ConfigSelectionArray {
+                currentValue: Config.options.dock.mode ?? "fixed"
+                onSelected: newValue => {
+                    Config.options.dock.mode = newValue;
+                }
+                options: [
+                    {
+                        displayName: Translation.tr("Fixed"),
+                        icon: "dock_to_bottom",
+                        value: "fixed"
+                    },
+                    {
+                        displayName: Translation.tr("Floating"),
+                        icon: "page_header",
+                        value: "floating"
+                    }
+                ]
+            }
+        }
+        ConfigSwitch {
+            buttonIcon: "rounded_corner"
+            text: Translation.tr("Flared attached base")
+            checked: Config.options.dock.rounded ?? true
+            onCheckedChanged: {
+                Config.options.dock.rounded = checked;
+            }
+            StyledToolTip {
+                text: Translation.tr("Only affects the fixed dock. Turn this off to keep the top corners rounded while the sides run straight down into the screen edge.")
+            }
+        }
         ConfigRow {
             uniform: true
             ConfigSpinBox {

@@ -57,7 +57,7 @@ BodyRectangle {
     component PageSection: ColumnLayout {
         id: pageSection
         required property string title
-        default property alias data: pageSectionContentArea.data
+        override default property alias contentChildren: pageSectionContentArea.children
 
         spacing: 16
 

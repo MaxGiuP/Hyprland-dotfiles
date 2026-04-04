@@ -395,8 +395,8 @@ FocusScope {
                                 anchors.margins: 1
                                 focus: index === root.currentTerminalIndex
                                 activeFocusOnTab: true
-                                font.family: Appearance.font.family.monospace
-                                font.pixelSize: Appearance.font.pixelSize.small
+                                font.family: "Noto Sans Mono"
+                                font.pointSize: 11
                                 colorScheme: "BreezeModified"
                                 session: QMLTermSession {
                                     id: termSession

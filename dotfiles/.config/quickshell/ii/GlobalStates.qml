@@ -27,6 +27,8 @@ Singleton {
     property bool regionSelectorOpen: false
     property bool searchOpen: false
     property bool screenLocked: false
+    property real screenLockBlurProgress: 0
+    property bool screenLockHideBar: false
     property bool screenLockContainsCharacters: false
     property bool screenUnlockFailed: false
     property bool sessionOpen: false
@@ -40,6 +42,25 @@ Singleton {
     property var desktopTrashRects: ({})
     property bool wallpaperSelectorOpen: false
     property bool workspaceShowNumbers: false
+    property var barTopClearanceByScreen: ({})
+
+    function setBarTopClearance(screenName, clearance) {
+        if (!screenName)
+            return
+
+        const nextMap = Object.assign({}, root.barTopClearanceByScreen)
+        nextMap[screenName] = clearance
+        root.barTopClearanceByScreen = nextMap
+    }
+
+    function clearBarTopClearance(screenName) {
+        if (!screenName)
+            return
+
+        const nextMap = Object.assign({}, root.barTopClearanceByScreen)
+        delete nextMap[screenName]
+        root.barTopClearanceByScreen = nextMap
+    }
 
     function resolvedDrawerScreen(preferredScreen = "") {
         return preferredScreen

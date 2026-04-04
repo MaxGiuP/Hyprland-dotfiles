@@ -16,7 +16,7 @@ Scope {
 
     // ── Shared config ─────────────────────────────────────────────────────
     readonly property string desktopPath: (Quickshell.env("HOME") || "/home/linmax") + "/Desktop"
-    readonly property string positionsPath: Quickshell.shellPath("desktop_positions.json")
+    readonly property string positionsPath: Qt.resolvedUrl(Quickshell.shellPath("desktop_positions.json"))
 
     readonly property int iconSize: 64
     readonly property int itemW: 88
@@ -38,7 +38,11 @@ Scope {
             try { root.positions = JSON.parse(positionsFile.text()) } catch(e) {}
             root.positionsReady = true
         }
-        onLoadFailed: root.positionsReady = true
+        onLoadFailed: error => {
+            if (error === FileViewError.FileNotFound)
+                positionsFile.setText("{}")
+            root.positionsReady = true
+        }
     }
 
     Timer {
@@ -287,7 +291,7 @@ Scope {
                         root.moveToScreen(root._pendingXferFrom, desktopWindow.screen.name,
                             root._pendingXferName, _ghostX, _ghostY)
                         root._pendingXferName = ""
-                        root.xferGraceTimer.stop()
+                        xferGraceTimer.stop()
                         _xferHeld = false
                         return true
                     }
@@ -518,7 +522,7 @@ Scope {
                                         root._pendingXferName = modelData.fileName
                                         root._pendingXferFrom = myName
                                         root._pendingXferY    = y
-                                        root.xferGraceTimer.restart()
+                                        xferGraceTimer.restart()
                                     }
                                 }
                                 const saved = root.positions[myName + "/" + modelData.fileName]
@@ -589,7 +593,7 @@ Scope {
                                             p[myName + "/" + name] = { x: nx, y: ny }
                                         }
                                         root.positions = p
-                                        root.saveTimer.restart()
+                                        saveTimer.restart()
                                     }
                                     return
                                 }
@@ -602,7 +606,7 @@ Scope {
                                     const snapped  = root.snapToGrid(0, clampedY, nextScreen.width, nextScreen.height, topOff)
                                     const cell     = root.findFreeCell(nextScreen.name, fileName, snapped.x, snapped.y, nextScreen.width, nextScreen.height, topOff)
                                     root.moveToScreen(myName, nextScreen.name, fileName, cell.x, cell.y)
-                                    root._pendingXferName = ""; root.xferGraceTimer.stop()
+                                    root._pendingXferName = ""; xferGraceTimer.stop()
                                 } else if (px <= 0 && myIdx > 0) {
                                     const prevScreen = screens[myIdx - 1]
                                     const clampedY   = Math.max(desktopWindow.dragMinY, Math.min(desktopWindow.dragMaxY, py))
@@ -610,7 +614,7 @@ Scope {
                                     const snapped    = root.snapToGrid(prevScreen.width - root.itemW, clampedY, prevScreen.width, prevScreen.height, topOff)
                                     const cell       = root.findFreeCell(prevScreen.name, fileName, snapped.x, snapped.y, prevScreen.width, prevScreen.height, topOff)
                                     root.moveToScreen(myName, prevScreen.name, fileName, cell.x, cell.y)
-                                    root._pendingXferName = ""; root.xferGraceTimer.stop()
+                                    root._pendingXferName = ""; xferGraceTimer.stop()
                                 } else {
                                     const topOff   = desktopWindow.dragMinY + root.gridPad
                                     const clampedX = Math.max(0, Math.min(desktopWindow.width - root.itemW, px))
@@ -622,7 +626,7 @@ Scope {
                                         p[takenKey] = { x: _origX, y: _origY }
                                         p[myName + "/" + fileName] = { x: snapped.x, y: snapped.y }
                                         root.positions = p
-                                        root.saveTimer.restart()
+                                        saveTimer.restart()
                                     } else {
                                         root.savePos(myName, fileName, snapped.x, snapped.y)
                                     }
@@ -830,7 +834,7 @@ Scope {
                             p[screenName + "/" + name] = p[oldKey]
                             delete p[oldKey]
                             root.positions = p
-                            root.saveTimer.restart()
+                            saveTimer.restart()
                         }
                         // Use -T (--no-target-directory) for directories so that mv
                         // renames the folder instead of silently moving it inside an

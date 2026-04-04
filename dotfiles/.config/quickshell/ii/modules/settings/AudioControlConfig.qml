@@ -220,10 +220,7 @@ ContentPage {
         id: volumeSyncTimer
         interval: 100
         repeat: false
-        onTriggered: {
-            if (Audio.sink?.audio)
-                Audio.sink.audio.volume = root._capturedVolume
-        }
+        onTriggered: Audio.setVolume(root._capturedVolume)
     }
 
     // ── Output ──────────────────────────────────────────────────────────────
@@ -250,7 +247,7 @@ ContentPage {
                 onActivated: index => {
                     const newDevice = root.realOutputDevices[index]
                     if (monoSwitch.checked) {
-                        root._capturedVolume = Audio.sink?.audio?.volume ?? 0
+                        root._capturedVolume = Audio.value
                         monoRecreateProc.oldMaster = root.monoMasterSink
                         root.monoMasterSink = newDevice.name
                         Audio.setDefaultSink(newDevice)
@@ -289,7 +286,7 @@ ContentPage {
                 configuration: StyledSlider.Configuration.M
                 usePercentTooltip: false
                 tooltipContent: `${Math.round(value * 100)}%`
-                onMoved: { if (Audio.sink?.audio) Audio.sink.audio.volume = value }
+                onMoved: Audio.setVolume(value)
             }
 
             StyledText {
@@ -342,7 +339,7 @@ ContentPage {
                 if (root._monoGuard)
                     return
                 if (checked) {
-                    root._capturedVolume = Audio.sink?.audio?.volume ?? 0
+                    root._capturedVolume = Audio.value
                     root.monoMasterSink = Audio.sink?.name ?? ""
                     monoSetupProc.master = root.monoMasterSink
                     monoSetupProc.running = false
@@ -450,15 +447,15 @@ ContentPage {
                 Layout.fillWidth: true
                 from: 0
                 to: 1
-                value: Audio.source?.audio?.volume ?? 0
+                value: Audio.micValue
                 configuration: StyledSlider.Configuration.M
                 usePercentTooltip: false
                 tooltipContent: `${Math.round(value * 100)}%`
-                onMoved: { if (Audio.source?.audio) Audio.source.audio.volume = value }
+                onMoved: Audio.setMicVolume(value)
             }
 
             StyledText {
-                text: `${Math.round((Audio.source?.audio?.volume ?? 0) * 100)}%`
+                text: `${Math.round(Audio.micValue * 100)}%`
                 color: Appearance.colors.colSubtext
                 font.pixelSize: Appearance.font.pixelSize.small
             }

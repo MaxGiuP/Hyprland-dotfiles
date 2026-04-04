@@ -28,7 +28,6 @@ Item { // Notification item area
         Math.abs(parentDragDistance) > dragConfirmThreshold ? 0 :
         dragIndexDiff == 1 ? (parentDragDistance * 0.3) :
         dragIndexDiff == 2 ? (parentDragDistance * 0.1) : 0
-
     implicitHeight: background.implicitHeight
 
     function handleLeftClick() {
@@ -361,5 +360,6 @@ Item { // Notification item area
                 }
             }
         }
+
     }
 }

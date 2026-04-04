@@ -5,12 +5,12 @@ import qs.modules.waffle.looks
 OSDValue {
     id: root
     iconName: WIcons.volumeIcon
-    value: Audio.sink?.audio.volume ?? 0
+    value: Audio.value
 
     Connections {
         // Listen to volume changes
-        target: Audio.sink?.audio ?? null
-        function onVolumeChanged() {
+        target: Audio
+        function onValueChanged() {
             if (Audio.ready)
                 root.timer.restart();
         }

@@ -199,7 +199,7 @@
         }
     },
     "battery": {
-        "automaticSuspend": true,
+        "automaticSuspend": false,
         "critical": 5,
         "full": 100,
         "low": 20,
@@ -228,19 +228,23 @@
     },
     "dock": {
         "enable": true,
-        "height": 60,
+        "height": 64,
         "hoverRegionHeight": 20,
         "hoverToReveal": true,
         "ignoredAppRegexes": [
         ],
+        "mode": "fixed",
         "monochromeIcons": false,
         "pinnedApps": [
             "kitty",
+            "brave-browser",
             "org.kde.dolphin",
             "org.mozilla.thunderbird",
-            "vmplayer"
+            "vmplayer",
+            "steam"
         ],
-        "pinnedOnStartup": false
+        "pinnedOnStartup": false,
+        "rounded": true
     },
     "hacks": {
         "arbitraryRaceConditionDelay": 20
@@ -259,7 +263,7 @@
     "language": {
         "translator": {
             "engine": "auto",
-            "sourceLanguage": "Italiano",
+            "sourceLanguage": "Deutsch",
             "targetLanguage": "English"
         },
         "ui": "it_IT"

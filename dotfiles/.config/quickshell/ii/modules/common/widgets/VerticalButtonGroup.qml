@@ -9,7 +9,7 @@ import QtQuick.Layouts
  */
 Rectangle {
     id: root
-    default property alias content: columnLayout.data
+    override default property alias content: columnLayout.data
     property real spacing: 5
     property real padding: 0
     property int clickIndex: columnLayout.clickIndex

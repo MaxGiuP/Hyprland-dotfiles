@@ -10,7 +10,7 @@ import qs.modules.common.functions
 Item {
     id: root
 
-    default property alias contentData: combo.data
+    override default property alias contentData: combo.data
 
     property string buttonIcon: ""
     property real buttonRadius: combo.height / 2

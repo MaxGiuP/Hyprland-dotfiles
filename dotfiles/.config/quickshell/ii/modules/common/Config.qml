@@ -458,7 +458,7 @@ Singleton {
                 property int low: 20
                 property int critical: 5
                 property int full: 101
-                property bool automaticSuspend: true
+                property bool automaticSuspend: false
                 property int suspend: 3
             }
 
@@ -494,6 +494,8 @@ Singleton {
 
             property JsonObject dock: JsonObject {
                 property bool enable: false
+                property string mode: "fixed"
+                property bool rounded: true
                 property bool monochromeIcons: true
                 property real height: 60
                 property real hoverRegionHeight: 2

@@ -23,6 +23,10 @@ LockScreen {
 
     lockSurface: Item {
         id: lockSurfaceItem
+        readonly property size safeSurfaceSize: Qt.size(
+            Math.max(1, Math.round(width)),
+            Math.max(1, Math.round(height))
+        )
 
         Component.onCompleted: {
             root.passwordView = false;
@@ -40,13 +44,11 @@ LockScreen {
             height: parent.height
             onStatusChanged: {
                 if (status === Image.Ready) {
-                    print("Lock wallpaper loaded");
-                    print(lockSurfaceItem.height);
-                    y = -lockSurfaceItem.height;
+                    y = -lockSurfaceItem.safeSurfaceSize.height;
                     openAnim.restart();
                 }
             }
-            sourceSize: Qt.size(lockSurfaceItem.width, lockSurfaceItem.height)
+            sourceSize: lockSurfaceItem.safeSurfaceSize
             source: Config.options.background.wallpaperPath
             fillMode: Image.PreserveAspectCrop
 
@@ -185,7 +187,7 @@ LockScreen {
         id: iconIndicator
         required property string baseIcon
         required property string icon
-        default property alias data: iconWidget.data
+        override default property alias contentChildren: iconWidget.children
         implicitWidth: 40
         implicitHeight: 40
         FluentIcon {

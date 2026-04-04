@@ -21,10 +21,24 @@ Item {
         {"icon": "smartphone", "name": "", "title": Translation.tr("KDE Connect")},
         {"icon": "terminal", "name": "", "title": Translation.tr("Console")},
     ]
-    property int tabCount: swipeView.count
+    property var tabPageComponents: [
+        ...(root.aiChatEnabled ? [aiChat] : []),
+        ...(root.translatorEnabled ? [translator] : []),
+        calculatorTab,
+        kdeConnectTab,
+        consoleTab,
+        ...(root.tabButtonList.length === 0 ? [placeholder] : []),
+    ]
+    property int tabCount: tabPageComponents.length
 
     function focusActiveItem() {
-        swipeView.currentItem.forceActiveFocus()
+        const currentPage = swipeView.currentItem;
+        const target = currentPage?.loadedItem ?? currentPage;
+        if (target?.focusActiveItem) {
+            target.focusActiveItem();
+        } else if (target?.forceActiveFocus) {
+            target.forceActiveFocus();
+        }
     }
 
     Keys.onPressed: (event) => {
@@ -55,7 +69,9 @@ Item {
                 id: tabBar
                 Layout.alignment: Qt.AlignHCenter
                 tabButtonList: root.tabButtonList
-                currentIndex: swipeView.currentIndex
+                Synchronizer on currentIndex {
+                    property alias source: swipeView.currentIndex
+                }
                 delegate: ToolbarTabButton {
                     required property int index
                     required property var modelData
@@ -98,14 +114,28 @@ Item {
                     }
                 }
 
-                contentChildren: [
-                    ...(root.aiChatEnabled ? [aiChat.createObject()] : []),
-                    ...(root.translatorEnabled ? [translator.createObject()] : []),
-                    calculatorTab.createObject(),
-                    kdeConnectTab.createObject(),
-                    consoleTab.createObject(),
-                    ...(root.tabButtonList.length === 0 ? [placeholder.createObject()] : []),
-                ]
+                Repeater {
+                    model: root.tabPageComponents
+                    delegate: SidebarLeftPageHost {
+                        required property var modelData
+                        pageComponent: modelData
+                    }
+                }
+            }
+        }
+
+        component SidebarLeftPageHost: Item {
+            id: pageHost
+            required property Component pageComponent
+            readonly property var loadedItem: pageLoader.item
+            width: SwipeView.view ? SwipeView.view.width : 0
+            height: SwipeView.view ? SwipeView.view.height : 0
+
+            Loader {
+                id: pageLoader
+                anchors.fill: parent
+                asynchronous: false
+                sourceComponent: pageHost.pageComponent
             }
         }
 

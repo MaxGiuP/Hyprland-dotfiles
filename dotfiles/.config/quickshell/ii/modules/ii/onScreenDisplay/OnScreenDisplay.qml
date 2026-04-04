@@ -54,16 +54,12 @@ Scope {
 
     Connections {
         // Listen to volume changes
-        target: Audio.sink?.audio ?? null
-        function onVolumeChanged() {
-            if (!Audio.ready)
-                return;
+        target: Audio
+        function onValueChanged() {
             root.currentIndicator = "volume";
             root.triggerOsd();
         }
         function onMutedChanged() {
-            if (!Audio.ready)
-                return;
             root.currentIndicator = "volume";
             root.triggerOsd();
         }

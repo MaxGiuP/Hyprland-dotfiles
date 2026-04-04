@@ -68,8 +68,9 @@ Scope { // Scope
             id: dockRoot
             required property var modelData
             screen: modelData
-            visible: !GlobalStates.screenLocked
             property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
+            readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
+            visible: !GlobalStates.screenLocked && !fullscreenOnMonitor
             readonly property int activeWorkspaceId: monitor?.activeWorkspace?.id ?? -1
             readonly property bool activeWorkspaceEmpty: activeWorkspaceId === -1
                 || HyprlandData.hyprlandClientsForWorkspace(activeWorkspaceId).length === 0
@@ -100,7 +101,7 @@ Scope { // Scope
 
             readonly property bool launchpadOnThisScreen: GlobalStates.overviewDrawerMode
                 || (GlobalStates.drawerOpen && dockRoot.modelData.name === GlobalStates.drawerScreen)
-            exclusiveZone: (root.pinned && !launchpadOnThisScreen)
+            exclusiveZone: (dockRoot.visible && root.pinned && !launchpadOnThisScreen)
                 ? implicitHeight - Appearance.sizes.hyprlandGapsOut - (Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
                 : 0
 
@@ -171,19 +172,6 @@ Scope { // Scope
                             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                         }
 
-                        StyledRectangularShadow {
-                            target: dockShadowTarget
-                            offset: Qt.vector2d(0.0, 0.0)
-                            visible: root.floatingDock
-                        }
-
-                        Rectangle {
-                            id: dockShadowTarget
-                            visible: false
-                            anchors.fill: dockVisualBackground
-                            radius: dockVisualBackground.radius
-                        }
-
                         Item {
                             id: dockVisualBackground
                             readonly property real radius: Appearance.rounding.large
@@ -192,14 +180,6 @@ Scope { // Scope
                                 ? 0
                                 : (root.flaredDockBase ? Math.round(fixedDockFlare * 0.06) : 0)
                             readonly property real fixedDockVisibleBottom: height - fixedDockBaseOverlap
-                            layer.enabled: !root.floatingDock
-                            layer.effect: MultiEffect {
-                                shadowEnabled: true
-                                shadowColor: Appearance.colors.colShadow
-                                shadowBlur: 0.96
-                                shadowVerticalOffset: 8
-                                shadowHorizontalOffset: 0
-                            }
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.top: parent.top
@@ -293,13 +273,6 @@ Scope { // Scope
                                     }
                                 }
 
-                                Rectangle {
-                                    anchors.fill: parent
-                                    color: "transparent"
-                                    border.width: 1
-                                    border.color: root.dockBorderColor
-                                    radius: dockVisualBackground.radius
-                                }
                             }
                         }
 
@@ -365,50 +338,6 @@ Scope { // Scope
                                     }
                                 }
 
-                                Shape {
-                                    anchors.fill: parent
-                                    preferredRendererType: Shape.CurveRenderer
-
-                                    ShapePath {
-                                        fillColor: "transparent"
-                                        strokeColor: root.dockBorderColor
-                                        strokeWidth: 1
-
-                                        startX: dockVisualBackground.radius
-                                        startY: 0
-
-                                        PathLine {
-                                            x: dockVisualBackground.width - dockVisualBackground.radius
-                                            y: 0
-                                        }
-                                        PathArc {
-                                            x: dockVisualBackground.width
-                                            y: dockVisualBackground.radius
-                                            radiusX: dockVisualBackground.radius
-                                            radiusY: dockVisualBackground.radius
-                                            direction: PathArc.Clockwise
-                                        }
-                                        PathLine {
-                                            x: dockVisualBackground.width
-                                            y: dockVisualBackground.fixedDockVisibleBottom
-                                        }
-                                        PathLine {
-                                            x: 0
-                                            y: dockVisualBackground.fixedDockVisibleBottom
-                                        }
-                                        PathLine {
-                                            x: 0
-                                            y: dockVisualBackground.radius
-                                        }
-                                        PathArc {
-                                            x: dockVisualBackground.radius
-                                            y: 0
-                                            radiusX: dockVisualBackground.radius
-                                            radiusY: dockVisualBackground.radius
-                                            direction: PathArc.Clockwise
-                                        }
-                                    }
-                                }
                             }
                         }
 
@@ -490,66 +419,6 @@ Scope { // Scope
                                     }
                                 }
 
-                                Shape {
-                                    anchors.fill: parent
-                                    preferredRendererType: Shape.CurveRenderer
-
-                                    ShapePath {
-                                        fillColor: "transparent"
-                                        strokeColor: root.dockBorderColor
-                                        strokeWidth: 1
-
-                                        startX: dockVisualBackground.fixedDockFlare + dockVisualBackground.radius
-                                        startY: 0
-
-                                        PathLine {
-                                            x: dockVisualBackground.width
-                                                - dockVisualBackground.fixedDockFlare
-                                                - dockVisualBackground.radius
-                                            y: 0
-                                        }
-                                        PathArc {
-                                            x: dockVisualBackground.width - dockVisualBackground.fixedDockFlare
-                                            y: dockVisualBackground.radius
-                                            radiusX: dockVisualBackground.radius
-                                            radiusY: dockVisualBackground.radius
-                                            direction: PathArc.Clockwise
-                                        }
-                                        PathLine {
-                                            x: dockVisualBackground.width - dockVisualBackground.fixedDockFlare
-                                            y: dockVisualBackground.fixedDockVisibleBottom - dockVisualBackground.fixedDockFlare
-                                        }
-                                        PathArc {
-                                            x: dockVisualBackground.width + 1
-                                            y: dockVisualBackground.fixedDockVisibleBottom
-                                            radiusX: dockVisualBackground.fixedDockFlare
-                                            radiusY: dockVisualBackground.fixedDockFlare
-                                            direction: PathArc.Counterclockwise
-                                        }
-                                        PathLine {
-                                            x: 0
-                                            y: dockVisualBackground.fixedDockVisibleBottom
-                                        }
-                                        PathArc {
-                                            x: dockVisualBackground.fixedDockFlare
-                                            y: dockVisualBackground.fixedDockVisibleBottom - dockVisualBackground.fixedDockFlare
-                                            radiusX: dockVisualBackground.fixedDockFlare
-                                            radiusY: dockVisualBackground.fixedDockFlare
-                                            direction: PathArc.Counterclockwise
-                                        }
-                                        PathLine {
-                                            x: dockVisualBackground.fixedDockFlare
-                                            y: dockVisualBackground.radius
-                                        }
-                                        PathArc {
-                                            x: dockVisualBackground.fixedDockFlare + dockVisualBackground.radius
-                                            y: 0
-                                            radiusX: dockVisualBackground.radius
-                                            radiusY: dockVisualBackground.radius
-                                            direction: PathArc.Clockwise
-                                        }
-                                    }
-                                }
                             }
                         }
 

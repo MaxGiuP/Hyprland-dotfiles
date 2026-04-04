@@ -28,7 +28,7 @@ DockButton {
 
     readonly property bool isSeparator: appToplevel.appId === "SEPARATOR"
     readonly property bool isPinnedApp: appToplevel.pinned && !isSeparator
-    readonly property var desktopEntry: DesktopEntries.heuristicLookup(appToplevel.appId)
+    readonly property var desktopEntry: TaskbarApps.resolveDesktopEntry(appToplevel.appId)
     property real initialX: 0
     property real initialY: 0
     property bool didDrag: false
@@ -99,7 +99,10 @@ DockButton {
             topMargin: dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
             bottomMargin: dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
         }
-        sourceComponent: DockSeparator {}
+        sourceComponent: DockSeparator {
+            separatorPadding: Math.max(Appearance.rounding.small, Math.round(root.iconSize * 0.26))
+            separatorThickness: Math.max(1, Math.round(root.iconSize * 0.05))
+        }
     }
 
     Loader {
@@ -240,7 +243,7 @@ DockButton {
                         label: root.isPinnedApp ? "Unpin from bar" : "Pin to bar"
                         symbol: root.isPinnedApp ? "keep_off" : "keep"
                         onTriggered: {
-                            TaskbarApps.togglePin(appToplevel.appId)
+                            TaskbarApps.togglePin(root.desktopEntry?.id ?? appToplevel.appId)
                             dockContextMenu.close()
                         }
                     }

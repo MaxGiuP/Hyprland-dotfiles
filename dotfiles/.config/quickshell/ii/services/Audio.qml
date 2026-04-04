@@ -19,7 +19,10 @@ Singleton {
     property PwNode source: Pipewire.defaultAudioSource
     readonly property real hardMaxValue: 4.00 // People keep joking about setting volume to 5172% so...
     property string audioTheme: Config.options.sounds.theme
-    property real value: sink?.audio.volume ?? 0
+    property real value: 0
+    property real micValue: 0
+    property bool muted: false
+    property bool micMuted: false
     property bool sinkRestorePending: true
     property bool sourceRestorePending: true
     property int restoreAttempts: 0
@@ -34,6 +37,52 @@ Singleton {
     }
     function appNodeDisplayName(node) {
         return (node.properties["application.name"] || node.description || node.name)
+    }
+
+    function parseVolumeState(output) {
+        const text = `${output ?? ""}`;
+        const match = text.match(/Volume:\s+([0-9.]+)/);
+        return {
+            valid: match !== null,
+            volume: match ? Number(match[1]) : 0,
+            muted: /\[MUTED\]/.test(text),
+        };
+    }
+
+    function applySinkStateFromOutput(output) {
+        const state = root.parseVolumeState(output);
+        if (!state.valid)
+            return;
+
+        root.value = state.volume;
+        root.muted = state.muted;
+    }
+
+    function applySourceStateFromOutput(output) {
+        const state = root.parseVolumeState(output);
+        if (!state.valid)
+            return;
+
+        root.micValue = state.volume;
+        root.micMuted = state.muted;
+    }
+
+    function refreshSinkState() {
+        getSinkVolume.running = false;
+        getSinkVolume.running = true;
+    }
+
+    function refreshSourceState() {
+        getSourceVolume.running = false;
+        getSourceVolume.running = true;
+    }
+
+    function scheduleSinkRefresh() {
+        sinkRefreshTimer.restart();
+    }
+
+    function scheduleSourceRefresh() {
+        sourceRefreshTimer.restart();
     }
 
     function rememberNode(kind, node) {
@@ -133,24 +182,52 @@ Singleton {
     signal sinkProtectionTriggered(string reason);
 
     // Controls
+    function setVolume(volume) {
+        const clamped = Math.max(0, Math.min(root.hardMaxValue, Number(volume)));
+        if (Number.isNaN(clamped))
+            return;
+
+        root.value = clamped;
+        Quickshell.execDetached(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", `${clamped}`]);
+        root.scheduleSinkRefresh();
+    }
+
+    function setMicVolume(volume) {
+        const clamped = Math.max(0, Math.min(1, Number(volume)));
+        if (Number.isNaN(clamped))
+            return;
+
+        root.micValue = clamped;
+        Quickshell.execDetached(["wpctl", "set-volume", "@DEFAULT_AUDIO_SOURCE@", `${clamped}`]);
+        root.scheduleSourceRefresh();
+    }
+
     function toggleMute() {
-        Audio.sink.audio.muted = !Audio.sink.audio.muted
+        root.muted = !root.muted;
+        Quickshell.execDetached(["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"]);
+        root.scheduleSinkRefresh();
     }
 
     function toggleMicMute() {
-        Audio.source.audio.muted = !Audio.source.audio.muted
+        root.micMuted = !root.micMuted;
+        Quickshell.execDetached(["wpctl", "set-mute", "@DEFAULT_AUDIO_SOURCE@", "toggle"]);
+        root.scheduleSourceRefresh();
     }
 
     function incrementVolume() {
         const currentVolume = Audio.value;
-        const step = currentVolume < 0.09 ? 0.01 : 0.02 || 0.2;
-        Audio.sink.audio.volume = Math.min(2.5, Audio.sink.audio.volume + step);
+        const stepPercent = currentVolume < 0.09 ? 1 : 2;
+        root.value = Math.min(root.hardMaxValue, currentVolume + (stepPercent / 100));
+        Quickshell.execDetached(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", `${stepPercent}%+`]);
+        root.scheduleSinkRefresh();
     }
     
     function decrementVolume() {
         const currentVolume = Audio.value;
-        const step = currentVolume < 0.09 ? 0.01 : 0.02 || 0.2;
-        Audio.sink.audio.volume -= step;
+        const stepPercent = currentVolume < 0.09 ? 1 : 2;
+        root.value = Math.max(0, currentVolume - (stepPercent / 100));
+        Quickshell.execDetached(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", `${stepPercent}%-`]);
+        root.scheduleSinkRefresh();
     }
 
     function setDefaultSink(node, rememberSelection = true) {
@@ -173,6 +250,7 @@ Singleton {
             `pactl move-sink-input "$input_id" ${pactTarget} 2>/dev/null || true; ` +
             `done`
         ]);
+        root.scheduleSinkRefresh();
     }
 
     function setDefaultSource(node, rememberSelection = true) {
@@ -191,11 +269,55 @@ Singleton {
             `wpctl set-default ${shellQuote(sourceId)} 2>/dev/null || true; ` +
             `pactl set-default-source ${pactTarget} 2>/dev/null || true`
         ]);
+        root.scheduleSourceRefresh();
     }
 
     // Internals
     PwObjectTracker {
         objects: root.settingsApp ? [] : [sink, source]
+    }
+
+    Timer {
+        id: sinkRefreshTimer
+        interval: 120
+        repeat: false
+        onTriggered: root.refreshSinkState()
+    }
+
+    Timer {
+        id: sourceRefreshTimer
+        interval: 120
+        repeat: false
+        onTriggered: root.refreshSourceState()
+    }
+
+    Timer {
+        id: volumePollTimer
+        interval: 1000
+        repeat: true
+        running: true
+        onTriggered: {
+            root.refreshSinkState();
+            root.refreshSourceState();
+        }
+    }
+
+    Process {
+        id: getSinkVolume
+        command: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@"]
+        stdout: StdioCollector {
+            id: sinkVolumeCollector
+            onStreamFinished: root.applySinkStateFromOutput(sinkVolumeCollector.text)
+        }
+    }
+
+    Process {
+        id: getSourceVolume
+        command: ["wpctl", "get-volume", "@DEFAULT_AUDIO_SOURCE@"]
+        stdout: StdioCollector {
+            id: sourceVolumeCollector
+            onStreamFinished: root.applySourceStateFromOutput(sourceVolumeCollector.text)
+        }
     }
 
     Timer {
@@ -208,8 +330,13 @@ Singleton {
 
     onOutputDevicesChanged: root.attemptRestoreSavedDefaults()
     onInputDevicesChanged: root.attemptRestoreSavedDefaults()
+    onSinkChanged: root.scheduleSinkRefresh()
+    onSourceChanged: root.scheduleSourceRefresh()
 
     Component.onCompleted: {
+        root.scheduleSinkRefresh();
+        root.scheduleSourceRefresh();
+
         if (root.settingsApp)
             return;
 
@@ -231,6 +358,34 @@ Singleton {
             root.attemptRestoreSavedDefaults();
             if ((root.sinkRestorePending || root.sourceRestorePending) && !restoreTimer.running)
                 restoreTimer.start();
+        }
+    }
+
+    Connections {
+        target: sink?.audio ?? null
+
+        function onVolumeChanged() {
+            const newVolume = Number(sink?.audio?.volume);
+            if (!Number.isNaN(newVolume))
+                root.value = newVolume;
+        }
+
+        function onMutedChanged() {
+            root.muted = sink?.audio?.muted ?? false;
+        }
+    }
+
+    Connections {
+        target: source?.audio ?? null
+
+        function onVolumeChanged() {
+            const newVolume = Number(source?.audio?.volume);
+            if (!Number.isNaN(newVolume))
+                root.micValue = newVolume;
+        }
+
+        function onMutedChanged() {
+            root.micMuted = source?.audio?.muted ?? false;
         }
     }
 
