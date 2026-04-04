@@ -26,12 +26,23 @@ Item {
     signal openSettingsRequested()
 
     visible: false
+    readonly property real contentWidth: Math.max(
+        newTextFileButton.visible ? newTextFileButton.implicitWidth : 0,
+        newFolderButton.visible ? newFolderButton.implicitWidth : 0,
+        refreshButton.visible ? refreshButton.implicitWidth : 0,
+        settingsButton.visible ? settingsButton.implicitWidth : 0,
+        trashSelectedButton.visible ? trashSelectedButton.implicitWidth : 0,
+        openButton.visible ? openButton.implicitWidth : 0,
+        renameButton.visible ? renameButton.implicitWidth : 0,
+        singleTrashButton.visible ? singleTrashButton.implicitWidth : 0,
+        bulkTrashButton.visible ? bulkTrashButton.implicitWidth : 0
+    )
     implicitWidth: menuRect.width
     implicitHeight: menuRect.height
 
     Rectangle {
         id: menuRect
-        width: 210
+        width: root.contentWidth + 16
         height: menuColumn.implicitHeight + 16
         radius: Appearance.rounding.normal
         color: Qt.rgba(Appearance.colors.colLayer1.r, Appearance.colors.colLayer1.g,
@@ -68,14 +79,16 @@ Item {
 
             // ── Background menu ────────────────────────────────────────────
             DesktopMenuButton {
+                id: newTextFileButton
                 visible: !root.isFileMenu
-                text: "New Text File"
+                text: Translation.tr("New Text File")
                 iconName: "document-new"
                 onTriggered: { root.requestNameInput("file"); root.closeRequested() }
             }
             DesktopMenuButton {
+                id: newFolderButton
                 visible: !root.isFileMenu
-                text: "New Folder"
+                text: Translation.tr("New Folder")
                 iconName: "folder-new"
                 onTriggered: { root.requestNameInput("folder"); root.closeRequested() }
             }
@@ -85,12 +98,14 @@ Item {
                 color: Qt.rgba(1, 1, 1, 0.1)
             }
             DesktopMenuButton {
+                id: refreshButton
                 visible: !root.isFileMenu
-                text: "Refresh"
+                text: Translation.tr("Refresh")
                 iconName: "view-refresh"
                 onTriggered: root.refreshRequested()
             }
             DesktopMenuButton {
+                id: settingsButton
                 visible: !root.isFileMenu
                 text: Translation.tr("Settings")
                 iconName: "preferences-system"
@@ -103,8 +118,11 @@ Item {
                 color: Qt.rgba(1, 1, 1, 0.1)
             }
             DesktopMenuButton {
+                id: trashSelectedButton
                 visible: !root.isFileMenu && root.selectedCount > 0
-                text: "Move " + root.selectedCount + " item" + (root.selectedCount === 1 ? "" : "s") + " to Trash"
+                text: root.selectedCount === 1
+                    ? Translation.tr("Move %1 item to Trash").arg(root.selectedCount)
+                    : Translation.tr("Move %1 items to Trash").arg(root.selectedCount)
                 iconName: "user-trash"
                 textColor: "#ef5350"
                 onTriggered: { root.trashSelectedRequested(); root.closeRequested() }
@@ -112,6 +130,7 @@ Item {
 
             // ── File/folder menu ───────────────────────────────────────────
             DesktopMenuButton {
+                id: openButton
                 visible: root.isFileMenu
                 text: Translation.tr("Open")
                 iconName: "document-open"
@@ -124,8 +143,9 @@ Item {
             }
             // Rename — only for a single selected item
             DesktopMenuButton {
+                id: renameButton
                 visible: root.isFileMenu && root.selectedCount <= 1
-                text: "Rename"
+                text: Translation.tr("Rename")
                 iconName: "edit-rename"
                 onTriggered: { root.renameRequested(); root.closeRequested() }
             }
@@ -136,16 +156,18 @@ Item {
             }
             // Single-item trash
             DesktopMenuButton {
+                id: singleTrashButton
                 visible: root.isFileMenu && root.selectedCount <= 1
-                text: "Move to Trash"
+                text: Translation.tr("Move to Trash")
                 iconName: "user-trash"
                 textColor: "#ef5350"
                 onTriggered: { root.deleteRequested(root.targetFilePath); root.closeRequested() }
             }
             // Bulk trash
             DesktopMenuButton {
+                id: bulkTrashButton
                 visible: root.isFileMenu && root.selectedCount > 1
-                text: "Move " + root.selectedCount + " items to Trash"
+                text: Translation.tr("Move %1 items to Trash").arg(root.selectedCount)
                 iconName: "user-trash"
                 textColor: "#ef5350"
                 onTriggered: { root.trashSelectedRequested(); root.closeRequested() }

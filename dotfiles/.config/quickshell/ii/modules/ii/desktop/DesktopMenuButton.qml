@@ -28,11 +28,9 @@ Item {
 
     RowLayout {
         id: row
-        anchors {
-            fill: parent
-            leftMargin: 12
-            rightMargin: 12
-        }
+        anchors.left: parent.left
+        anchors.leftMargin: 12
+        anchors.verticalCenter: parent.verticalCenter
         spacing: 8
 
         IconImage {
@@ -46,6 +44,7 @@ Item {
             text: root.text
             color: root.textColor
             font.pixelSize: 13
+            horizontalAlignment: Text.AlignLeft
             Layout.alignment: Qt.AlignVCenter
         }
     }
