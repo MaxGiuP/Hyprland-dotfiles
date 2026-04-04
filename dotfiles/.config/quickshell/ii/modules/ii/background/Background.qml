@@ -28,12 +28,10 @@ Variants {
         required property var modelData
 
         // Hide when fullscreen
-        property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(workspace => workspace.monitor && workspace.monitor.name == monitor.name)
-        property var activeWorkspaceWithFullscreen: workspacesForMonitor.filter(workspace => ((workspace.toplevels.values.filter(window => window.wayland?.fullscreen)[0] != undefined) && workspace.active))[0]
-        visible: GlobalStates.screenLocked || (!(activeWorkspaceWithFullscreen != undefined)) || !Config?.options.background.hideWhenFullscreen
-
         // Workspaces
         property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
+        readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
+        visible: GlobalStates.screenLocked || !fullscreenOnMonitor || !Config?.options.background.hideWhenFullscreen
         property list<var> relevantWindows: HyprlandData.windowList.filter(win => win.monitor == monitor?.id && win.workspace.id >= 0).sort((a, b) => a.workspace.id - b.workspace.id)
         property int firstWorkspaceId: relevantWindows[0]?.workspace.id || 1
         property int lastWorkspaceId: relevantWindows[relevantWindows.length - 1]?.workspace.id || 10
@@ -58,7 +56,10 @@ Variants {
         property real movableYSpace: ((wallpaperHeight / wallpaperToScreenRatio * effectiveWallpaperScale) - screenHeight) / 2
         readonly property bool verticalParallax: (Config.options.background.parallax.autoVertical && wallpaperHeight > wallpaperWidth) || Config.options.background.parallax.vertical
         // Colors
-        property bool shouldBlur: (GlobalStates.screenLocked && Config.options.lock.blur.enable)
+        readonly property real lockBlurProgress: Config.options.lock.blur.enable
+            ? Math.max(0, Math.min(1, GlobalStates.screenLockBlurProgress))
+            : 0
+        property bool shouldBlur: lockBlurProgress > 0.001
         property color dominantColor: Appearance.colors.colPrimary // Default, to be changed
         property bool dominantColorIsDark: dominantColor.hslLightness < 0.5
         property color colText: {
@@ -142,7 +143,7 @@ Variants {
             // Wallpaper
             StyledImage {
                 id: wallpaper
-                visible: opacity > 0 && !blurLoader.active
+                visible: opacity > 0
                 opacity: (status === Image.Ready && !bgRoot.wallpaperIsVideo) ? 1 : 0
                 cache: false
                 smooth: false
@@ -196,25 +197,43 @@ Variants {
 
             Loader {
                 id: blurLoader
-                active: Config.options.lock.blur.enable && (GlobalStates.screenLocked || scaleAnim.running)
+                // The lock surface already renders a full-screen blurred screencopy.
+                // Avoid stacking a second wallpaper blur underneath the lock screen.
+                active: false
                 anchors.fill: wallpaper
-                scale: GlobalStates.screenLocked ? Config.options.lock.blur.extraZoom : 1
-                Behavior on scale {
-                    NumberAnimation {
-                        id: scaleAnim
-                        duration: 400
-                        easing.type: Easing.BezierSpline
-                        easing.bezierCurve: Appearance.animationCurves.expressiveDefaultSpatial
+                scale: 1 + ((Config.options.lock.blur.extraZoom - 1) * bgRoot.lockBlurProgress)
+                sourceComponent: Item {
+                    ShaderEffectSource {
+                        id: wallpaperTexture
+                        visible: wallpaper.status === Image.Ready
+                        live: true
+                        hideSource: true
+                        sourceItem: wallpaper
+                        x: wallpaper.x
+                        y: wallpaper.y
+                        width: wallpaper.width
+                        height: wallpaper.height
                     }
-                }
-                sourceComponent: GaussianBlur {
-                    source: wallpaper
-                    radius: GlobalStates.screenLocked ? Config.options.lock.blur.radius : 0
-                    samples: radius * 2 + 1
+
+                    GaussianBlur {
+                        visible: wallpaperTexture.visible
+                        source: wallpaperTexture
+                        x: wallpaper.x
+                        y: wallpaper.y
+                        width: wallpaper.width
+                        height: wallpaper.height
+                        radius: Config.options.lock.blur.radius * bgRoot.lockBlurProgress
+                        samples: Math.max(1, Math.ceil(radius) * 2 + 1)
+                        transparentBorder: true
+                    }
 
                     Rectangle {
-                        opacity: GlobalStates.screenLocked ? 1 : 0
-                        anchors.fill: parent
+                        visible: wallpaperTexture.visible
+                        x: wallpaper.x
+                        y: wallpaper.y
+                        width: wallpaper.width
+                        height: wallpaper.height
+                        opacity: bgRoot.lockBlurProgress
                         color: CF.ColorUtils.transparentize(Appearance.colors.colLayer0, 0.7)
                     }
                 }

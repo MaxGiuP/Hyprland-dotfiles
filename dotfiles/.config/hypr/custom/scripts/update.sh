@@ -37,6 +37,22 @@ detect_quickshell_pkg() {
     pacman -Qo /usr/bin/quickshell 2>/dev/null | awk '{print $(NF-1)}'
 }
 
+package_version() {
+    pacman -Q "$1" 2>/dev/null | awk '{print $2}'
+}
+
+detect_vmware_host_modules_pkg() {
+    pacman -Qq 2>/dev/null | rg '^vmware-host-modules' | head -n 1
+}
+
+detect_vmware_workstation_branch() {
+    local pkgver branchver
+    pkgver=$(package_version vmware-workstation || true)
+    pkgver=${pkgver%%-*}
+    branchver=${pkgver,,}
+    [ -n "$branchver" ] && printf 'workstation-%s\n' "$branchver"
+}
+
 find_quickshell_build_dir() {
     local qs_pkg="$1"
     local candidate found
@@ -45,6 +61,7 @@ find_quickshell_build_dir() {
         "$HOME/quickshell-git"
         "$HOME/quickshell"
         "$HOME/.cache/yay/$qs_pkg"
+        "$HOME/.cache/paru/clone/$qs_pkg"
         "$HOME/Downloads/dots-hyprland/sdata/dist-arch/$qs_pkg"
     )
 
@@ -56,6 +73,57 @@ find_quickshell_build_dir() {
     done
 
     found=$(find "$HOME" -maxdepth 6 -path "*/$qs_pkg/PKGBUILD" -print -quit 2>/dev/null || true)
+    if [ -n "$found" ]; then
+        dirname "$found"
+        return 0
+    fi
+
+    return 1
+}
+
+find_vmware_build_dir() {
+    local pkg="$1"
+    local candidate found
+    local -a candidates=(
+        "$HOME/$pkg"
+        "$HOME/.cache/yay/$pkg"
+        "$HOME/.cache/paru/clone/$pkg"
+        "$HOME/Downloads/dots-hyprland/sdata/dist-arch/$pkg"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [ -f "$candidate/PKGBUILD" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    found=$(find "$HOME" -maxdepth 6 -path "*/$pkg/PKGBUILD" -print -quit 2>/dev/null || true)
+    if [ -n "$found" ]; then
+        dirname "$found"
+        return 0
+    fi
+
+    return 1
+}
+
+find_vmware_source_repo() {
+    local candidate found
+    local -a candidates=(
+        "$HOME/.cache/yay/vmware-host-modules-dkms-fix-git/vmware-host-modules"
+        "$HOME/.cache/yay/vmware-host-modules-dkms-git/vmware-host-modules"
+        "$HOME/.cache/paru/clone/vmware-host-modules-dkms-fix-git/vmware-host-modules"
+        "$HOME/.cache/paru/clone/vmware-host-modules-dkms-git/vmware-host-modules"
+    )
+
+    for candidate in "${candidates[@]}"; do
+        if [ -d "$candidate/.git" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    found=$(find "$HOME" -maxdepth 7 -path '*/vmware-host-modules/.git' -print -quit 2>/dev/null || true)
     if [ -n "$found" ]; then
         dirname "$found"
         return 0
@@ -296,6 +364,15 @@ priv() {
     if [ "$USE_SUDO" -eq 1 ]; then sudo "$@"; else pkexec "$@"; fi
 }
 
+VMWARE_WORKSTATION_BEFORE=$(package_version vmware-workstation || true)
+VMWARE_HOST_MODULES_PKG_BEFORE=$(detect_vmware_host_modules_pkg || true)
+VMWARE_HOST_MODULES_BEFORE=""
+if [ -n "$VMWARE_HOST_MODULES_PKG_BEFORE" ]; then
+    VMWARE_HOST_MODULES_BEFORE=$(package_version "$VMWARE_HOST_MODULES_PKG_BEFORE" || true)
+fi
+KERNEL_BEFORE=$(package_version linux || true)
+KERNEL_HEADERS_BEFORE=$(package_version linux-headers || true)
+
 # ── pacman ────────────────────────────────────────────────────────────────────
 section "${T[PACMAN]}"
 if command -v pacman >/dev/null 2>&1; then
@@ -404,6 +481,159 @@ rebuild_quickshell() {
 }
 
 rebuild_quickshell
+
+# ── VMware (host modules rebuild) ────────────────────────────────────────────
+repair_vmware() {
+    section "VMware — host modules"
+
+    local workstation_after host_pkg_after host_after kernel_after headers_after
+    local repair_needed repair_reason build_dir helper vmware_branch vmware_repo branch_ref
+    local tarball_tmp
+
+    workstation_after=$(package_version vmware-workstation || true)
+    if [ -z "$workstation_after" ]; then
+        skip "vmware"
+        return 0
+    fi
+
+    host_pkg_after=$(detect_vmware_host_modules_pkg || true)
+    host_after=""
+    if [ -n "$host_pkg_after" ]; then
+        host_after=$(package_version "$host_pkg_after" || true)
+    fi
+
+    kernel_after=$(package_version linux || true)
+    headers_after=$(package_version linux-headers || true)
+
+    echo -e "  ${DIM}Detected: vmware-workstation ${workstation_after}${R}"
+    if [ -n "$host_pkg_after" ]; then
+        echo -e "  ${DIM}Host modules: ${host_pkg_after} ${host_after}${R}"
+    fi
+
+    repair_needed=0
+    repair_reason=""
+
+    if [ "${VMWARE_WORKSTATION_BEFORE:-}" != "$workstation_after" ]; then
+        repair_needed=1
+        repair_reason="vmware-workstation changed"
+    fi
+
+    if [ "${VMWARE_HOST_MODULES_BEFORE:-}" != "$host_after" ]; then
+        repair_needed=1
+        if [ -n "$repair_reason" ]; then
+            repair_reason="${repair_reason}; host modules changed"
+        else
+            repair_reason="host modules changed"
+        fi
+    fi
+
+    if [ "${KERNEL_BEFORE:-}" != "$kernel_after" ] || [ "${KERNEL_HEADERS_BEFORE:-}" != "$headers_after" ]; then
+        repair_needed=1
+        if [ -n "$repair_reason" ]; then
+            repair_reason="${repair_reason}; kernel packages changed"
+        else
+            repair_reason="kernel packages changed"
+        fi
+    fi
+
+    if [ "$repair_needed" -eq 0 ]; then
+        echo -e "  ${PASS}  ${GREEN}VMware modules look unchanged — no repair needed${R}"
+        return 0
+    fi
+
+    echo -e "  ${WARN}  ${YELLOW}Repairing VMware modules: ${repair_reason}${R}"
+
+    vmware_branch=$(detect_vmware_workstation_branch || true)
+    vmware_repo=$(find_vmware_source_repo 2>/dev/null || true)
+    branch_ref=""
+
+    if [ -n "$vmware_repo" ] && [ -n "$vmware_branch" ]; then
+        git -C "$vmware_repo" fetch origin --quiet 2>/dev/null || true
+        if git -C "$vmware_repo" rev-parse --verify "${vmware_branch}^{commit}" >/dev/null 2>&1; then
+            branch_ref="$vmware_branch"
+        elif git -C "$vmware_repo" rev-parse --verify "origin/${vmware_branch}^{commit}" >/dev/null 2>&1; then
+            branch_ref="origin/${vmware_branch}"
+        fi
+    fi
+
+    if [ -n "$branch_ref" ] && [ -n "$vmware_repo" ]; then
+        echo -e "  ${DIM}Using VMware source branch: ${vmware_branch}${R}"
+        build_tmp=$(mktemp -d /tmp/vmware-host-modules.XXXXXX)
+        module_dir="/lib/modules/${kernel_after}/updates/dkms"
+
+        if git -C "$vmware_repo" archive "$branch_ref" | tar -x -C "$build_tmp" \
+            && git -C "$vmware_repo" archive -o "$build_tmp/vmmon.tar" "$branch_ref" vmmon-only \
+            && git -C "$vmware_repo" archive -o "$build_tmp/vmnet.tar" "$branch_ref" vmnet-only \
+            && make VM_UNAME="$kernel_after" -C "$build_tmp" \
+            && zstd -f "$build_tmp/vmmon-only/vmmon.ko" -o "$build_tmp/vmmon.ko.zst" \
+            && zstd -f "$build_tmp/vmnet-only/vmnet.ko" -o "$build_tmp/vmnet.ko.zst" \
+            && priv install -d "$module_dir" /usr/lib/vmware/modules/source \
+            && priv install -m 0644 "$build_tmp/vmmon.ko.zst" "$module_dir/vmmon.ko.zst" \
+            && priv install -m 0644 "$build_tmp/vmnet.ko.zst" "$module_dir/vmnet.ko.zst" \
+            && priv install -m 0644 "$build_tmp/vmmon.tar" /usr/lib/vmware/modules/source/vmmon.tar \
+            && priv install -m 0644 "$build_tmp/vmnet.tar" /usr/lib/vmware/modules/source/vmnet.tar \
+            && priv depmod -a "$kernel_after"; then
+            rm -rf "$build_tmp"
+        else
+            rm -rf "$build_tmp"
+            fail "vmware"
+            return 1
+        fi
+    elif [ -n "$host_pkg_after" ]; then
+        build_dir=$(find_vmware_build_dir "$host_pkg_after" 2>/dev/null || true)
+        if [ -n "$build_dir" ]; then
+            echo -e "  ${DIM}PKGBUILD: ${build_dir}${R}"
+            if (cd "$build_dir" && makepkg -sif --noconfirm); then
+                :
+            else
+                fail "vmware"
+                return 1
+            fi
+        else
+            helper=$(preferred_aur_helper 2>/dev/null || true)
+            if [ -z "$helper" ]; then
+                fail "vmware"
+                return 1
+            fi
+            echo -e "  ${DIM}No local PKGBUILD found — using ${helper}${R}"
+            if "$helper" -S "$host_pkg_after" --rebuild --noconfirm; then
+                :
+            else
+                fail "vmware"
+                return 1
+            fi
+        fi
+    elif command -v vmware-modconfig >/dev/null 2>&1; then
+        if priv env DISPLAY= WAYLAND_DISPLAY= VMWARE_SKIP_SERVICES=1 vmware-modconfig --console --install-all; then
+            :
+        else
+            fail "vmware"
+            return 1
+        fi
+    else
+        fail "vmware"
+        return 1
+    fi
+
+    if pgrep -fa 'vmware-vmx|vmplayer|vmware$|vmware ' >/dev/null 2>&1; then
+        echo -e "  ${WARN}  ${YELLOW}VMware is running — skipping module reload. Close VMware once before launching it again.${R}"
+    else
+        priv systemctl stop vmware-networks.service vmware-usbarbitrator.service >/dev/null 2>&1 || true
+        priv modprobe -r vmnet vmmon >/dev/null 2>&1 || true
+        priv modprobe vmmon >/dev/null 2>&1 || true
+        priv modprobe vmnet >/dev/null 2>&1 || true
+        priv systemctl start vmware-networks.service vmware-usbarbitrator.service >/dev/null 2>&1 || true
+    fi
+
+    if modinfo vmmon >/dev/null 2>&1 && modinfo vmnet >/dev/null 2>&1; then
+        ok "vmware"
+    else
+        fail "vmware"
+        return 1
+    fi
+}
+
+repair_vmware
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo

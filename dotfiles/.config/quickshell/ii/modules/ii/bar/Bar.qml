@@ -31,8 +31,23 @@ Scope {
                 id: barRoot
                 screen: barLoader.modelData
                 property HyprlandMonitor monitor: Hyprland.monitorFor(barLoader.modelData)
-                readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
+                readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === monitor?.name) ?? null
+                readonly property real leftReserved: monitorData?.reserved?.[0] ?? 0
+                readonly property real rightReserved: monitorData?.reserved?.[2] ?? 0
+                property bool fullscreenOnMonitor: false
                 visible: !Config.options.bar.hideWhenFullscreen || !fullscreenOnMonitor
+                readonly property bool topBarVisible: !Config.options.bar.bottom
+                    && visible
+                    && !launchpadOnThisScreen
+                    && (!Config?.options.bar.autoHide.enable || mustShow)
+                readonly property real topBarClearance: topBarVisible
+                    ? (Appearance.sizes.baseBarHeight
+                        + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0))
+                    : Appearance.sizes.hyprlandGapsOut
+
+                function recomputeFullscreenOnMonitor() {
+                    fullscreenOnMonitor = HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name);
+                }
 
                 Timer {
                     id: showBarTimer
@@ -75,6 +90,7 @@ Scope {
                 }
 
                 margins {
+                    left: -barRoot.leftReserved
                     right: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.right) * -1
                     bottom: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.bottom) * -1
                 }
@@ -82,9 +98,29 @@ Scope {
                 // Include in focus grab
                 Component.onCompleted: {
                     GlobalFocusGrab.addPersistent(barRoot);
+                    barRoot.recomputeFullscreenOnMonitor();
+                    GlobalStates.setBarTopClearance(barLoader.modelData.name, barRoot.topBarClearance);
                 }
                 Component.onDestruction: {
                     GlobalFocusGrab.removePersistent(barRoot);
+                    GlobalStates.clearBarTopClearance(barLoader.modelData.name);
+                }
+
+                onTopBarClearanceChanged: {
+                    GlobalStates.setBarTopClearance(barLoader.modelData.name, barRoot.topBarClearance);
+                }
+
+                Connections {
+                    target: HyprlandData
+                    function onMonitorsChanged() {
+                        Qt.callLater(barRoot.recomputeFullscreenOnMonitor);
+                    }
+                    function onWindowListChanged() {
+                        Qt.callLater(barRoot.recomputeFullscreenOnMonitor);
+                    }
+                    function onWorkspacesChanged() {
+                        Qt.callLater(barRoot.recomputeFullscreenOnMonitor);
+                    }
                 }
 
                 MouseArea  {
@@ -114,9 +150,11 @@ Scope {
                             left: parent.left
                             top: parent.top
                             bottom: undefined
+                            leftMargin: 0
                             topMargin: ((Config?.options.bar.autoHide.enable && !mustShow) || launchpadOnThisScreen) ? -Appearance.sizes.barHeight : 0
                             bottomMargin: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.bottom) * -1
                             rightMargin: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.right) * -1
+                                - barRoot.rightReserved
                         }
                         Behavior on anchors.topMargin {
                             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -139,8 +177,11 @@ Scope {
                             }
                             PropertyChanges {
                                 target: barContent
+                                anchors.leftMargin: 0
                                 anchors.topMargin: 0
                                 anchors.bottomMargin: ((Config?.options.bar.autoHide.enable && !mustShow) || launchpadOnThisScreen) ? -Appearance.sizes.barHeight : 0
+                                anchors.rightMargin: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.right) * -1
+                                    - barRoot.rightReserved
                             }
                         }
                     }
@@ -153,6 +194,8 @@ Scope {
                             right: parent.right
                             top: barContent.bottom
                             bottom: undefined
+                            leftMargin: 0
+                            rightMargin: -barRoot.rightReserved
                         }
                         height: Appearance.rounding.screenRounding
                         active: showBarBackground && Config.options.bar.cornerStyle === 0 // Hug

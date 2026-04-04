@@ -10,11 +10,15 @@ import qs.modules.common.panels.lock
 import Qt5Compat.GraphicalEffects
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import Quickshell.Services.Mpris
 
 MouseArea {
     id: root
     required property LockContext context
+    property int lockpadRiseDurationMs: 650
+    property int introStartDelayMs: 0
+    property var captureScreen: null
     property bool introStarted: false
 
     // ─── Focus management ────────────────────────────────────────────────────
@@ -37,6 +41,21 @@ MouseArea {
 
     // ─── Intro state ─────────────────────────────────────────────────────────
     property bool introComplete: false
+    readonly property real lockBlurProgress: Config.options.lock.blur.enable
+        ? Math.max(0, Math.min(1, GlobalStates.screenLockBlurProgress))
+        : 0
+    property bool blurCapturePending: false
+    property bool blurWasActive: false
+
+    function refreshBlurCapture() {
+        if (!root.captureScreen) {
+            root.blurCapturePending = true;
+            return;
+        }
+
+        root.blurCapturePending = false;
+        screenshotView.captureFrame();
+    }
 
     // ─── GPU (nvidia-smi) ────────────────────────────────────────────────────
     property bool gpuAvailable: true
@@ -122,6 +141,18 @@ MouseArea {
 
     onWidthChanged: startIntroAnimation()
     onHeightChanged: startIntroAnimation()
+    onCaptureScreenChanged: {
+        if (root.blurCapturePending && root.captureScreen)
+            Qt.callLater(root.refreshBlurCapture);
+    }
+    onLockBlurProgressChanged: {
+        const blurIsActive = root.lockBlurProgress > 0.001;
+        if (blurIsActive && !root.blurWasActive) {
+            Qt.callLater(root.refreshBlurCapture);
+        }
+
+        root.blurWasActive = blurIsActive;
+    }
 
     function startIntroAnimation() {
         if (root.introStarted || root.width <= 0 || root.height <= 0)
@@ -143,6 +174,72 @@ MouseArea {
         powerButtons.anchors.bottomMargin = -12;
 
         lockRiseAnim.restart();
+    }
+
+    Item {
+        id: screenshotLayer
+        z: -20
+        anchors.fill: parent
+        clip: true
+        visible: opacity > 0
+        opacity: screenshotView.hasContent ? 1 : 0
+        readonly property real blurScale: 1 + ((Config.options.lock.blur.extraZoom - 1) * root.lockBlurProgress)
+        readonly property real blurRadius: Config.options.lock.blur.radius * root.lockBlurProgress
+        // Overscan the screencopy so the blur still covers the full screen
+        // when the lock transition zoom changes and the blur samples past edges.
+        readonly property real blurOverscan: Math.ceil(
+            blurRadius + (Math.max(root.width, root.height) * Math.max(0, blurScale - 1) / 2)
+        )
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 120
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        ScreencopyView {
+            id: screenshotView
+            x: -screenshotLayer.blurOverscan
+            y: -screenshotLayer.blurOverscan
+            width: root.width + screenshotLayer.blurOverscan * 2
+            height: root.height + screenshotLayer.blurOverscan * 2
+            scale: screenshotLayer.blurScale
+            transformOrigin: Item.Center
+            captureSource: root.captureScreen
+            live: false
+            paintCursor: false
+        }
+
+        ShaderEffectSource {
+            id: screenshotTexture
+            x: screenshotView.x
+            y: screenshotView.y
+            width: screenshotView.width
+            height: screenshotView.height
+            sourceItem: screenshotView
+            live: true
+            hideSource: true
+            visible: false
+        }
+
+        GaussianBlur {
+            x: screenshotView.x
+            y: screenshotView.y
+            width: screenshotView.width
+            height: screenshotView.height
+            visible: screenshotView.hasContent
+            source: screenshotTexture
+            radius: screenshotLayer.blurRadius
+            samples: Math.max(1, Math.ceil(radius) * 2 + 1)
+            transparentBorder: false
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: ColorUtils.transparentize(Appearance.colors.colLayer0, 0.7)
+            opacity: root.lockBlurProgress
+        }
     }
 
     // ─── Lockpad position helpers ─────────────────────────────────────────────
@@ -190,13 +287,16 @@ MouseArea {
     SequentialAnimation {
         id: lockRiseAnim
 
+        // Let the blur settle before the lockpad enters the screen.
+        PauseAnimation { duration: root.introStartDelayMs }
+
         // Phase 1: lockpad rises from bottom to centre in unlocked state
         NumberAnimation {
             target: lockpadIcon
             property: "y"
             from: root.height
             to: root.lockpadCenterY
-            duration: 650
+            duration: root.lockpadRiseDurationMs
             easing.type: Easing.OutCubic
         }
 
@@ -589,15 +689,15 @@ MouseArea {
                             onClicked: Audio.toggleMute()
                             contentItem: MaterialSymbol {
                                 anchors.centerIn: parent
-                                text: (Audio.sink?.audio.muted ?? false) ? "volume_off"
-                                    : (Audio.sink?.audio.volume ?? 0) > 0.5 ? "volume_up" : "volume_down"
+                                text: Audio.muted ? "volume_off"
+                                    : Audio.value > 0.5 ? "volume_up" : "volume_down"
                                 iconSize: 20; color: Appearance.colors.colOnLayer1
                             }
                         }
                         StyledSlider {
                             Layout.fillWidth: true; from: 0; to: 1
-                            value: Audio.sink?.audio.volume ?? 0
-                            onMoved: { if (Audio.sink) Audio.sink.audio.volume = value }
+                            value: Audio.value
+                            onMoved: Audio.setVolume(value)
                             configuration: StyledSlider.Configuration.S
                         }
                     }
