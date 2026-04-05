@@ -346,7 +346,7 @@ Item {
                                     contextMenu.y = Math.min(pos.y, root.height - contextMenu.height - 4)
                                     contextMenu.visible = true
                                 } else {
-                                    appCell.app?.execute()
+                                    AppLaunch.launchDesktopEntry(appCell.app)
                                     root.appLaunched()
                                 }
                             }

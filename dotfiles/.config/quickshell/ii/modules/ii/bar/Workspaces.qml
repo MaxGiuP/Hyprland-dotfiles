@@ -14,13 +14,17 @@ import Qt5Compat.GraphicalEffects
 
 Item {
     id: root
+    property var shellScreen: null
     property bool vertical: false
     property bool borderless: Config.options.bar.borderless
-    readonly property HyprlandMonitor monitor: Hyprland.monitorFor(root.QsWindow.window?.screen)
+    readonly property var effectiveScreen: root.shellScreen ?? root.QsWindow.window?.screen
+    readonly property HyprlandMonitor monitor: Hyprland.monitorFor(root.effectiveScreen)
+    readonly property string monitorName: root.effectiveScreen?.name ?? monitor?.name ?? ""
+    readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === monitorName) ?? null
     readonly property Toplevel activeWindow: ToplevelManager.activeToplevel
     
     readonly property int workspacesShown: Math.max(Config.options.bar.workspaces.shown, 1)
-    readonly property int activeWorkspaceId: Math.max(monitor?.activeWorkspace?.id ?? 1, 1)
+    readonly property int activeWorkspaceId: Math.max(monitorData?.activeWorkspace?.id ?? 1, 1)
     readonly property int workspaceGroup: Math.floor((root.activeWorkspaceId - 1) / root.workspacesShown)
     property list<bool> workspaceOccupied: []
     property int widgetPadding: 4

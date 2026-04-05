@@ -109,20 +109,25 @@ Singleton {
     // Internals
 
     function updateWindowList() {
-        getClients.running = true;
+        if (!getClients.running)
+            getClients.running = true;
     }
 
     function updateLayers() {
-        getLayers.running = true;
+        if (!getLayers.running)
+            getLayers.running = true;
     }
 
     function updateMonitors() {
-        getMonitors.running = true;
+        if (!getMonitors.running)
+            getMonitors.running = true;
     }
 
     function updateWorkspaces() {
-        getWorkspaces.running = true;
-        getActiveWorkspace.running = true;
+        if (!getWorkspaces.running)
+            getWorkspaces.running = true;
+        if (!getActiveWorkspace.running)
+            getActiveWorkspace.running = true;
     }
 
     function updateAll() {
@@ -178,10 +183,35 @@ Singleton {
     Connections {
         target: Hyprland
 
+        function onFocusedWorkspaceChanged() {
+            updateMonitors();
+            updateWorkspaces();
+        }
+
         function onRawEvent(event) {
             // console.log("Hyprland raw event:", event.name);
             if (["openlayer", "closelayer", "screencast"].includes(event.name)) return;
             updateAll()
+        }
+    }
+
+    // Fallback polling for cases where the Hyprland event stream stalls for this shell instance.
+    Timer {
+        interval: 400
+        running: true
+        repeat: true
+        onTriggered: {
+            root.updateMonitors();
+            root.updateWorkspaces();
+        }
+    }
+
+    Timer {
+        interval: 900
+        running: true
+        repeat: true
+        onTriggered: {
+            root.updateWindowList();
         }
     }
 

@@ -64,11 +64,14 @@ Scope { // Scope
         // For each monitor
         model: Quickshell.screens
 
-        PanelWindow {
-            id: dockRoot
+        Scope {
+            id: screenScope
             required property var modelData
-            screen: modelData
-            property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
+
+            PanelWindow {
+            id: dockRoot
+            screen: screenScope.modelData
+            property HyprlandMonitor monitor: Hyprland.monitorFor(screenScope.modelData)
             readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
             visible: !GlobalStates.screenLocked && !fullscreenOnMonitor
             readonly property int activeWorkspaceId: monitor?.activeWorkspace?.id ?? -1
@@ -89,7 +92,7 @@ Scope { // Scope
                     root.pinned
                     || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse)
                     || dockApps.requestDockShow
-                    || (GlobalStates.desktopDragActive && GlobalStates.desktopDragScreen === dockRoot.modelData.name)
+                    || (GlobalStates.desktopDragActive && GlobalStates.desktopDragScreen === screenScope.modelData.name)
                     || activeWorkspaceEmpty
                 )
 
@@ -100,7 +103,7 @@ Scope { // Scope
             }
 
             readonly property bool launchpadOnThisScreen: GlobalStates.overviewDrawerMode
-                || (GlobalStates.drawerOpen && dockRoot.modelData.name === GlobalStates.drawerScreen)
+                || (GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen)
             exclusiveZone: (dockRoot.visible && root.pinned && !launchpadOnThisScreen)
                 ? implicitHeight - Appearance.sizes.hyprlandGapsOut - (Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
                 : 0
@@ -202,9 +205,9 @@ Scope { // Scope
                                 id: dockWallpaper
                                 visible: source.length > 0
                                 x: -dockVisualBackground.x
-                                y: dockRoot.height - (dockRoot.modelData?.height ?? dockRoot.height) - dockVisualBackground.y
-                                width: dockRoot.modelData?.width ?? dockRoot.width
-                                height: dockRoot.modelData?.height ?? dockRoot.height
+                                y: dockRoot.height - (screenScope.modelData?.height ?? dockRoot.height) - dockVisualBackground.y
+                                width: screenScope.modelData?.width ?? dockRoot.width
+                                height: screenScope.modelData?.height ?? dockRoot.height
                                 source: root.dockWallpaperSource
                                 fillMode: Image.PreserveAspectCrop
                                 cache: false
@@ -488,6 +491,7 @@ Scope { // Scope
                     }
                 }
             }
+        }
         }
     }
 }

@@ -279,7 +279,7 @@ Rectangle {
 
         onClicked: {
             GlobalStates.searchOpen = false;
-            desktopEntry.execute();
+            AppLaunch.launchDesktopEntry(desktopEntry);
         }
 
         contentItem: Item {

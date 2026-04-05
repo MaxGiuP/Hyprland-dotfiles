@@ -132,11 +132,7 @@ Singleton {
             iconType: LauncherSearchResult.IconType.System,
             verb: Translation.tr("Open"),
             execute: () => {
-                if (!entry.runInTerminal)
-                    entry.execute();
-                else {
-                    Quickshell.execDetached(["bash", '-c', `${Config.options.apps.terminal} -e '${StringUtils.shellSingleQuoteEscape(entry.command.join(' '))}'`]);
-                }
+                AppLaunch.launchDesktopEntry(entry);
             },
             comment: entry.comment,
             runInTerminal: entry.runInTerminal,
@@ -148,11 +144,7 @@ Singleton {
                     iconName: action.icon,
                     iconType: LauncherSearchResult.IconType.System,
                     execute: () => {
-                        if (!action.runInTerminal)
-                            action.execute();
-                        else {
-                            Quickshell.execDetached(["bash", '-c', `${Config.options.apps.terminal} -e '${StringUtils.shellSingleQuoteEscape(action.command.join(' '))}'`]);
-                        }
+                        AppLaunch.launchDesktopAction(action);
                     }
                 });
             })

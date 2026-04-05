@@ -358,7 +358,7 @@ Scope {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
-                                            appCell.app?.execute()
+                                            AppLaunch.launchDesktopEntry(appCell.app)
                                             GlobalStates.closeDrawer()
                                         }
                                     }

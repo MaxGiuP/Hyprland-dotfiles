@@ -22,14 +22,16 @@ Variants {
     id: root
     model: Quickshell.screens
 
-    PanelWindow {
-        id: bgRoot
-
+    Scope {
+        id: screenScope
         required property var modelData
+
+        PanelWindow {
+            id: bgRoot
 
         // Hide when fullscreen
         // Workspaces
-        property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
+        property HyprlandMonitor monitor: Hyprland.monitorFor(screenScope.modelData)
         readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
         visible: GlobalStates.screenLocked || !fullscreenOnMonitor || !Config?.options.background.hideWhenFullscreen
         property list<var> relevantWindows: HyprlandData.windowList.filter(win => win.monitor == monitor?.id && win.workspace.id >= 0).sort((a, b) => a.workspace.id - b.workspace.id)
@@ -45,13 +47,13 @@ Variants {
             return enabled && sensitiveWallpaper && sensitiveNetwork;
         }
         readonly property real monitorScale: monitor?.scale ?? 1
-        readonly property real screenWidth: Math.max(1, width || screen?.width || modelData.width || 1)
-        readonly property real screenHeight: Math.max(1, height || screen?.height || modelData.height || 1)
+        readonly property real screenWidth: Math.max(1, width || screen?.width || screenScope.modelData.width || 1)
+        readonly property real screenHeight: Math.max(1, height || screen?.height || screenScope.modelData.height || 1)
         property real wallpaperToScreenRatio: Math.min(wallpaperWidth / screenWidth, wallpaperHeight / screenHeight)
         property real preferredWallpaperScale: Config.options.background.parallax.workspaceZoom
         property real effectiveWallpaperScale: 1 // Some reasonable init value, to be updated
-        property int wallpaperWidth: modelData.width // Some reasonable init value, to be updated
-        property int wallpaperHeight: modelData.height // Some reasonable init value, to be updated
+        property int wallpaperWidth: screenScope.modelData.width // Some reasonable init value, to be updated
+        property int wallpaperHeight: screenScope.modelData.height // Some reasonable init value, to be updated
         property real movableXSpace: ((wallpaperWidth / wallpaperToScreenRatio * effectiveWallpaperScale) - screenWidth) / 2
         property real movableYSpace: ((wallpaperHeight / wallpaperToScreenRatio * effectiveWallpaperScale) - screenHeight) / 2
         readonly property bool verticalParallax: (Config.options.background.parallax.autoVertical && wallpaperHeight > wallpaperWidth) || Config.options.background.parallax.vertical
@@ -72,7 +74,7 @@ Variants {
         }
 
         // Layer props
-        screen: modelData
+        screen: screenScope.modelData
         exclusionMode: ExclusionMode.Ignore
         WlrLayershell.layer: WlrLayer.Background
         WlrLayershell.namespace: "quickshell:background"
@@ -326,6 +328,6 @@ Variants {
                 }
             }
         }
-
     }
+}
 }

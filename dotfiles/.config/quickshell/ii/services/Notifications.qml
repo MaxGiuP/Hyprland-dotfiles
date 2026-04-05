@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import qs.modules.common
+import qs.modules.common.functions
 import qs
 import qs.services
 import QtQuick
@@ -479,8 +480,7 @@ Singleton {
         const notif = getNotificationById(id);
         const entry = resolveDesktopEntryForNotif(notif);
         if (!entry) return false;
-        entry.execute();
-        return true;
+        return AppLaunch.launchDesktopEntry(entry);
     }
 
     function triggerListChange() {

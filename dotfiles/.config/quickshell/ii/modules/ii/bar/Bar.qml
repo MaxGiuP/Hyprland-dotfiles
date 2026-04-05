@@ -23,14 +23,17 @@ Scope {
                 return screens;
             return screens.filter(screen => list.includes(screen.name));
         }
-        LazyLoader {
-            id: barLoader
-            active: GlobalStates.barOpen
+        Scope {
+            id: screenScope
             required property ShellScreen modelData
-            component: PanelWindow { // Bar window
+
+            LazyLoader {
+                id: barLoader
+                active: GlobalStates.barOpen
+                component: PanelWindow { // Bar window
                 id: barRoot
-                screen: barLoader.modelData
-                property HyprlandMonitor monitor: Hyprland.monitorFor(barLoader.modelData)
+                screen: screenScope.modelData
+                property HyprlandMonitor monitor: Hyprland.monitorFor(screenScope.modelData)
                 readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === monitor?.name) ?? null
                 readonly property real leftReserved: monitorData?.reserved?.[0] ?? 0
                 readonly property real rightReserved: monitorData?.reserved?.[2] ?? 0
@@ -69,7 +72,7 @@ Scope {
                     }
                 }
                 property bool superShow: false
-                readonly property bool launchpadOnThisScreen: GlobalStates.drawerOpen && barLoader.modelData.name === GlobalStates.drawerScreen
+                readonly property bool launchpadOnThisScreen: GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen
                 property bool mustShow: (hoverRegion.containsMouse || superShow) && !launchpadOnThisScreen
                 exclusionMode: ExclusionMode.Ignore
                 exclusiveZone: ((!visible) || launchpadOnThisScreen || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
@@ -99,15 +102,15 @@ Scope {
                 Component.onCompleted: {
                     GlobalFocusGrab.addPersistent(barRoot);
                     barRoot.recomputeFullscreenOnMonitor();
-                    GlobalStates.setBarTopClearance(barLoader.modelData.name, barRoot.topBarClearance);
+                    GlobalStates.setBarTopClearance(screenScope.modelData.name, barRoot.topBarClearance);
                 }
                 Component.onDestruction: {
                     GlobalFocusGrab.removePersistent(barRoot);
-                    GlobalStates.clearBarTopClearance(barLoader.modelData.name);
+                    GlobalStates.clearBarTopClearance(screenScope.modelData.name);
                 }
 
                 onTopBarClearanceChanged: {
-                    GlobalStates.setBarTopClearance(barLoader.modelData.name, barRoot.topBarClearance);
+                    GlobalStates.setBarTopClearance(screenScope.modelData.name, barRoot.topBarClearance);
                 }
 
                 Connections {
@@ -259,6 +262,7 @@ Scope {
                     }
                 }
             }
+        }
         }
     }
 

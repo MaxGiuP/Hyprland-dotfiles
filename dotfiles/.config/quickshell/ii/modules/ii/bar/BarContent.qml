@@ -122,6 +122,7 @@ Item { // Bar content region
             }
 
             ActiveWindow {
+                shellScreen: root.screen
                 Layout.leftMargin: 10 + (leftSidebarButton.visible ? 0 : Appearance.rounding.screenRounding)
                 Layout.rightMargin: Appearance.rounding.screenRounding
                 Layout.fillWidth: true
@@ -170,6 +171,7 @@ Item { // Bar content region
 
             Workspaces {
                 id: workspacesWidget
+                shellScreen: root.screen
                 Layout.fillHeight: true
                 MouseArea {
                     // Right-click to toggle overview
