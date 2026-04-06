@@ -74,7 +74,7 @@ Scope {
                 property bool superShow: false
                 readonly property bool launchpadOnThisScreen: GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen
                 property bool mustShow: (hoverRegion.containsMouse || superShow) && !launchpadOnThisScreen
-                exclusionMode: ExclusionMode.Ignore
+                exclusionMode: ExclusionMode.Normal
                 exclusiveZone: ((!visible) || launchpadOnThisScreen || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
                 WlrLayershell.namespace: "quickshell:bar"
