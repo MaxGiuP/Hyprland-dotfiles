@@ -18,6 +18,13 @@ WARN="${YELLOW}!${R}"
 FAILED=()
 SKIPPED=()
 UPDATED=()
+SKIP_PKGS=()
+PENDING_AUR_HELPER=""
+PENDING_AUR_CAPTURED=""
+PENDING_AUR_IGNORE_ARGS=()
+declare -A CONFLICT_DECISIONS=()   # "installed:incoming" -> "skip"|"remove"
+CONFLICT_NEW_DECISION=0            # set to 1 when resolve_conflicts shows a new menu
+ASSUME_INSTALLED=()                # packages to pass as --assume-installed when skipping
 
 preferred_aur_helper() {
     if command -v yay >/dev/null 2>&1; then
@@ -263,8 +270,144 @@ run_pkg() {
     fi
 }
 
+# ── Conflict resolution ───────────────────────────────────────────────────────
+
+is_conflict_error() {
+    grep -qiE \
+        'irrisolvab|irresolvable|unresolvable|conflicting.dep|package.conflict|failed to prepare' \
+        <<< "${1:-}"
+}
+
+# Strip epoch:version-pkgrel from a package+version string.
+#   "python-materialyoucolor-3.0.2-1"              → "python-materialyoucolor"
+#   "python-materialyoucolor-git-3.0.1.r1.gABC-1"  → "python-materialyoucolor-git"
+strip_pkg_version() {
+    printf '%s' "$1" | sed -E 's/-[0-9:][^[:space:]-]*(-[0-9]+)?$//'
+}
+
+# Print description, version, and reverse-deps for a package.
+show_pkg_info() {
+    local pkg="$1"
+    if pacman -Qi "$pkg" &>/dev/null; then
+        echo -e "  ${DIM}  Status:      installed${R}"
+        pacman -Qi "$pkg" 2>/dev/null \
+            | grep -E '^\s*(Description|Version|Required By|Install Reason)\s*:' \
+            | sed 's/^[[:space:]]*//' \
+            | while IFS= read -r line; do echo -e "  ${DIM}  ${line}${R}"; done
+    else
+        echo -e "  ${DIM}  Status:      not yet installed (incoming)${R}"
+        { yay -Si "$pkg" 2>/dev/null || pacman -Si "$pkg" 2>/dev/null; } \
+            | grep -E '^\s*(Description|Version|URL|Repository)\s*:' \
+            | head -4 \
+            | sed 's/^[[:space:]]*//' \
+            | while IFS= read -r line; do echo -e "  ${DIM}  ${line}${R}"; done
+    fi
+}
+
+# Parse yay/pacman output for conflict lines.
+# Prints "installed_pkg:incoming_pkg" pairs (deduplicated).
+extract_conflicts() {
+    local output="$1"
+    local -a seen=()
+
+    while IFS= read -r line; do
+        # Language-agnostic: extract the package pacman asks to Remove
+        local remove_pkg
+        remove_pkg=$(printf '%s' "$line" | grep -oP \
+            '(?i)(?:Remove|Rimuovere|Supprimer|Entfernen|Verwijderen|Eliminar)\s+\K[a-z0-9@._+][a-z0-9@._+\-]*(?=\?)')
+        [ -z "$remove_pkg" ] && continue
+
+        # The two conflicting packages (with versions) follow "::"
+        local after tok1 tok2 pkg1 pkg2
+        after=$(printf '%s' "$line" | sed 's/^.*::[[:space:]]*//')
+        # packages are at positions $1 and $3 — position $2 is the conjunction
+        # word ("and", "e", "et", "und", etc.) which varies by locale
+        tok1=$(printf '%s' "$after" | awk '{print $1}')
+        tok3=$(printf '%s' "$after" | awk '{print $3}')
+        pkg1=$(strip_pkg_version "$tok1")
+        pkg2=$(strip_pkg_version "$tok3")
+
+        # installed = the one pacman wants to remove; incoming = the other
+        local installed incoming
+        if   [ "$remove_pkg" = "$pkg1" ]; then installed="$pkg1"; incoming="$pkg2"
+        elif [ "$remove_pkg" = "$pkg2" ]; then installed="$pkg2"; incoming="$pkg1"
+        else                                   installed="$remove_pkg"; incoming="$pkg1"
+        fi
+
+        local key="${installed}:${incoming}"
+        local dup=0
+        for s in "${seen[@]:-}"; do [ "$s" = "$key" ] && dup=1 && break; done
+        [ "$dup" -eq 1 ] && continue
+        seen+=("$key")
+        printf '%s\n' "$key"
+    done < <(grep -i 'confli' <<< "$output")
+}
+
+# Interactive conflict resolution menu.
+# Sets CONFLICT_NEW_DECISION=1 if any pair required user input; 0 if all were auto-applied.
+resolve_conflicts() {
+    local -a pairs=("$@")
+    local -a to_remove=() to_skip=()
+    CONFLICT_NEW_DECISION=0
+
+    for pair in "${pairs[@]}"; do
+        local installed="${pair%%:*}"
+        local incoming="${pair##*:}"
+        local _dkey="${installed}:${incoming}"
+
+        # Auto-apply a stored decision without prompting
+        if [ -n "${CONFLICT_DECISIONS[$_dkey]+x}" ]; then
+            echo -e "\n  ${DIM}Applying stored decision for ${WHITE}${installed}${R}${DIM} ↔ ${CYAN}${incoming}${R}${DIM}: ${CONFLICT_DECISIONS[$_dkey]}${R}"
+            case "${CONFLICT_DECISIONS[$_dkey]}" in
+                skip)
+                    to_skip+=("$incoming")
+                    ASSUME_INSTALLED+=("${incoming}=9999:0-0")
+                    ;;
+                remove) to_remove+=("$installed") ;;
+            esac
+            continue
+        fi
+
+        CONFLICT_NEW_DECISION=1
+        echo
+        echo -e "  ${RED}${BOLD}⚡ Package conflict${R}"
+        echo -e "  ${DIM}  ─────────────────────────────────────────────────────────${R}"
+        echo
+        echo -e "  ${BOLD}${WHITE}${installed}${R}  ${DIM}(currently installed)${R}"
+        show_pkg_info "$installed"
+        echo
+        echo -e "  ${BOLD}${CYAN}${incoming}${R}  ${DIM}(incoming — conflicts with installed)${R}"
+        show_pkg_info "$incoming"
+        echo
+
+        local choice
+        while true; do
+            echo -e "  ${BOLD}How to resolve?${R}"
+            echo -e "  ${GREEN}1)${R} Ignore        — skip ${CYAN}${incoming}${R} for this run, keep ${WHITE}${installed}${R}"
+            echo -e "  ${GREEN}2)${R} Replace ${WHITE}${installed}${R} with ${CYAN}${incoming}${R}"
+            echo -e "  ${GREEN}3)${R} Replace ${CYAN}${incoming}${R} with ${WHITE}${installed}${R}"
+            read -rp "  Choice [1-3]: " choice
+            case "$choice" in
+                1) to_skip+=("$incoming");    CONFLICT_DECISIONS[$_dkey]="skip";   ASSUME_INSTALLED+=("${incoming}=9999:0-0"); break ;;
+                2) to_remove+=("$installed"); CONFLICT_DECISIONS[$_dkey]="remove"; break ;;
+                3) to_skip+=("$incoming");    CONFLICT_DECISIONS[$_dkey]="skip";   ASSUME_INSTALLED+=("${incoming}=9999:0-0"); break ;;
+                *) echo -e "  ${WARN}  Please enter 1, 2, or 3." ;;
+            esac
+        done
+    done
+
+    if [ ${#to_remove[@]} -gt 0 ]; then
+        echo
+        echo -e "  ${WARN}  ${YELLOW}Removing: ${to_remove[*]}${R}"
+        priv pacman -Rdd --noconfirm "${to_remove[@]}" 2>&1 | sed 's/^/    /'
+    fi
+    for p in "${to_skip[@]}"; do SKIP_PKGS+=("$p"); done
+}
+
+# ── AUR updates ───────────────────────────────────────────────────────────────
+
 run_aur_updates() {
-    local helper title output rc attempt delay
+    local helper title rc attempt delay captured
     helper=$(preferred_aur_helper 2>/dev/null || true)
 
     if [ -z "$helper" ]; then
@@ -280,32 +423,54 @@ run_aur_updates() {
 
     section "$title"
 
+    # Build --ignore flags from any packages the user chose to skip
+    local -a ignore_args=()
+    for p in "${SKIP_PKGS[@]:-}"; do
+        [ -n "$p" ] && ignore_args+=(--ignore "$p")
+    done
+
+    # Phase 1: run interactively so the user sees all yay output.
+    # yay writes progress/prompts to /dev/tty (not stdout/stderr), so we
+    # cannot capture it here — we only check the exit code.
+    captured=""
     for attempt in 1 2 3; do
-        output=$("$helper" -Sua --devel --noconfirm 2>&1)
+        "$helper" -Sua --devel --noconfirm "${ignore_args[@]}"
         rc=$?
-        [ -n "$output" ] && printf '%s\n' "$output"
+        [ $rc -eq 0 ] && { ok "$helper"; return 0; }
 
-        if [ $rc -eq 0 ]; then
-            ok "$helper"
-            return 0
-        fi
+        # Phase 2: re-run with flags that suppress yay's own interactive prompts
+        # (diff viewer, clean-build questions).  Without those prompts yay writes
+        # to stdout/stderr instead of /dev/tty, so we can capture and analyse it.
+        echo -e "\n  ${DIM}Analysing failure...${R}"
+        captured=$(LC_ALL=C "$helper" -Sua --devel --noconfirm \
+            --answerdiff=None --answerclean=None --answeredit=None --noprogressbar \
+            "${ignore_args[@]}" 2>&1 || true)
 
-        if is_rate_limited "$output"; then
+        if is_rate_limited "$captured"; then
             if [ "$attempt" -lt 3 ]; then
                 delay=$((attempt * 15))
                 echo -e "  ${WARN}  ${YELLOW}${helper} hit the AUR rate limit; retrying in ${delay}s...${R}"
                 sleep "$delay"
                 continue
             fi
-
             echo -e "  ${WARN}  ${YELLOW}${helper} hit the AUR rate limit again; skipping AUR updates for this run.${R}"
             SKIPPED+=("${helper} (rate-limited)")
             return 0
         fi
 
-        fail "$helper"
-        return 1
+        break  # Non-rate-limit error — fall through to conflict resolution
     done
+
+    if is_conflict_error "$captured"; then
+        PENDING_AUR_HELPER="$helper"
+        PENDING_AUR_CAPTURED="$captured"
+        PENDING_AUR_IGNORE_ARGS=("${ignore_args[@]}")
+        echo -e "  ${WARN}  ${YELLOW}Package conflict detected — deferring resolution to end of update run.${R}"
+        return 0
+    fi
+
+    fail "$helper"
+    return 1
 }
 
 # ── Banner ────────────────────────────────────────────────────────────────────
@@ -634,6 +799,58 @@ repair_vmware() {
 }
 
 repair_vmware
+
+# ── Deferred AUR conflict resolution ─────────────────────────────────────────
+if [ -n "$PENDING_AUR_HELPER" ]; then
+    section "Conflict Resolution — ${PENDING_AUR_HELPER}"
+    _def_captured="$PENDING_AUR_CAPTURED"
+    _def_ignore=("${PENDING_AUR_IGNORE_ARGS[@]}")
+    _def_ok=0
+    _def_loop=0
+
+    while is_conflict_error "$_def_captured"; do
+        _def_loop=$((_def_loop + 1))
+        [ "$_def_loop" -gt 10 ] && break
+
+        _def_pairs=()
+        while IFS= read -r _p; do [ -n "$_p" ] && _def_pairs+=("$_p"); done \
+            < <(extract_conflicts "$_def_captured")
+        [ "${#_def_pairs[@]}" -eq 0 ] && break
+
+        resolve_conflicts "${_def_pairs[@]}"
+
+        _def_ignore=()
+        for _p in "${SKIP_PKGS[@]:-}"; do [ -n "$_p" ] && _def_ignore+=(--ignore "$_p"); done
+        _def_assume=()
+        for _p in "${ASSUME_INSTALLED[@]:-}"; do [ -n "$_p" ] && _def_assume+=(--assume-installed "$_p"); done
+
+        echo
+        echo -e "  ${DIM}Re-running ${PENDING_AUR_HELPER} after conflict resolution...${R}"
+        "$PENDING_AUR_HELPER" -Sua --devel --noconfirm "${_def_ignore[@]}" "${_def_assume[@]}"
+        _def_rc=$?
+
+        if [ "$_def_rc" -eq 0 ]; then
+            _def_ok=1
+            break
+        fi
+
+        # If resolve_conflicts made no new decisions (all were auto-applied from stored
+        # decisions) and the run still failed, the conflict is unresolvable.
+        if [ "$CONFLICT_NEW_DECISION" -eq 0 ]; then
+            echo
+            echo -e "  ${WARN}  ${YELLOW}Conflict persists even with --ignore and --assume-installed.${R}"
+            echo -e "  ${DIM}  Consider option 2 (replace installed with incoming) to unblock updates.${R}"
+            break
+        fi
+
+        echo -e "\n  ${DIM}Re-analysing failure...${R}"
+        _def_captured=$(LC_ALL=C "$PENDING_AUR_HELPER" -Sua --devel --noconfirm \
+            --answerdiff=None --answerclean=None --answeredit=None --noprogressbar \
+            "${_def_ignore[@]}" "${_def_assume[@]}" 2>&1 || true)
+    done
+
+    [ "$_def_ok" -eq 1 ] && ok "$PENDING_AUR_HELPER" || fail "$PENDING_AUR_HELPER"
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo

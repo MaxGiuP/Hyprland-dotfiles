@@ -104,6 +104,88 @@ Singleton {
         root.data = d;
     }
 
+    // wttr.in uses "06:30 AM" format — convert to 24h "06:30"
+    function to24h(t) {
+        if (!t) return "--";
+        const parts = t.trim().split(' ');
+        if (parts.length < 2) return t.trim().slice(0, 5);
+        let [hh, mm] = parts[0].split(':');
+        hh = parseInt(hh);
+        if (parts[1] === 'AM' && hh === 12) hh = 0;
+        if (parts[1] === 'PM' && hh !== 12) hh += 12;
+        return `${String(hh).padStart(2, '0')}:${mm}`;
+    }
+
+    function refineDataWttr(raw) {
+        if (!raw || !raw.current_condition?.[0]) return;
+        const c = raw.current_condition[0];
+        const w = raw.weather?.[0];
+        let d = {};
+
+        // wttr.in returns all values as strings
+        d.wCode    = parseInt(c.weatherCode) || null;
+        d.uv       = c.uvIndex ?? w?.uvIndex ?? "--";
+        d.humidity = c.humidity != null ? (c.humidity + "%") : "--";
+        d.windDir  = c.winddir16Point ?? "--";
+
+        d.sunrise  = root.to24h(w?.astronomy?.[0]?.sunrise);
+        d.sunset   = root.to24h(w?.astronomy?.[0]?.sunset);
+        d.city     = raw.nearest_area?.[0]?.areaName?.[0]?.value ?? root.city;
+
+        if (root.useUSCS) {
+            d.wind          = c.windspeedMiles  != null ? (c.windspeedMiles   + " mph")  : "--";
+            d.precip        = c.precipInches    != null ? (c.precipInches     + " in")   : "--";
+            d.visib         = c.visibilityMiles != null ? (c.visibilityMiles  + " mi")   : "--";
+            d.press         = c.pressureInches  != null ? (c.pressureInches   + " inHg") : "--";
+            d.temp          = c.temp_F          != null ? (c.temp_F           + "°F")    : "--";
+            d.tempFeelsLike = c.FeelsLikeF      != null ? (c.FeelsLikeF       + "°F")    : "";
+        } else {
+            d.wind          = c.windspeedKmph   != null ? (c.windspeedKmph    + " km/h") : "--";
+            d.precip        = c.precipMM        != null ? (c.precipMM         + " mm")   : "--";
+            d.visib         = c.visibility      != null ? (c.visibility       + " km")   : "--";
+            d.press         = c.pressure        != null ? (c.pressure         + " hPa")  : "--";
+            d.temp          = c.temp_C          != null ? (c.temp_C           + "°C")    : "--";
+            d.tempFeelsLike = c.FeelsLikeC      != null ? (c.FeelsLikeC       + "°C")    : "";
+        }
+
+        d.lastRefresh = DateTime.time + " • " + DateTime.date + " (wttr.in)";
+
+        // Hourly: wttr.in gives 8 slots/day at "0","300","600",...,"2100" (hour*100)
+        d.hourly = [];
+        try {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const nowMins  = new Date().getHours() * 60 + new Date().getMinutes();
+            for (const day of (raw.weather ?? [])) {
+                const isToday = day.date === todayStr;
+                for (const slot of (day.hourly ?? [])) {
+                    const slotH = Math.floor(parseInt(slot.time) / 100);
+                    const slotM = parseInt(slot.time) % 100;
+                    if (isToday && (slotH * 60 + slotM) < nowMins) continue;
+                    d.hourly.push({
+                        time:  `${String(slotH).padStart(2,'0')}:${String(slotM).padStart(2,'0')}`,
+                        wCode: parseInt(slot.weatherCode),
+                        temp:  root.useUSCS ? (slot.tempF + "°F") : (slot.tempC + "°C")
+                    });
+                    if (d.hourly.length >= 10) break;
+                }
+                if (d.hourly.length >= 10) break;
+            }
+        } catch(e) {
+            console.error("[WeatherService] wttr.in hourly error: " + e.message);
+        }
+
+        root.data = d;
+    }
+
+    function tryFallback() {
+        console.info("[WeatherService] open-meteo unavailable — falling back to wttr.in");
+        const loc = (root.gpsActive && root.location.valid)
+            ? (root.location.lat + "," + root.location.long)
+            : formatCityName(root.city);
+        fallbackFetcher.command = ["curl", "-s", "--max-time", "15", `https://wttr.in/${loc}?format=j1`];
+        fallbackFetcher.running = true;
+    }
+
     function getData() {
         const units = root.useUSCS
             ? "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch"
@@ -148,19 +230,67 @@ Singleton {
         if (!root.gpsActive) return;
         console.info("[WeatherService] Starting the GPS service.");
         positionSource.start();
+        gpsTimeoutTimer.restart();
     }
 
+    // If GPS is enabled but never delivers coordinates (e.g. geoclue is installed
+    // but inactive/unconfigured), fall back to city mode after one fetch interval.
+    Timer {
+        id: gpsTimeoutTimer
+        interval: root.fetchInterval
+        repeat: false
+        onTriggered: {
+            if (!root.gpsActive || root.location.valid) return;
+            console.warn("[WeatherService] GPS timed out — no position received. Falling back to city mode.");
+            positionSource.stop();
+            root.location.valid = false;
+            root.gpsActive = false;
+            Quickshell.execDetached(["notify-send", Translation.tr("Weather Service"),
+                Translation.tr("GPS timed out. Using city fallback instead."), "-a", "Shell"]);
+        }
+    }
+
+    // Primary: open-meteo. On any failure (bad JSON, empty response, no .current)
+    // automatically retries via wttr.in.
     Process {
         id: fetcher
         command: ["bash", "-c", ""]
         stdout: StdioCollector {
             onStreamFinished: {
-                if (text.trim().length === 0) return;
+                if (text.trim().length === 0) {
+                    root.tryFallback();
+                    return;
+                }
                 try {
                     const parsed = JSON.parse(text);
-                    root.refineData(parsed);
+                    if (parsed?.current) {
+                        root.refineData(parsed);
+                    } else {
+                        root.tryFallback();
+                    }
                 } catch(e) {
-                    console.error("[WeatherService] Parse error: " + e.message);
+                    console.error("[WeatherService] open-meteo parse error: " + e.message);
+                    root.tryFallback();
+                }
+            }
+        }
+    }
+
+    // Fallback: wttr.in
+    Process {
+        id: fallbackFetcher
+        command: ["curl", "-s", "--max-time", "15", ""]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.trim().length === 0) {
+                    console.error("[WeatherService] wttr.in returned empty response");
+                    return;
+                }
+                try {
+                    const parsed = JSON.parse(text);
+                    root.refineDataWttr(parsed);
+                } catch(e) {
+                    console.error("[WeatherService] wttr.in parse error: " + e.message);
                 }
             }
         }

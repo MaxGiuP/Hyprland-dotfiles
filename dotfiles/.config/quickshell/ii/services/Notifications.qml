@@ -84,11 +84,19 @@ Singleton {
     function phoneNotifSummary(notif) {
         const title = String(notif?.title ?? "").trim();
         const ticker = String(notif?.ticker ?? "").trim();
-        return title.length > 0 ? title : ticker;
+        const smsFallbackSummary = String(notif?.smsFallbackSummary ?? "").trim();
+        if (title.length > 0)
+            return title;
+        if (smsFallbackSummary.length > 0)
+            return smsFallbackSummary;
+        return ticker;
     }
 
     function phoneNotifBody(notif) {
         const text = String(notif?.text ?? "").trim();
+        const smsFallbackBody = String(notif?.smsFallbackBody ?? "").trim();
+        if (smsFallbackBody.length > 0)
+            return smsFallbackBody;
         if (text.length > 0)
             return text;
 
