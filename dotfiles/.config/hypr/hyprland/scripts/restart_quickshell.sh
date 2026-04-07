@@ -4,6 +4,7 @@
 
 set -eu
 
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 QS_CONFIG="${1:-${QS_CONFIG:-ii}}"
 SERVICE_NAME="${QS_SERVICE_NAME:-quickshell.service}"
 
@@ -18,6 +19,6 @@ sleep 0.5
 pgrep -x quickshell >/dev/null 2>&1 && pkill -KILL -x quickshell || true
 pgrep -x qs >/dev/null 2>&1 && pkill -KILL -x qs || true
 
-setsid -f "$HOME/.config/hypr/custom/scripts/start_quickshell.sh" "$QS_CONFIG" >/dev/null 2>&1 &
+setsid -f "$SCRIPT_DIR/start_quickshell.sh" "$QS_CONFIG" >/dev/null 2>&1 &
 
 echo "Riavviato: quickshell manuale ($QS_CONFIG)"

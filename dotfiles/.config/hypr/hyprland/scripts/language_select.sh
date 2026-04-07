@@ -3,7 +3,8 @@ set -euo pipefail
 
 TRANSLATION_DIR="$HOME/.config/quickshell/ii/translations"
 LOCALE_CONF="/etc/locale.conf"
-ENV_CONF="$HOME/.config/hypr/custom/env.conf"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_CONF="$(cd "$SCRIPT_DIR/.." && pwd)/env.conf"
 
 ENV_SYSTEM="/etc/environment"
 DEFAULT_LOCALE="/etc/default/locale"
@@ -61,7 +62,7 @@ echo "Regenerating locales..."
 sudo locale-gen
 
 ###############################################################################
-# 5. Update ~/.config/hypr/custom/env.conf (LANG, LC_TIME, LC_CTYPE, LC_ALL)
+# 5. Update Hypr env.conf (LANG, LC_TIME, LC_CTYPE, LC_ALL)
 ###############################################################################
 
 if [[ -f "$ENV_CONF" ]]; then
