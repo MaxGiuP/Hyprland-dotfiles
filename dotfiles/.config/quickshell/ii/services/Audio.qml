@@ -160,17 +160,17 @@ Singleton {
     }
 
     // Lists
-    function correctType(node, isSink) {
-        return (node.isSink === isSink) && node.audio
-    }
     function appNodes(isSink) {
         return Pipewire.nodes.values.filter((node) => { // Should be list<PwNode> but it breaks ScriptModel
-            return root.correctType(node, isSink) && node.isStream
+            return (node.isSink === isSink) && node.isStream
         })
     }
     function devices(isSink) {
+        // Note: do NOT filter by node.audio here — audio is null for untracked nodes,
+        // causing the list to be empty before PwObjectTracker activates them.
+        // node.isSink is available without tracking (set from media.class).
         return Pipewire.nodes.values.filter(node => {
-            return root.correctType(node, isSink) && !node.isStream
+            return (node.isSink === isSink) && !node.isStream
         })
     }
     readonly property list<var> outputAppNodes: root.appNodes(true)
@@ -273,8 +273,10 @@ Singleton {
     }
 
     // Internals
+    // Track all device nodes so node.audio is populated for volume/mute control.
+    // Defaults (sink/source) are included so their Connections blocks get live updates.
     PwObjectTracker {
-        objects: root.settingsApp ? [] : [sink, source]
+        objects: root.settingsApp ? [] : ([...root.outputDevices, ...root.inputDevices, root.sink, root.source]).filter(n => n != null)
     }
 
     Timer {
