@@ -28,10 +28,11 @@ ApplicationWindow {
         baseWidth: 760
 
         readonly property bool settingsApp: Quickshell.env("II_SETTINGS_APP") === "1"
-        readonly property var realOutputDevices: root.settingsApp ? [] : Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
+        readonly property var trackedOutputDevices: root.settingsApp ? [] : Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
+        readonly property var realOutputDevices: root.settingsApp ? [] : Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
 
         PwObjectTracker {
-            objects: root.realOutputDevices
+            objects: root.trackedOutputDevices
         }
 
         ContentSection {
@@ -43,7 +44,7 @@ ApplicationWindow {
                 buttonIcon: "speaker"
                 textRole: "displayName"
                 model: root.realOutputDevices.map(d => ({ displayName: Audio.friendlyDeviceName(d) }))
-                currentIndex: Math.max(0, root.realOutputDevices.findIndex(d => d.name === (Audio.sink?.name ?? "")))
+                currentIndex: Math.max(0, root.realOutputDevices.findIndex(d => Audio.isCurrentDefaultSink(d)))
                 onActivated: index => Audio.setDefaultSink(root.realOutputDevices[index])
             }
 

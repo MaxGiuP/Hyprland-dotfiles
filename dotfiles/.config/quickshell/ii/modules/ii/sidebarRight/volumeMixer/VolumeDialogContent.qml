@@ -11,7 +11,7 @@ ColumnLayout {
     id: root
     required property bool isSink
     readonly property list<var> appPwNodes: isSink ? Audio.outputAppNodes : Audio.inputAppNodes
-    readonly property list<var> devices: isSink ? Audio.outputDevices : Audio.inputDevices
+    readonly property list<var> devices: isSink ? Audio.selectableOutputDevices : Audio.selectableInputDevices
     readonly property bool hasApps: appPwNodes.length > 0
     spacing: 16
 
@@ -46,9 +46,9 @@ ColumnLayout {
         model: root.devices.map(node => Audio.friendlyDeviceName(node))
         currentIndex: root.devices.findIndex(item => {
             if (root.isSink) {
-                return item.id === Pipewire.defaultAudioSink?.id
+                return Audio.isCurrentDefaultSink(item)
             } else {
-                return item.id === Pipewire.defaultAudioSource?.id
+                return Audio.isCurrentDefaultSource(item)
             }
         })
         onActivated: (index) => {

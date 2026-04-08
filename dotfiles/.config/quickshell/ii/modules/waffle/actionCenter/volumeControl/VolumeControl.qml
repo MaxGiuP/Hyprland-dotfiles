@@ -89,13 +89,13 @@ Item {
 
         Repeater {
             model: ScriptModel {
-                values: root.output ? Audio.outputDevices : Audio.inputDevices
+                values: root.output ? Audio.selectableOutputDevices : Audio.selectableInputDevices
             }
             delegate: WChoiceButton {
                 required property var modelData
                 icon.name: WIcons.audioDeviceIcon(modelData)
                 text: Audio.friendlyDeviceName(modelData)
-                checked: (root.output ? Audio.sink : Audio.source) === modelData
+                checked: root.output ? Audio.isCurrentDefaultSink(modelData) : Audio.isCurrentDefaultSource(modelData)
                 onClicked: {
                     if (root.output) Audio.setDefaultSink(modelData);
                     else Audio.setDefaultSource(modelData);

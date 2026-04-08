@@ -21,7 +21,8 @@ ContentPage {
     readonly property string outputVisualizerSource: Audio.sink?.name ? `${Audio.sink.name}.monitor` : ""
     readonly property string inputVisualizerSource: Audio.source?.name ?? ""
 
-    readonly property var realOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
+    readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
+    readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
 
     function shellQuote(value) {
         return `'${String(value ?? "").replace(/'/g, `'\"'\"'`)}'`;
@@ -57,7 +58,7 @@ ContentPage {
 
     // Track all output devices so their PwNode references are ready for setDefaultSink
     PwObjectTracker {
-        objects: root.realOutputDevices
+        objects: root.trackedOutputDevices
     }
 
     Process {
@@ -241,8 +242,10 @@ ContentPage {
                         : Audio.friendlyDeviceName(d)
                 }))
                 currentIndex: {
-                    const target = monoSwitch.checked ? root.monoMasterSink : (Audio.sink?.name ?? "")
-                    return Math.max(0, root.realOutputDevices.findIndex(d => d.name === target))
+                    if (monoSwitch.checked)
+                        return Math.max(0, root.realOutputDevices.findIndex(d => d.name === root.monoMasterSink))
+
+                    return Math.max(0, root.realOutputDevices.findIndex(d => Audio.isCurrentDefaultSink(d)))
                 }
                 onActivated: index => {
                     const newDevice = root.realOutputDevices[index]
@@ -420,9 +423,9 @@ ContentPage {
                 Layout.fillWidth: true
                 buttonIcon: "mic"
                 textRole: "displayName"
-                model: Audio.inputDevices.map(d => ({ displayName: Audio.friendlyDeviceName(d) }))
-                currentIndex: Math.max(0, Audio.inputDevices.findIndex(d => d === Audio.source))
-                onActivated: index => Audio.setDefaultSource(Audio.inputDevices[index])
+                model: Audio.selectableInputDevices.map(d => ({ displayName: Audio.friendlyDeviceName(d) }))
+                currentIndex: Math.max(0, Audio.selectableInputDevices.findIndex(d => Audio.isCurrentDefaultSource(d)))
+                onActivated: index => Audio.setDefaultSource(Audio.selectableInputDevices[index])
             }
         }
 

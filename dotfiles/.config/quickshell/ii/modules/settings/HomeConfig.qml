@@ -17,10 +17,11 @@ ContentPage {
     property string _memory: ""
     property string _uptime: ""
 
-    readonly property var realOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
+    readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
+    readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
 
     PwObjectTracker {
-        objects: root.realOutputDevices
+        objects: root.trackedOutputDevices
     }
 
     component SummaryCard: Rectangle {
@@ -250,7 +251,7 @@ ContentPage {
             buttonIcon: "speaker"
             textRole: "displayName"
             model: root.realOutputDevices.map(d => ({ displayName: Audio.friendlyDeviceName(d) }))
-            currentIndex: Math.max(0, root.realOutputDevices.findIndex(d => d.name === (Audio.sink?.name ?? "")))
+            currentIndex: Math.max(0, root.realOutputDevices.findIndex(d => Audio.isCurrentDefaultSink(d)))
             onActivated: index => Audio.setDefaultSink(root.realOutputDevices[index])
         }
 

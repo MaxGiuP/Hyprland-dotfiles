@@ -34,4 +34,21 @@ wait_for_hypr() {
 
 wait_for_hypr || true
 
+# Wait for WirePlumber to register audio nodes in PipeWire.
+# Without this, quickshell may connect before ALSA devices are available,
+# resulting in an empty audio device list in the sidebar.
+wait_for_wireplumber() {
+  i=0
+  while [ "$i" -lt 50 ]; do
+    status="$(wpctl status -n 2>/dev/null || true)"
+    if printf '%s\n' "$status" | grep -qE "^[[:space:]│]*[* ]?[[:space:]]*[0-9]+\.[[:space:]]+.+(\[vol:|\[Audio/Sink\])"; then
+      return 0
+    fi
+    sleep 0.1
+    i=$((i + 1))
+  done
+  return 0  # Don't block startup even if WirePlumber isn't ready
+}
+wait_for_wireplumber
+
 exec "$QS_BIN" -c "$QS_CONFIG"

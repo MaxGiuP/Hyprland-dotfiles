@@ -26,6 +26,10 @@ Singleton {
     property bool sinkRestorePending: true
     property bool sourceRestorePending: true
     property int restoreAttempts: 0
+    property list<var> fallbackOutputDevices: []
+    property list<var> fallbackInputDevices: []
+    property int fallbackDefaultSinkId: -1
+    property int fallbackDefaultSourceId: -1
     readonly property int maxRestoreAttempts: 20
     
     function shellQuote(value) {
@@ -33,7 +37,10 @@ Singleton {
     }
 
     function friendlyDeviceName(node) {
-        return (node.nickname || node.description || Translation.tr("Unknown"));
+        const nickname = `${node?.nickname ?? ""}`.trim();
+        const description = `${node?.description ?? ""}`.trim();
+        const name = `${node?.name ?? ""}`.trim();
+        return nickname || description || name || Translation.tr("Unknown");
     }
     function appNodeDisplayName(node) {
         return (node.properties["application.name"] || node.description || node.name)
@@ -108,6 +115,90 @@ Singleton {
             || (saved.nickname.length > 0 && nodeNickname === saved.nickname);
     }
 
+    function nodeId(node) {
+        const id = Number(node?.id);
+        return Number.isNaN(id) ? -1 : id;
+    }
+
+    function defaultDeviceId(isSink) {
+        const liveId = Number(isSink ? Pipewire.defaultAudioSink?.id : Pipewire.defaultAudioSource?.id);
+        if (!Number.isNaN(liveId))
+            return liveId;
+
+        return isSink ? root.fallbackDefaultSinkId : root.fallbackDefaultSourceId;
+    }
+
+    function defaultDevice(isSink) {
+        const liveDevice = isSink ? root.sink : root.source;
+        if (liveDevice)
+            return liveDevice;
+
+        const targetId = root.defaultDeviceId(isSink);
+        const devices = isSink ? root.selectableOutputDevices : root.selectableInputDevices;
+        return devices.find(node => root.nodeId(node) === targetId) ?? null;
+    }
+
+    function isCurrentDefaultSink(node) {
+        return root.nodeId(node) === root.defaultDeviceId(true);
+    }
+
+    function isCurrentDefaultSource(node) {
+        return root.nodeId(node) === root.defaultDeviceId(false);
+    }
+
+    function parseFallbackDevices(output) {
+        const sinks = [];
+        const sources = [];
+        let defaultSinkId = -1;
+        let defaultSourceId = -1;
+
+        for (const rawLine of `${output ?? ""}`.split(/\r?\n/)) {
+            if (!rawLine)
+                continue;
+
+            const parts = rawLine.split("\t");
+            if (parts.length < 6)
+                continue;
+
+            const [kind, idText, name, description, nickname, defaultText] = parts;
+            const id = Number(idText);
+            if (Number.isNaN(id))
+                continue;
+
+            const device = {
+                id,
+                name,
+                description,
+                nickname,
+                __fallback: true,
+                __kind: kind,
+            };
+
+            if (kind === "sink") {
+                sinks.push(device);
+                if (defaultText === "1")
+                    defaultSinkId = id;
+            } else if (kind === "source") {
+                sources.push(device);
+                if (defaultText === "1")
+                    defaultSourceId = id;
+            }
+        }
+
+        root.fallbackOutputDevices = sinks;
+        root.fallbackInputDevices = sources;
+        root.fallbackDefaultSinkId = defaultSinkId;
+        root.fallbackDefaultSourceId = defaultSourceId;
+    }
+
+    function refreshFallbackDevices() {
+        if (root.settingsApp)
+            return;
+
+        fallbackDeviceProcess.running = false;
+        fallbackDeviceProcess.running = true;
+    }
+
     function attemptRestoreSavedDefaults() {
         if (root.settingsApp)
             return;
@@ -177,6 +268,10 @@ Singleton {
     readonly property list<var> inputAppNodes: root.appNodes(false)
     readonly property list<var> outputDevices: root.devices(true)
     readonly property list<var> inputDevices: root.devices(false)
+    readonly property list<var> selectableOutputDevices: root.outputDevices.length > 0 ? root.outputDevices : root.fallbackOutputDevices
+    readonly property list<var> selectableInputDevices: root.inputDevices.length > 0 ? root.inputDevices : root.fallbackInputDevices
+    readonly property string currentSinkDisplayName: root.friendlyDeviceName(root.defaultDevice(true))
+    readonly property string currentSourceDisplayName: root.friendlyDeviceName(root.defaultDevice(false))
 
     // Signals
     signal sinkProtectionTriggered(string reason);
@@ -236,10 +331,13 @@ Singleton {
 
         if (rememberSelection)
             root.rememberNode("sink", node);
-        Pipewire.preferredDefaultAudioSink = node;
         const sinkId = `${node.id ?? ""}`;
         const sinkName = `${node.name ?? ""}`;
         const pactTarget = shellQuote(sinkName.length > 0 ? sinkName : sinkId);
+
+        if (!node.__fallback)
+            Pipewire.preferredDefaultAudioSink = node;
+        root.fallbackDefaultSinkId = root.nodeId(node);
 
         // Keep PipeWire, PulseAudio compatibility, and existing streams aligned.
         Quickshell.execDetached([
@@ -259,10 +357,13 @@ Singleton {
 
         if (rememberSelection)
             root.rememberNode("source", node);
-        Pipewire.preferredDefaultAudioSource = node;
         const sourceId = `${node.id ?? ""}`;
         const sourceName = `${node.name ?? ""}`;
         const pactTarget = shellQuote(sourceName.length > 0 ? sourceName : sourceId);
+
+        if (!node.__fallback)
+            Pipewire.preferredDefaultAudioSource = node;
+        root.fallbackDefaultSourceId = root.nodeId(node);
 
         Quickshell.execDetached([
             "bash", "-lc",
@@ -322,6 +423,42 @@ Singleton {
         }
     }
 
+    Process {
+        id: fallbackDeviceProcess
+        command: ["bash", "-lc",
+            "awk_extract='function trim(s){sub(/^[[:space:]]+/,\"\",s); sub(/[[:space:]]+$/,\"\",s); return s} " +
+            "function emit(kind, star, id, label){if (id == \"\") return; print kind \"\\t\" id \"\\t\" trim(label) \"\\t\" (star == \"*\" ? 1 : 0)} " +
+            "BEGIN{section=\"\"; inAudio=0} " +
+            "/^Audio$/{inAudio=1; next} " +
+            "inAudio && /├─ Sinks:/{section=\"sink\"; next} " +
+            "inAudio && /├─ Sources:/{section=\"source\"; next} " +
+            "inAudio && /├─ Filters:/{section=\"filter\"; next} " +
+            "inAudio && (/└─ Streams:/ || /^Video$/){section=\"\"; if ($0 ~ /^Video$/) inAudio=0; next} " +
+            "inAudio && match($0, /^[[:space:]│]*([* ])?[[:space:]]*([0-9]+)\\.[[:space:]]+([^\\[]+)/, m) { " +
+            "  kind = section; " +
+            "  if (section == \"filter\") { " +
+            "    if ($0 ~ /\\[Audio\\/Sink\\]/) kind = \"sink\"; " +
+            "    else if ($0 ~ /\\[Audio\\/Source\\]/) kind = \"source\"; " +
+            "    else next; " +
+            "  } " +
+            "  emit(kind, m[1], m[2], m[3]); " +
+            "}' ; " +
+            "while IFS=$'\\t' read -r kind id label is_default; do " +
+            "  inspect=$(wpctl inspect \"$id\" 2>/dev/null || true); " +
+            "  name=$(printf '%s\\n' \"$inspect\" | sed -n 's/^[[:space:]]*\\* node.name = \"\\(.*\\)\"$/\\1/p' | head -n1); " +
+            "  desc=$(printf '%s\\n' \"$inspect\" | sed -n 's/^[[:space:]]*\\*\\{0,1\\}[[:space:]]*node.description = \"\\(.*\\)\"$/\\1/p' | head -n1); " +
+            "  nick=$(printf '%s\\n' \"$inspect\" | sed -n 's/^[[:space:]]*\\*\\{0,1\\}[[:space:]]*node.nick = \"\\(.*\\)\"$/\\1/p' | head -n1); " +
+            "  [ -n \"$name\" ] || name=\"$label\"; " +
+            "  [ -n \"$desc\" ] || desc=\"$label\"; " +
+            "  printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$kind\" \"$id\" \"$name\" \"$desc\" \"$nick\" \"$is_default\"; " +
+            "done < <(wpctl status -n 2>/dev/null | awk \"$awk_extract\")"
+        ]
+        stdout: StdioCollector {
+            id: fallbackDeviceCollector
+            onStreamFinished: root.parseFallbackDevices(fallbackDeviceCollector.text)
+        }
+    }
+
     Timer {
         id: restoreTimer
         interval: 750
@@ -330,14 +467,40 @@ Singleton {
         onTriggered: root.attemptRestoreSavedDefaults()
     }
 
-    onOutputDevicesChanged: root.attemptRestoreSavedDefaults()
-    onInputDevicesChanged: root.attemptRestoreSavedDefaults()
-    onSinkChanged: root.scheduleSinkRefresh()
-    onSourceChanged: root.scheduleSourceRefresh()
+    Timer {
+        id: fallbackRefreshTimer
+        interval: 5000
+        repeat: true
+        running: !root.settingsApp
+        onTriggered: {
+            if (root.outputDevices.length === 0 || root.inputDevices.length === 0 || root.fallbackOutputDevices.length > 0 || root.fallbackInputDevices.length > 0)
+                root.refreshFallbackDevices();
+        }
+    }
+
+    onOutputDevicesChanged: {
+        root.attemptRestoreSavedDefaults();
+        if (root.outputDevices.length === 0)
+            root.refreshFallbackDevices();
+    }
+    onInputDevicesChanged: {
+        root.attemptRestoreSavedDefaults();
+        if (root.inputDevices.length === 0)
+            root.refreshFallbackDevices();
+    }
+    onSinkChanged: {
+        root.scheduleSinkRefresh();
+        root.refreshFallbackDevices();
+    }
+    onSourceChanged: {
+        root.scheduleSourceRefresh();
+        root.refreshFallbackDevices();
+    }
 
     Component.onCompleted: {
         root.scheduleSinkRefresh();
         root.scheduleSourceRefresh();
+        root.refreshFallbackDevices();
 
         if (root.settingsApp)
             return;
