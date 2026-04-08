@@ -16,6 +16,8 @@ ContentPage {
     property var englishTranslations: ({})
     property var targetTranslations: ({})
     property string rawTargetJson: "{}"
+    property string sysLocale: ""
+    property string sysLangStatus: ""
     onRawTargetJsonChanged: {
         if (!rawJsonEditor.activeFocus)
             rawJsonEditor.text = rawTargetJson
@@ -59,6 +61,36 @@ ContentPage {
         command: [Directories.aiTranslationScriptPath, translationProc.locale]
     }
 
+    Process {
+        id: readSysLocaleProc
+        running: true
+        command: ["bash", "-c", "grep '^LANG=' /etc/locale.conf 2>/dev/null | head -1 | cut -d= -f2 | cut -d. -f1"]
+        stdout: StdioCollector {
+            id: sysLocaleCollector
+            onStreamFinished: root.sysLocale = sysLocaleCollector.text.trim()
+        }
+    }
+
+    Process {
+        id: sysLangApplyProc
+        property string targetLang: ""
+        command: ["/usr/bin/pkexec", "/home/linmax/.config/hypr/hyprland/scripts/set_language.sh", sysLangApplyProc.targetLang]
+        stdout: StdioCollector { id: sysLangApplyOut }
+        stderr: StdioCollector { id: sysLangApplyErr }
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0) {
+                root.sysLangStatus = Translation.tr("System locale updated to %1.UTF-8. Re-login for full effect.").arg(sysLangApplyProc.targetLang)
+                readSysLocaleProc.running = false
+                readSysLocaleProc.running = true
+            } else {
+                const details = (sysLangApplyErr.text || sysLangApplyOut.text).trim()
+                root.sysLangStatus = details.length > 0
+                    ? Translation.tr("Failed to update system locale. %1").arg(details)
+                    : Translation.tr("Failed to update system locale.")
+            }
+        }
+    }
+
     FileView {
         id: englishTranslationFile
         path: `${Translation.translationsDir}/en_US.json`
@@ -99,33 +131,67 @@ ContentPage {
         icon: "translate"
         title: Translation.tr("Language")
 
+        StyledText {
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: Appearance.colors.colSubtext
+            text: Translation.tr("Selecting a locale updates the shell UI translation and the system-wide locale (/etc/locale.conf and Hyprland env.conf). Re-login for system changes to fully apply.")
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: activeLocaleRow.implicitHeight + 20
+            radius: Appearance.rounding.normal
+            color: Appearance.colors.colLayer1
+            border.width: 1
+            border.color: Appearance.colors.colOutlineVariant
+
+            RowLayout {
+                id: activeLocaleRow
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 12
+
+                MaterialSymbol {
+                    text: "public"
+                    iconSize: 20
+                    color: Appearance.colors.colSubtext
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    StyledText {
+                        text: Translation.tr("Active system locale")
+                        color: Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.small
+                    }
+
+                    StyledText {
+                        text: root.sysLocale.length > 0 ? root.sysLocale + ".UTF-8" : "…"
+                        color: Appearance.colors.colOnLayer1
+                        font.weight: Font.Medium
+                    }
+                }
+            }
+        }
+
         StyledComboBox {
             Layout.fillWidth: true
             buttonIcon: "language"
-            textRole: "displayName"
-            model: [
-                {
-                    displayName: Translation.tr("Auto (System)"),
-                    value: "auto"
-                },
-                ...Translation.allAvailableLanguages.map(lang => ({
-                    displayName: lang,
-                    value: lang
-                }))
-            ]
-            currentIndex: {
-                const index = model.findIndex(item => item.value === Config.options.language.ui)
-                return index !== -1 ? index : 0
-            }
-            onActivated: index => Config.options.language.ui = model[index].value
+            textRole: "text"
+            model: Translation.allAvailableLanguages.map(lang => ({ text: lang }))
+            currentIndex: Math.max(0, Translation.allAvailableLanguages.indexOf(root.sysLocale))
+            onActivated: index => localeInput.text = Translation.allAvailableLanguages[index]
         }
 
         ConfigRow {
             MaterialTextArea {
                 id: localeInput
                 Layout.fillWidth: true
-                placeholderText: Translation.tr("Locale code, e.g. fr_FR, de_DE, zh_CN...")
-                text: Config.options.language.ui === "auto" ? Qt.locale().name : Config.options.language.ui
+                placeholderText: Translation.tr("Locale code, e.g. en_US, fr_FR, de_DE...")
+                text: root.sysLocale
                 onTextChanged: {
                     targetTranslationFile.path = root.targetTranslationPath()
                     targetTranslationFile.reload()
@@ -133,21 +199,36 @@ ContentPage {
             }
 
             RippleButtonWithIcon {
-                id: generateTranslationBtn
                 Layout.fillHeight: true
-                nerdIcon: ""
-                enabled: !translationProc.running || (translationProc.locale !== localeInput.text.trim())
-                mainText: enabled ? Translation.tr("Generate translation") : Translation.tr("Generating…")
+                materialIcon: "save"
+                enabled: !sysLangApplyProc.running && localeInput.text.trim().length > 0
+                mainText: sysLangApplyProc.running ? Translation.tr("Applying…") : Translation.tr("Apply")
                 onClicked: {
-                    translationProc.locale = localeInput.text.trim()
-                    translationProc.running = false
-                    translationProc.running = true
+                    const lang = localeInput.text.trim()
+                    if (!lang) return
+                    root.sysLangStatus = ""
+                    Config.options.language.ui = lang
+                    sysLangApplyProc.targetLang = lang
+                    sysLangApplyProc.running = false
+                    sysLangApplyProc.running = true
                 }
             }
         }
 
         ConfigRow {
             uniform: true
+
+            RippleButtonWithIcon {
+                Layout.fillWidth: true
+                materialIcon: "auto_awesome"
+                enabled: !translationProc.running || (translationProc.locale !== localeInput.text.trim())
+                mainText: translationProc.running ? Translation.tr("Generating…") : Translation.tr("Generate translation")
+                onClicked: {
+                    translationProc.locale = localeInput.text.trim()
+                    translationProc.running = false
+                    translationProc.running = true
+                }
+            }
 
             RippleButtonWithIcon {
                 Layout.fillWidth: true
@@ -162,9 +243,18 @@ ContentPage {
             RippleButtonWithIcon {
                 Layout.fillWidth: true
                 materialIcon: "edit_document"
-                mainText: Translation.tr("Open locale JSON file")
+                mainText: Translation.tr("Open locale JSON")
                 onClicked: Qt.openUrlExternally(`file://${root.targetTranslationPath()}`)
             }
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            visible: root.sysLangStatus.length > 0
+            wrapMode: Text.Wrap
+            color: Appearance.colors.colSubtext
+            font.pixelSize: Appearance.font.pixelSize.small
+            text: root.sysLangStatus
         }
     }
 

@@ -39,6 +39,9 @@ Singleton {
     property string desktopDragScreen: ""
     property real desktopDragPointerX: -1
     property real desktopDragPointerY: -1
+    property real desktopDragHotspotX: 0
+    property real desktopDragHotspotY: 0
+    property var desktopDragVisual: null
     property var desktopTrashRects: ({})
     property bool wallpaperSelectorOpen: false
     property bool workspaceShowNumbers: false
@@ -60,6 +63,91 @@ Singleton {
         const nextMap = Object.assign({}, root.barTopClearanceByScreen)
         delete nextMap[screenName]
         root.barTopClearanceByScreen = nextMap
+    }
+
+    function beginDesktopDrag(screenName, urls, hotspotX, hotspotY, visual) {
+        root.desktopDragActive = true
+        root.desktopDragUrls = Array.isArray(urls) ? urls.slice() : []
+        root.desktopDragScreen = screenName || ""
+        root.desktopDragHotspotX = Number(hotspotX ?? 0)
+        root.desktopDragHotspotY = Number(hotspotY ?? 0)
+        root.desktopDragVisual = visual ?? null
+    }
+
+    function monitorForGlobalPoint(globalX, globalY) {
+        const gx = Number(globalX ?? -1)
+        const gy = Number(globalY ?? -1)
+        return HyprlandData.monitors.find(m => {
+            const mx = Number(m?.x ?? 0)
+            const my = Number(m?.y ?? 0)
+            const mw = Number(m?.width ?? 0)
+            const mh = Number(m?.height ?? 0)
+            return gx >= mx && gx < mx + mw && gy >= my && gy < my + mh
+        }) ?? null
+    }
+
+    function screenNameForGlobalPoint(globalX, globalY) {
+        return root.monitorForGlobalPoint(globalX, globalY)?.name ?? ""
+    }
+
+    function updateDesktopDragPointerGlobal(globalX, globalY) {
+        root.desktopDragPointerX = Number(globalX ?? -1)
+        root.desktopDragPointerY = Number(globalY ?? -1)
+        const pointerScreen = root.screenNameForGlobalPoint(globalX, globalY)
+        if (pointerScreen.length > 0)
+            root.desktopDragScreen = pointerScreen
+    }
+
+    function updateDesktopDragPointer(screenName, localX, localY) {
+        const monitor = HyprlandData.monitors.find(m => m.name === screenName)
+        const monitorX = Number(monitor?.x ?? 0)
+        const monitorY = Number(monitor?.y ?? 0)
+        if (screenName)
+            root.desktopDragScreen = screenName
+        root.updateDesktopDragPointerGlobal(
+            monitorX + Number(localX ?? -1),
+            monitorY + Number(localY ?? -1)
+        )
+    }
+
+    function clearDesktopDragState() {
+        root.desktopDragActive = false
+        root.desktopDragUrls = []
+        root.desktopDragScreen = ""
+        root.desktopDragPointerX = -1
+        root.desktopDragPointerY = -1
+        root.desktopDragHotspotX = 0
+        root.desktopDragHotspotY = 0
+        root.desktopDragVisual = null
+    }
+
+    Timer {
+        id: desktopDragCursorPollTimer
+        interval: 20
+        repeat: true
+        running: root.desktopDragActive
+        onTriggered: {
+            if (!desktopDragCursorProcess.running)
+                desktopDragCursorProcess.running = true
+        }
+    }
+
+    Process {
+        id: desktopDragCursorProcess
+        command: ["hyprctl", "cursorpos", "-j"]
+        stdout: StdioCollector {
+            id: desktopDragCursorCollector
+            onStreamFinished: {
+                if (!root.desktopDragActive)
+                    return
+
+                try {
+                    const cursor = JSON.parse(desktopDragCursorCollector.text)
+                    root.updateDesktopDragPointerGlobal(cursor?.x, cursor?.y)
+                } catch (e) {
+                }
+            }
+        }
     }
 
     function resolvedDrawerScreen(preferredScreen = "") {

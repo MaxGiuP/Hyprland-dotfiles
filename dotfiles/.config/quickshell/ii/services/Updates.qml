@@ -16,7 +16,7 @@ Singleton {
     property bool available: true
     property alias checking: checkUpdatesProc.running
     property int count: 0
-    property string updateScriptPath: "/home/linmax/.config/hypr/custom/scripts/update.sh"
+    property string updateScriptPath: "/home/linmax/.config/hypr/hyprland/scripts/update.sh"
     readonly property int watchIntervalMs: 10 * 1000
     
     readonly property bool updateAdvised: available && count > Config.options.updates.adviseUpdateThreshold

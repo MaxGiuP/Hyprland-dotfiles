@@ -6,6 +6,9 @@ import qs.modules.common.widgets
 MaterialSymbol {
     id: root
     readonly property bool showUnreadCount: Config.options.bar.indicators.notifications.showUnreadCount
+    readonly property int badgeHeight: 14
+    readonly property int badgeHorizontalPadding: 4
+    readonly property string badgeTextValue: Notifications.unread > 999 ? "999+" : String(Notifications.unread)
     text: Notifications.silent ? "notifications_paused" : "notifications"
     iconSize: Appearance.font.pixelSize.larger
     color: rightSidebarButton.colText
@@ -23,8 +26,12 @@ MaterialSymbol {
         color: "#FFFFFF"
         z: 1
 
-        implicitHeight: root.showUnreadCount ? Math.max(notificationCounterText.implicitWidth, notificationCounterText.implicitHeight) : 8
-        implicitWidth: implicitHeight
+        implicitHeight: root.showUnreadCount ? root.badgeHeight : 8
+        implicitWidth: root.showUnreadCount
+            ? Math.max(implicitHeight, notificationCounterText.implicitWidth + root.badgeHorizontalPadding * 2)
+            : implicitHeight
+        width: implicitWidth
+        height: implicitHeight
 
         StyledText {
             id: notificationCounterText
@@ -32,7 +39,7 @@ MaterialSymbol {
             anchors.centerIn: parent
             font.pixelSize: Appearance.font.pixelSize.smallest
             color: "#000000"
-            text: Notifications.unread
+            text: root.badgeTextValue
         }
     }
 }

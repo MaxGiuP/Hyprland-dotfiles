@@ -6,6 +6,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Effects
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.services
@@ -57,19 +58,40 @@ Scope {
         onTriggered: positionsFile.setText(JSON.stringify(root.positions))
     }
 
-    // ── Cross-screen drag handoff ──────────────────────────────────────────
-    // Hyprland drops the Wayland pointer grab when the cursor crosses a
-    // layer-shell surface boundary, so the drag ends before onMoved can
-    // trigger the normal transfer.  on_DragActiveChanged detects this and
-    // sets a "pending transfer"; the destination screen's bgMouseArea picks
-    // it up the moment the cursor arrives (via onPressed or onPositionChanged).
+    // ── Desktop-owned drag session ─────────────────────────────────────────
+    // The source MouseArea still loses its grab when the pointer crosses a
+    // layer-shell boundary, so the desktop promotes the drag to shared global
+    // state as soon as the drag threshold is crossed and resolves the drop
+    // from that state on release.
     property string _pendingXferName: ""
     property string _pendingXferFrom: ""
-    property real   _pendingXferY:    0
+    property bool _pendingXferFinalizeRequested: false
+    property bool _shortcutFinalizePending: false
     Timer {
         id: xferGraceTimer
-        interval: 800; repeat: false
-        onTriggered: root._pendingXferName = ""
+        interval: 8000; repeat: false
+        onTriggered: {
+            root.clearPendingTransfer()
+            GlobalStates.clearDesktopDragState()
+        }
+    }
+
+    function clearPendingTransfer() {
+        root._pendingXferName = ""
+        root._pendingXferFrom = ""
+        root._pendingXferFinalizeRequested = false
+        xferGraceTimer.stop()
+    }
+
+    Connections {
+        target: GlobalStates
+
+        function onDesktopDragActiveChanged() {
+            if (!GlobalStates.desktopDragActive && root._pendingXferName !== "")
+                root.clearPendingTransfer()
+            if (!GlobalStates.desktopDragActive)
+                root._pendingXferFinalizeRequested = false
+        }
     }
 
     function assignedScreen(fileName) {
@@ -177,12 +199,169 @@ Scope {
         return FileUtils.trimFileProtocol(decodeURIComponent(String(uri ?? "")))
     }
 
+    function geometryForScreen(screenName) {
+        const shellScreen = Quickshell.screens.find(s => s.name === screenName)
+        const monitor = HyprlandData.monitors.find(m => m.name === screenName)
+        return {
+            x: Number(monitor?.x ?? 0),
+            y: Number(monitor?.y ?? 0),
+            width: Number(shellScreen?.width ?? monitor?.width ?? 0),
+            height: Number(shellScreen?.height ?? monitor?.height ?? 0)
+        }
+    }
+
+    function desktopDragOverTrash() {
+        const px = GlobalStates.desktopDragPointerX
+        const py = GlobalStates.desktopDragPointerY
+        if (px < 0 || py < 0)
+            return false
+
+        const rects = GlobalStates.desktopTrashRects ?? {}
+        for (const screenName in rects) {
+            const rect = rects[screenName]
+            if (!rect || !rect.visible)
+                continue
+            if (px >= rect.x && px <= rect.x + rect.width &&
+                    py >= rect.y && py <= rect.y + rect.height)
+                return true
+        }
+        return false
+    }
+
+    function finalizePendingTransferFromGlobalRelease() {
+        if (!GlobalStates.desktopDragActive) {
+            root._pendingXferFinalizeRequested = false
+            return false
+        }
+
+        if (root._pendingXferName === "") {
+            root._pendingXferFinalizeRequested = true
+            xferGraceTimer.restart()
+            return false
+        }
+
+        root._pendingXferFinalizeRequested = false
+
+        if (root.desktopDragOverTrash()) {
+            const filePaths = (Array.isArray(GlobalStates.desktopDragUrls) ? GlobalStates.desktopDragUrls : [])
+                .map(uri => root.uriToFilePath(uri))
+                .filter(path => path.length > 0)
+            if (filePaths.length > 0)
+                Quickshell.execDetached(["gio", "trash", ...filePaths])
+            root.clearPendingTransfer()
+            GlobalStates.clearDesktopDragState()
+            return true
+        }
+
+        const targetScreen = GlobalStates.desktopDragScreen || root._pendingXferFrom
+        const targetGeometry = root.geometryForScreen(targetScreen)
+        if (targetScreen.length === 0 || targetGeometry.width <= 0 || targetGeometry.height <= 0)
+            return false
+
+        const targetMinY = Config.options.bar.bottom ? 0 : Appearance.sizes.barHeight
+        const targetMaxY = Config.options.bar.bottom
+            ? targetGeometry.height - root.itemH - Appearance.sizes.barHeight
+            : targetGeometry.height - root.itemH
+        const topOff = targetMinY + root.gridPad
+        const rawX = GlobalStates.desktopDragPointerX - targetGeometry.x - GlobalStates.desktopDragHotspotX
+        const rawY = GlobalStates.desktopDragPointerY - targetGeometry.y - GlobalStates.desktopDragHotspotY
+        const clampedX = Math.max(0, Math.min(targetGeometry.width - root.itemW, rawX))
+        const clampedY = Math.max(targetMinY, Math.min(targetMaxY, rawY))
+        const snapped = root.snapToGrid(
+            clampedX,
+            clampedY,
+            targetGeometry.width,
+            targetGeometry.height,
+            topOff
+        )
+
+        if (targetScreen === root._pendingXferFrom) {
+            // Same-screen: place at snap target; swap with any occupant rather than
+            // hunting for a distant free cell (which breaks on a packed desktop).
+            const takenKey = root.occupantKey(targetScreen, root._pendingXferName, snapped.x, snapped.y)
+            if (takenKey === null) {
+                root.savePos(targetScreen, root._pendingXferName, snapped.x, snapped.y)
+            } else {
+                // Swap: occupant moves to the dragged item's old position.
+                const origPos = root.positions[targetScreen + "/" + root._pendingXferName]
+                const p = Object.assign({}, root.positions)
+                p[takenKey] = { x: Number(origPos?.x ?? snapped.x), y: Number(origPos?.y ?? snapped.y) }
+                p[targetScreen + "/" + root._pendingXferName] = { x: snapped.x, y: snapped.y }
+                root.positions = p
+                saveTimer.restart()
+            }
+        } else {
+            // Cross-screen: find a free cell on the target screen.
+            const cell = root.findFreeCell(
+                targetScreen,
+                root._pendingXferName,
+                snapped.x,
+                snapped.y,
+                targetGeometry.width,
+                targetGeometry.height,
+                topOff
+            )
+            root.moveToScreen(root._pendingXferFrom, targetScreen, root._pendingXferName, cell.x, cell.y)
+        }
+
+        root.clearPendingTransfer()
+        GlobalStates.clearDesktopDragState()
+        return true
+    }
+
     // ── Shared folder model ───────────────────────────────────────────────
     FolderListModel {
         id: folderModel
         folder: root.positionsReady ? ("file://" + root.desktopPath) : ""
         showDirs: true; showFiles: true; showHidden: false
         sortField: FolderListModel.Name
+    }
+
+    // When the global shortcut fires (LMB released anywhere), we can't trust the
+    // current desktopDragScreen: a stale polling result from just before the cursor
+    // crossed to another monitor may have overwritten the correct screen.  Query the
+    // live cursor position first, update global state with it, then finalize.
+    Process {
+        id: shortcutFinalizeProcess
+        command: ["hyprctl", "cursorpos", "-j"]
+        stdout: StdioCollector {
+            id: shortcutFinalizeCollector
+            onStreamFinished: {
+                const wasPending = root._shortcutFinalizePending
+                root._shortcutFinalizePending = false
+                if (!wasPending || !GlobalStates.desktopDragActive)
+                    return
+                try {
+                    const pos = JSON.parse(shortcutFinalizeCollector.text)
+                    if (pos?.x !== undefined && pos?.y !== undefined)
+                        GlobalStates.updateDesktopDragPointerGlobal(pos.x, pos.y)
+                } catch(e) {}
+                root.finalizePendingTransferFromGlobalRelease()
+            }
+        }
+    }
+
+    GlobalShortcut {
+        name: "desktopDragMouseLeftRelease"
+        description: "Finalize pending desktop cross-monitor drag on real LMB release"
+
+        function finalize() {
+            if (!GlobalStates.desktopDragActive)
+                return
+            if (root._pendingXferName === "") {
+                root._pendingXferFinalizeRequested = true
+                xferGraceTimer.restart()
+                return
+            }
+            // Avoid double-start if already waiting for a cursor-pos result
+            if (root._shortcutFinalizePending || shortcutFinalizeProcess.running)
+                return
+            root._shortcutFinalizePending = true
+            shortcutFinalizeProcess.running = true
+        }
+
+        onPressed: finalize()
+        onReleased: finalize()
     }
 
     // ── One desktop window + one input overlay per screen ─────────────────
@@ -239,6 +418,7 @@ Scope {
                 property bool menuVisible: false
                 property real menuX: 0
                 property real menuY: 0
+                readonly property var hyprMonitor: HyprlandData.monitors.find(m => m.name === screenScope.modelData.name)
 
                 readonly property int dragMinY: Config.options.bar.bottom ? 0 : Appearance.sizes.barHeight
                 readonly property int dragMaxY: Config.options.bar.bottom
@@ -259,48 +439,34 @@ Scope {
                     property real _rbCurrentX: 0
                     property real _rbCurrentY: 0
 
-                    // Cross-screen ghost state
-                    property real _ghostX: root.gridPad
-                    property real _ghostY: desktopWindow.dragMinY + root.gridPad
-                    property bool _xferHeld: false  // arrived with button still held
+                    property bool _xferHeld: false
 
-                    function _isPendingDest() {
-                        return root._pendingXferName !== "" &&
-                               root._pendingXferFrom !== desktopWindow.screen.name
+                    function _hasPendingTransfer() {
+                        return GlobalStates.desktopDragActive && root._pendingXferName !== ""
                     }
 
-                    function _updateGhost(mx, my) {
-                        if (!_isPendingDest()) return
-                        const topOff = desktopWindow.dragMinY + root.gridPad
-                        const snapped = root.snapToGrid(mx, my,
-                            desktopWindow.width, desktopWindow.height, topOff)
-                        const cell = root.findFreeCell(desktopWindow.screen.name, root._pendingXferName,
-                            snapped.x, snapped.y,
-                            desktopWindow.width, desktopWindow.height, topOff)
-                        _ghostX = cell.x
-                        _ghostY = cell.y
+                    function _updatePendingPointer(mx, my) {
+                        if (!_hasPendingTransfer())
+                            return
+
+                        GlobalStates.updateDesktopDragPointer(desktopWindow.screen.name, mx, my)
+                        xferGraceTimer.restart()
                     }
 
-                    // Finalise a pending cross-screen transfer at the current ghost position.
-                    function _tryXferReceive() {
-                        if (!_isPendingDest()) return false
-                        const screens = Quickshell.screens
-                        const myIdx   = screens.findIndex(s => s.name === desktopWindow.screen.name)
-                        const fromIdx = screens.findIndex(s => s.name === root._pendingXferFrom)
-                        if (Math.abs(fromIdx - myIdx) !== 1) return false
-                        root.moveToScreen(root._pendingXferFrom, desktopWindow.screen.name,
-                            root._pendingXferName, _ghostX, _ghostY)
-                        root._pendingXferName = ""
-                        xferGraceTimer.stop()
-                        _xferHeld = false
-                        return true
+                    function _finalizePendingTransfer() {
+                        if (!_hasPendingTransfer())
+                            return false
+
+                        const finalized = root.finalizePendingTransferFromGlobalRelease()
+                        if (finalized)
+                            _xferHeld = false
+                        return finalized
                     }
 
                     onPressed: (mouse) => {
-                        if (_isPendingDest()) {
-                            // Arrived on this screen with button still held — track ghost
+                        if (_hasPendingTransfer()) {
                             _xferHeld = true
-                            _updateGhost(mouse.x, mouse.y)
+                            _updatePendingPointer(mouse.x, mouse.y)
                             return
                         }
                         if (mouse.button === Qt.LeftButton) {
@@ -310,9 +476,9 @@ Scope {
                         }
                     }
                     onPositionChanged: (mouse) => {
-                        if (_xferHeld || (!pressed && _isPendingDest())) {
-                            // Update ghost while holding or hovering over destination
-                            _updateGhost(mouse.x, mouse.y)
+                        if (_hasPendingTransfer()) {
+                            _xferHeld = !!(mouse.buttons & Qt.LeftButton) || !!(pressedButtons & Qt.LeftButton)
+                            _updatePendingPointer(mouse.x, mouse.y)
                             return
                         }
                         if (!pressed || !(mouse.buttons & Qt.LeftButton)) return
@@ -325,8 +491,9 @@ Scope {
                         }
                     }
                     onReleased: (mouse) => {
-                        if (_xferHeld || (mouse.button === Qt.LeftButton && _isPendingDest())) {
-                            _tryXferReceive()
+                        if (mouse.button === Qt.LeftButton && _hasPendingTransfer()) {
+                            _updatePendingPointer(mouse.x, mouse.y)
+                            _finalizePendingTransfer()
                             return
                         }
                         if (mouse.button === Qt.LeftButton) {
@@ -361,6 +528,31 @@ Scope {
                             }
                         }
                     }
+                    onPressedButtonsChanged: {
+                        if (!_hasPendingTransfer() || !containsMouse)
+                            return
+
+                        const leftHeld = !!(pressedButtons & Qt.LeftButton)
+                        if (leftHeld) {
+                            _xferHeld = true
+                            xferGraceTimer.restart()
+                            return
+                        }
+
+                        if (_xferHeld)
+                            _finalizePendingTransfer()
+                    }
+                    onContainsMouseChanged: {
+                        if (!containsMouse || !_hasPendingTransfer())
+                            return
+
+                        // On Wayland, wl_pointer.enter does not carry button state, so
+                        // pressedButtons may be 0 even with LMB held.  An active pending
+                        // transfer implies the user IS holding LMB, so always mark it held
+                        // so that onPressedButtonsChanged can finalize on release.
+                        _xferHeld = true
+                        _updatePendingPointer(mouseX, mouseY)
+                    }
                     onClicked: (mouse) => {
                         if (_rbDragging) {
                             // Rubber-band just completed; selection was set in onReleased.
@@ -380,20 +572,64 @@ Scope {
                     }
                 }
 
-                // Cross-screen drag ghost — shown on the destination monitor while a
-                // pending transfer is active so the user can see where the item will land.
-                Rectangle {
-                    visible: bgMouseArea._isPendingDest()
+                Item {
+                    id: dragProxy
+                    readonly property var dragVisual: GlobalStates.desktopDragVisual ?? ({
+                        fileName: "",
+                        filePath: "",
+                        fileIsDir: true,
+                        fileUrl: ""
+                    })
+                    visible: GlobalStates.desktopDragActive
+                             && GlobalStates.desktopDragVisual !== null
+                             && GlobalStates.desktopDragPointerX >= 0
+                             && GlobalStates.desktopDragPointerY >= 0
                     z: 20
-                    x: bgMouseArea._ghostX
-                    y: bgMouseArea._ghostY
-                    width: root.itemW; height: root.itemH
-                    radius: Appearance.rounding.normal
-                    color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g,
-                                   Appearance.colors.colPrimary.b, 0.25)
-                    border.color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g,
-                                          Appearance.colors.colPrimary.b, 0.7)
-                    border.width: 1
+                    x: GlobalStates.desktopDragPointerX - Number(desktopWindow.hyprMonitor?.x ?? 0) - GlobalStates.desktopDragHotspotX
+                    y: GlobalStates.desktopDragPointerY - Number(desktopWindow.hyprMonitor?.y ?? 0) - GlobalStates.desktopDragHotspotY
+                    width: root.itemW
+                    height: root.itemH
+                    opacity: 0.94
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        radius: Appearance.rounding.normal
+                        color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g,
+                                       Appearance.colors.colPrimary.b, 0.22)
+                        border.color: Qt.rgba(Appearance.colors.colPrimary.r, Appearance.colors.colPrimary.g,
+                                              Appearance.colors.colPrimary.b, 0.72)
+                        border.width: 1
+                    }
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 4
+                        spacing: 4
+
+                        DirectoryIcon {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: root.iconSize
+                            Layout.preferredHeight: root.iconSize
+                            fileModelData: dragProxy.dragVisual
+                        }
+
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 14
+                            Layout.rightMargin: 14
+                            text: String(dragProxy.dragVisual.fileName ?? "").replace(/(.{12})/g, "$1\n")
+                            color: "white"
+                            font.pixelSize: 13
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                            style: Text.Outline
+                            styleColor: Qt.rgba(0, 0, 0, 0.75)
+                        }
+                    }
                 }
 
                 // Rubber band visual
@@ -424,6 +660,11 @@ Scope {
                             property bool _positionSet: false
                             visible: _positionSet &&
                                      root.assignedScreen(modelData.fileName) === desktopWindow.screen.name
+                            opacity: GlobalStates.desktopDragActive
+                                     && GlobalStates.desktopDragVisual?.fileName === modelData.fileName
+                                ? 0
+                                : 1
+                            enabled: opacity > 0 || dragging
 
                             iconSize: root.iconSize
                             itemWidth: root.itemW
@@ -439,19 +680,19 @@ Scope {
                                     .filter(uri => uri.length > 0)
                             }
 
-                            drag.minimumX: {
+                            dragMinimumX: {
                                 const s = Quickshell.screens
                                 return s.findIndex(sc => sc.name === desktopWindow.screen.name) > 0
                                     ? -root.itemW : 0
                             }
-                            drag.maximumX: {
+                            dragMaximumX: {
                                 const s = Quickshell.screens
                                 const idx = s.findIndex(sc => sc.name === desktopWindow.screen.name)
                                 return idx < s.length - 1 ? desktopWindow.width
                                                           : desktopWindow.width - root.itemW
                             }
-                            drag.minimumY: desktopWindow.dragMinY
-                            drag.maximumY: desktopWindow.dragMaxY
+                            dragMinimumY: desktopWindow.dragMinY
+                            dragMaximumY: desktopWindow.dragMaxY
 
                             Component.onCompleted: {
                                 try {
@@ -478,13 +719,13 @@ Scope {
 
                             property var _syncPos: root.positions[desktopWindow.screen.name + "/" + modelData.fileName]
                             on_SyncPosChanged: {
-                                if (drag.active || !_positionSet || !visible || !_syncPos) return
+                                if (dragging || !_positionSet || !visible || !_syncPos) return
                                 if (Math.abs(x - _syncPos.x) > 2 || Math.abs(y - _syncPos.y) > 2) {
                                     x = _syncPos.x; y = _syncPos.y
                                 }
                             }
 
-                            property bool _dragActive: drag.active
+                            property bool _dragActive: dragging
                             on_DragActiveChanged: {
                                 if (_dragActive) {
                                     // Drag just started — snapshot every selected item's position
@@ -503,32 +744,22 @@ Scope {
                                     } else {
                                         screenScope._groupStartPositions = {}
                                     }
+                                    root._pendingXferName = modelData.fileName
+                                    root._pendingXferFrom = desktopWindow.screen.name
+                                    xferGraceTimer.restart()
+                                    root._pendingXferFinalizeRequested = false
                                     return
                                 }
                                 if (!_positionSet || !visible) return
-                                // x/y are still the drag-end position here — check for
-                                // cross-screen intent before we snap the item back.
-                                // Skip cross-screen detection for group drags; onMoved handles them.
                                 const myName  = desktopWindow.screen.name
-                                const isGroupDrag = selected &&
-                                    screenScope.selectedFileNames.length > 1 &&
-                                    !!screenScope._groupStartPositions[modelData.fileName]
-                                if (!isGroupDrag) {
-                                    const screens = Quickshell.screens
-                                    const myIdx   = screens.findIndex(s => s.name === myName)
-                                    const nearRight = x >= desktopWindow.width - root.itemW && myIdx < screens.length - 1
-                                    const nearLeft  = x <= 0 && myIdx > 0
-                                    if (nearRight || nearLeft) {
-                                        root._pendingXferName = modelData.fileName
-                                        root._pendingXferFrom = myName
-                                        root._pendingXferY    = y
-                                        xferGraceTimer.restart()
-                                    }
-                                }
                                 const saved = root.positions[myName + "/" + modelData.fileName]
                                 if (saved && (Math.abs(x - saved.x) > 2 || Math.abs(y - saved.y) > 2)) {
                                     x = saved.x; y = saved.y
                                 }
+                            }
+
+                            onDragReleaseRequested: {
+                                root.finalizePendingTransferFromGlobalRelease()
                             }
 
                             // Real-time group drag: move every other selected item by the
@@ -566,8 +797,6 @@ Scope {
 
                             onMoved: (fileName, px, py) => {
                                 const myName  = desktopWindow.screen.name
-                                const screens = Quickshell.screens
-                                const myIdx   = screens.findIndex(s => s.name === myName)
 
                                 // ── Group drag: snap leader, apply same delta to all others ──
                                 const isGroupDrag = selected &&
@@ -598,39 +827,62 @@ Scope {
                                     return
                                 }
 
-                                // ── Single-item drag (original logic) ────────────────────────
-                                if (px >= desktopWindow.width - root.itemW && myIdx < screens.length - 1) {
-                                    const nextScreen = screens[myIdx + 1]
-                                    const clampedY = Math.max(desktopWindow.dragMinY, Math.min(desktopWindow.dragMaxY, py))
-                                    const topOff   = desktopWindow.dragMinY + root.gridPad
-                                    const snapped  = root.snapToGrid(0, clampedY, nextScreen.width, nextScreen.height, topOff)
-                                    const cell     = root.findFreeCell(nextScreen.name, fileName, snapped.x, snapped.y, nextScreen.width, nextScreen.height, topOff)
-                                    root.moveToScreen(myName, nextScreen.name, fileName, cell.x, cell.y)
-                                    root._pendingXferName = ""; xferGraceTimer.stop()
-                                } else if (px <= 0 && myIdx > 0) {
-                                    const prevScreen = screens[myIdx - 1]
-                                    const clampedY   = Math.max(desktopWindow.dragMinY, Math.min(desktopWindow.dragMaxY, py))
-                                    const topOff     = desktopWindow.dragMinY + root.gridPad
-                                    const snapped    = root.snapToGrid(prevScreen.width - root.itemW, clampedY, prevScreen.width, prevScreen.height, topOff)
-                                    const cell       = root.findFreeCell(prevScreen.name, fileName, snapped.x, snapped.y, prevScreen.width, prevScreen.height, topOff)
-                                    root.moveToScreen(myName, prevScreen.name, fileName, cell.x, cell.y)
-                                    root._pendingXferName = ""; xferGraceTimer.stop()
-                                } else {
-                                    const topOff   = desktopWindow.dragMinY + root.gridPad
-                                    const clampedX = Math.max(0, Math.min(desktopWindow.width - root.itemW, px))
-                                    const clampedY = Math.max(desktopWindow.dragMinY, Math.min(desktopWindow.dragMaxY, py))
-                                    const snapped  = root.snapToGrid(clampedX, clampedY, desktopWindow.width, desktopWindow.height, topOff)
-                                    const takenKey = root.occupantKey(myName, fileName, snapped.x, snapped.y)
-                                    if (takenKey !== null) {
-                                        const p = Object.assign({}, root.positions)
-                                        p[takenKey] = { x: _origX, y: _origY }
-                                        p[myName + "/" + fileName] = { x: snapped.x, y: snapped.y }
-                                        root.positions = p
-                                        saveTimer.restart()
-                                    } else {
-                                        root.savePos(myName, fileName, snapped.x, snapped.y)
-                                    }
+                                // ── Single-item drag within this screen ──────────────────────
+                                const pointerX = GlobalStates.desktopDragPointerX
+                                const pointerY = GlobalStates.desktopDragPointerY
+                                const dropScreen = GlobalStates.desktopDragScreen || myName
+                                const dropGeometry = root.geometryForScreen(dropScreen)
+                                const useGlobalPointer = pointerX >= 0 && pointerY >= 0
+                                    && dropGeometry.width > 0 && dropGeometry.height > 0
+                                const targetScreen = useGlobalPointer ? dropScreen : myName
+                                const targetGeometry = useGlobalPointer ? dropGeometry : root.geometryForScreen(myName)
+                                const targetMinY = Config.options.bar.bottom ? 0 : Appearance.sizes.barHeight
+                                const targetMaxY = Config.options.bar.bottom
+                                    ? targetGeometry.height - root.itemH - Appearance.sizes.barHeight
+                                    : targetGeometry.height - root.itemH
+                                const topOff = targetMinY + root.gridPad
+                                const rawX = useGlobalPointer
+                                    ? pointerX - targetGeometry.x - GlobalStates.desktopDragHotspotX
+                                    : px
+                                const rawY = useGlobalPointer
+                                    ? pointerY - targetGeometry.y - GlobalStates.desktopDragHotspotY
+                                    : py
+                                const clampedX = Math.max(0, Math.min(targetGeometry.width - root.itemW, rawX))
+                                const clampedY = Math.max(targetMinY, Math.min(targetMaxY, rawY))
+                                const snapped  = root.snapToGrid(
+                                    clampedX,
+                                    clampedY,
+                                    targetGeometry.width,
+                                    targetGeometry.height,
+                                    topOff
+                                )
+                                const cell = root.findFreeCell(
+                                    targetScreen,
+                                    fileName,
+                                    snapped.x,
+                                    snapped.y,
+                                    targetGeometry.width,
+                                    targetGeometry.height,
+                                    topOff
+                                )
+
+                                if (targetScreen !== myName) {
+                                    root.moveToScreen(myName, targetScreen, fileName, cell.x, cell.y)
+                                    root.clearPendingTransfer()
+                                    return
                                 }
+
+                                const takenKey = root.occupantKey(myName, fileName, cell.x, cell.y)
+                                if (takenKey !== null) {
+                                    const p = Object.assign({}, root.positions)
+                                    p[takenKey] = { x: _origX, y: _origY }
+                                    p[myName + "/" + fileName] = { x: cell.x, y: cell.y }
+                                    root.positions = p
+                                    saveTimer.restart()
+                                } else {
+                                    root.savePos(myName, fileName, cell.x, cell.y)
+                                }
+                                root.clearPendingTransfer()
                             }
 
                             onTrashRequested: urls => {

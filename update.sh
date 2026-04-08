@@ -18,6 +18,18 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST_DIR="$REPO_DIR/dotfiles/.config"
 
+RSYNC_ARGS=(
+    -a
+    --delete
+    --no-owner
+    --no-group
+    --exclude=__pycache__/
+    --exclude=*.pyc
+    --exclude=anon_inode:*
+    --exclude=pipe:*
+    --exclude=socket:*
+)
+
 # ── Configs managed by this repo ─────────────────────────────────────────────
 MANAGED=(
     hypr
@@ -113,7 +125,13 @@ for cfg in "${MANAGED[@]}"; do
 
     # Show a quick summary of what will change
     if [[ -d "$dst" ]]; then
-        changed=$(rsync -rin --delete "$src/" "$dst/" 2>/dev/null | grep -v '^\.' | head -20 || true)
+        changed=$(rsync -rin --delete \
+            --exclude=__pycache__/ \
+            --exclude='*.pyc' \
+            --exclude='anon_inode:*' \
+            --exclude='pipe:*' \
+            --exclude='socket:*' \
+            "$src/" "$dst/" 2>/dev/null | grep -v '^\.' | head -20 || true)
         if [[ -z "$changed" ]]; then
             ok "$cfg — already up to date"
             synced+=("$cfg")
@@ -135,7 +153,7 @@ for cfg in "${MANAGED[@]}"; do
     fi
 
     mkdir -p "$dst"
-    rsync -a --delete "$src/" "$dst/"
+    rsync "${RSYNC_ARGS[@]}" "$src/" "$dst/"
     ok "$cfg synced"
     synced+=("$cfg")
 done

@@ -30,6 +30,7 @@ Singleton {
 
         return Qt.locale().name;
     }
+    readonly property var locale: Qt.locale(languageCode)
 
     TranslationScanner {
         id: scanLanguagesProcess

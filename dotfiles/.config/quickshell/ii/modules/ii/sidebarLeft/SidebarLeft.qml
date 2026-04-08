@@ -248,7 +248,7 @@ Scope {
                 }
 
                 exclusionMode: ExclusionMode.Normal
-                exclusiveZone: screenScope.pinnedWindowOpen ? root.sidebarWidth : 0
+                exclusiveZone: 0
                 implicitWidth: Appearance.sizes.sidebarWidthExtended + Appearance.sizes.elevationMargin
                 implicitHeight: screen?.height ?? 2160
                 WlrLayershell.namespace: "quickshell:sidebarLeft"

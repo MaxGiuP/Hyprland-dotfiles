@@ -85,6 +85,14 @@ Item {
             }
         }
 
+        WindowDialogParagraph {
+            Layout.fillWidth: true
+            visible: PolkitService.failureMessage.length > 0
+            horizontalAlignment: Text.AlignLeft
+            color: Appearance.colors.colError
+            text: PolkitService.failureMessage
+        }
+
         WindowDialogButtonRow {
             Layout.bottomMargin: 10 // I honestly don't know why this is necessary
             Item {

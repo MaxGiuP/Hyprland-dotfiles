@@ -865,81 +865,100 @@ MouseArea {
             }
 
             // ── Password input ────────────────────────────────────────────
-            RowLayout {
-                id: passwordRow
+            ColumnLayout {
+                spacing: 6
                 Layout.fillWidth: true
-                spacing: 10
 
-                Rectangle {
-                    id: passwordPill
-                    Layout.fillWidth: true; height: 50
-                    radius: Appearance.rounding.full
-                    color: Appearance.colors.colLayer2; clip: true
+                RowLayout {
+                    id: passwordRow
+                    Layout.fillWidth: true
+                    spacing: 10
 
-                    StyledText {
-                        anchors.centerIn: parent
-                        visible: passwordInput.text.length === 0
-                        text: root.context.showFailure ? Translation.tr("Incorrect password") : Translation.tr("Enter password")
-                        color: root.context.showFailure ? Appearance.m3colors.m3error : Appearance.colors.colSubtext
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                    }
+                    Rectangle {
+                        id: passwordPill
+                        Layout.fillWidth: true; height: 50
+                        radius: Appearance.rounding.full
+                        color: Appearance.colors.colLayer2; clip: true
 
-                    StyledTextInput {
-                        id: passwordInput
-                        anchors { fill: parent; leftMargin: 20; rightMargin: 20 }
-                        verticalAlignment: TextInput.AlignVCenter
-                        echoMode: TextInput.Password; inputMethodHints: Qt.ImhSensitiveData
-                        enabled: !root.context.unlockInProgress
-                        cursorVisible: text.length > 0
-                        color: Config.options.lock.materialShapeChars ? "transparent" : Appearance.colors.colOnLayer2
-                        font.pixelSize: Appearance.font.pixelSize.normal
-
-                        onTextChanged: root.context.currentText = this.text
-                        onAccepted: root.context.tryUnlock()
-                        Keys.onPressed: event => { root.context.resetClearTimer(); }
-
-                        Connections {
-                            target: root.context
-                            function onCurrentTextChanged() { passwordInput.text = root.context.currentText; }
+                        StyledText {
+                            anchors.centerIn: parent
+                            visible: passwordInput.text.length === 0
+                            text: root.context.showFailure
+                                ? (root.context.lockoutActive
+                                    ? Translation.tr("Incorrect password - limit of %1 attempts reached").arg(root.context.attemptLimit)
+                                    : Translation.tr("Incorrect password"))
+                                : Translation.tr("Enter password")
+                            color: root.context.showFailure ? Appearance.m3colors.m3error : Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.normal
                         }
 
-                        SequentialAnimation {
-                            id: shakeAnim
-                            NumberAnimation { target: passwordPill; property: "x"; to: -12; duration: 50 }
-                            NumberAnimation { target: passwordPill; property: "x"; to: 12;  duration: 50 }
-                            NumberAnimation { target: passwordPill; property: "x"; to: -6;  duration: 40 }
-                            NumberAnimation { target: passwordPill; property: "x"; to: 6;   duration: 40 }
-                            NumberAnimation { target: passwordPill; property: "x"; to: 0;   duration: 30 }
+                        StyledTextInput {
+                            id: passwordInput
+                            anchors { fill: parent; leftMargin: 20; rightMargin: 20 }
+                            verticalAlignment: TextInput.AlignVCenter
+                            echoMode: TextInput.Password; inputMethodHints: Qt.ImhSensitiveData
+                            enabled: !root.context.unlockInProgress
+                            cursorVisible: text.length > 0
+                            color: Config.options.lock.materialShapeChars ? "transparent" : Appearance.colors.colOnLayer2
+                            font.pixelSize: Appearance.font.pixelSize.normal
+
+                            onTextChanged: root.context.currentText = this.text
+                            onAccepted: root.context.tryUnlock()
+                            Keys.onPressed: event => { root.context.resetClearTimer(); }
+
+                            Connections {
+                                target: root.context
+                                function onCurrentTextChanged() { passwordInput.text = root.context.currentText; }
+                            }
+
+                            SequentialAnimation {
+                                id: shakeAnim
+                                NumberAnimation { target: passwordPill; property: "x"; to: -12; duration: 50 }
+                                NumberAnimation { target: passwordPill; property: "x"; to: 12;  duration: 50 }
+                                NumberAnimation { target: passwordPill; property: "x"; to: -6;  duration: 40 }
+                                NumberAnimation { target: passwordPill; property: "x"; to: 6;   duration: 40 }
+                                NumberAnimation { target: passwordPill; property: "x"; to: 0;   duration: 30 }
+                            }
+                            Connections {
+                                target: GlobalStates
+                                function onScreenUnlockFailedChanged() {
+                                    if (GlobalStates.screenUnlockFailed) shakeAnim.restart();
+                                }
+                            }
                         }
-                        Connections {
-                            target: GlobalStates
-                            function onScreenUnlockFailedChanged() {
-                                if (GlobalStates.screenUnlockFailed) shakeAnim.restart();
+
+                        Loader {
+                            active: Config.options.lock.materialShapeChars
+                            anchors { fill: parent; leftMargin: 20; rightMargin: 20 }
+                            sourceComponent: PasswordChars {
+                                length: root.context.currentText.length
+                                selectionStart: passwordInput.selectionStart
+                                selectionEnd: passwordInput.selectionEnd
+                                cursorPosition: passwordInput.cursorPosition
                             }
                         }
                     }
 
-                    Loader {
-                        active: Config.options.lock.materialShapeChars
-                        anchors { fill: parent; leftMargin: 20; rightMargin: 20 }
-                        sourceComponent: PasswordChars {
-                            length: root.context.currentText.length
-                            selectionStart: passwordInput.selectionStart
-                            selectionEnd: passwordInput.selectionEnd
-                            cursorPosition: passwordInput.cursorPosition
+                    RippleButton {
+                        implicitWidth: 50; implicitHeight: 50; toggled: true
+                        colBackgroundToggled: Appearance.colors.colPrimary
+                        enabled: !root.context.unlockInProgress
+                        onClicked: root.context.tryUnlock()
+                        contentItem: MaterialSymbol {
+                            anchors.centerIn: parent; text: "arrow_forward"; iconSize: 24
+                            color: Appearance.colors.colOnPrimary
                         }
                     }
                 }
 
-                RippleButton {
-                    implicitWidth: 50; implicitHeight: 50; toggled: true
-                    colBackgroundToggled: Appearance.colors.colPrimary
-                    enabled: !root.context.unlockInProgress
-                    onClicked: root.context.tryUnlock()
-                    contentItem: MaterialSymbol {
-                        anchors.centerIn: parent; text: "arrow_forward"; iconSize: 24
-                        color: Appearance.colors.colOnPrimary
-                    }
+                StyledText {
+                    visible: root.context.lockoutActive
+                    Layout.fillWidth: true
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.m3colors.m3error
+                    text: Translation.tr("Limit of %1 incorrect passwords reached. Try again in %2 seconds.")
+                        .arg(root.context.attemptLimit)
+                        .arg(Math.max(1, Math.ceil(root.context.lockoutRemainingMs / 1000)))
                 }
             }
 

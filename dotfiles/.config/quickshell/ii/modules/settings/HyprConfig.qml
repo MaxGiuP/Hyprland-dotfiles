@@ -101,21 +101,33 @@ ContentPage {
         }
 
         FileEditor {
+            filePath: "/home/linmax/.config/hypr/hyprland/env.conf"
+            title: Translation.tr("Environment and locale")
+            placeholderText: Translation.tr("Hyprland env.conf")
+        }
+
+        FileEditor {
+            filePath: "/home/linmax/.config/hypr/hyprland/execs.conf"
+            title: Translation.tr("Startup commands")
+            placeholderText: Translation.tr("Hyprland execs.conf")
+        }
+
+        FileEditor {
             filePath: "/home/linmax/.config/hypr/hyprland/keybinds.conf"
             title: Translation.tr("Main keybinds")
             placeholderText: Translation.tr("Hyprland keybinds.conf")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/rules.conf"
-            title: Translation.tr("Window rules")
-            placeholderText: Translation.tr("Hyprland rules.conf")
+            filePath: "/home/linmax/.config/hypr/hyprland/keybinds.user.conf"
+            title: Translation.tr("Additional keybinds (inactive)")
+            placeholderText: Translation.tr("Hyprland keybinds.user.conf")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/custom/general.conf"
-            title: Translation.tr("Custom general overrides")
-            placeholderText: Translation.tr("custom/general.conf")
+            filePath: "/home/linmax/.config/hypr/hyprland/rules.conf"
+            title: Translation.tr("Window rules")
+            placeholderText: Translation.tr("Hyprland rules.conf")
         }
 
         FileEditor {

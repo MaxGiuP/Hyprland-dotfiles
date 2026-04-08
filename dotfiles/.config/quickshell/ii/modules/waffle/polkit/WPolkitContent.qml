@@ -131,6 +131,15 @@ Rectangle {
                             }
                         }
                     }
+
+                    WText {
+                        Layout.fillWidth: true
+                        visible: PolkitService.failureMessage.length > 0
+                        wrapMode: Text.Wrap
+                        horizontalAlignment: Text.AlignLeft
+                        color: Looks.colors.error
+                        text: PolkitService.failureMessage
+                    }
                 }
             }
             BodyRectangle {

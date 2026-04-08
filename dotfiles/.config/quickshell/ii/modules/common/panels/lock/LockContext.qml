@@ -22,6 +22,12 @@ Scope {
     property bool fingerprintsConfigured: false
     property var targetAction: LockContext.ActionEnum.Unlock
     property bool alsoInhibitIdle: false
+    property int failedAttempts: 0
+    property int attemptLimit: 25
+    property bool lockoutActive: false
+    property int lockoutDurationMs: 60000
+    property int lockoutRemainingMs: 0
+    property double lockoutDeadline: 0
 
     function resetTargetAction() {
         root.targetAction = LockContext.ActionEnum.Unlock;
@@ -61,6 +67,10 @@ Scope {
 
     function tryUnlock(alsoInhibitIdle = false) {
         root.alsoInhibitIdle = alsoInhibitIdle;
+        if (root.lockoutActive) {
+            root.showFailure = true;
+            return;
+        }
         root.unlockInProgress = true;
         pam.start();
     }
@@ -95,29 +105,41 @@ Scope {
         }
     }
     
-    PamContext {
-        id: pam
+        PamContext {
+            id: pam
 
-        // pam_unix will ask for a response for the password prompt
-        onPamMessage: {
-            if (this.responseRequired) {
-                this.respond(root.currentText);
+            // pam_unix will ask for a response for the password prompt
+            onPamMessage: {
+                if (this.responseRequired) {
+                    this.respond(root.currentText);
+                }
+            }
+
+            // pam_unix won't send any important messages so all we need is the completion status.
+            onCompleted: result => {
+                if (result == PamResult.Success) {
+                    root.unlocked(root.targetAction);
+                    stopFingerPam();
+                    root.failedAttempts = 0;
+                    root.lockoutActive = false;
+                    root.lockoutRemainingMs = 0;
+                    root.lockoutDeadline = 0;
+                    lockoutTimer.stop();
+                } else {
+                    root.clearText();
+                    root.unlockInProgress = false;
+                    GlobalStates.screenUnlockFailed = true;
+                    root.showFailure = true;
+                    root.failedAttempts += 1;
+                    if (root.failedAttempts >= root.attemptLimit && !root.lockoutActive) {
+                        root.lockoutActive = true;
+                        root.lockoutDeadline = Date.now() + root.lockoutDurationMs;
+                        root.lockoutRemainingMs = root.lockoutDurationMs;
+                        lockoutTimer.restart();
+                    }
+                }
             }
         }
-
-        // pam_unix won't send any important messages so all we need is the completion status.
-        onCompleted: result => {
-            if (result == PamResult.Success) {
-                root.unlocked(root.targetAction);
-                stopFingerPam();
-            } else {
-                root.clearText();
-                root.unlockInProgress = false;
-                GlobalStates.screenUnlockFailed = true;
-                root.showFailure = true;
-            }
-        }
-    }
 
     PamContext {
         id: fingerPam
@@ -132,6 +154,26 @@ Scope {
             } else if (result == PamResult.Error) { // if timeout or etc..
                 tryFingerUnlock()
             }
+        }
+    }
+
+    Timer {
+        id: lockoutTimer
+        interval: 250
+        repeat: true
+        running: false
+        triggeredOnStart: false
+        onTriggered: {
+            const remaining = root.lockoutDeadline - Date.now();
+            if (remaining <= 0) {
+                root.failedAttempts = 0;
+                root.lockoutActive = false;
+                root.lockoutRemainingMs = 0;
+                root.lockoutDeadline = 0;
+                lockoutTimer.stop();
+                return;
+            }
+            root.lockoutRemainingMs = remaining;
         }
     }
 }

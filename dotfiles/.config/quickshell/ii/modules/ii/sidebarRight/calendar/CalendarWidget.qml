@@ -159,9 +159,9 @@ Item {
 
     function formatDateWithCapitalMonth(dateObj, format) {
         const dateValue = new Date(dateObj);
-        const raw = dateValue.toLocaleDateString(Qt.locale(), format);
-        const monthLong = dateValue.toLocaleDateString(Qt.locale(), "MMMM");
-        const monthShort = dateValue.toLocaleDateString(Qt.locale(), "MMM");
+        const raw = dateValue.toLocaleDateString(Translation.locale, format);
+        const monthLong = dateValue.toLocaleDateString(Translation.locale, "MMMM");
+        const monthShort = dateValue.toLocaleDateString(Translation.locale, "MMM");
         const monthLongCap = root.capitalizeFirst(monthLong);
         const monthShortCap = root.capitalizeFirst(monthShort);
         let out = raw.replace(monthLong, monthLongCap);
@@ -171,9 +171,9 @@ Item {
 
     function formatDateTimeWithCapitalMonth(dateObj, format) {
         const dateValue = new Date(dateObj);
-        const raw = dateValue.toLocaleString(Qt.locale(), format);
-        const monthLong = dateValue.toLocaleDateString(Qt.locale(), "MMMM");
-        const monthShort = dateValue.toLocaleDateString(Qt.locale(), "MMM");
+        const raw = dateValue.toLocaleString(Translation.locale, format);
+        const monthLong = dateValue.toLocaleDateString(Translation.locale, "MMMM");
+        const monthShort = dateValue.toLocaleDateString(Translation.locale, "MMM");
         const monthLongCap = root.capitalizeFirst(monthLong);
         const monthShortCap = root.capitalizeFirst(monthShort);
         let out = raw.replace(monthLong, monthLongCap);
@@ -204,7 +204,7 @@ Item {
         const datePart = root.formatDateWithCapitalMonth(d, "dd MMM");
         const timePart = root.isAllDayTask(taskLike)
             ? "--:--"
-            : d.toLocaleTimeString(Qt.locale(), "HH:mm");
+            : d.toLocaleTimeString(Translation.locale, "HH:mm");
         return `${datePart}, ${timePart}`;
     }
 
@@ -217,7 +217,7 @@ Item {
             const datePart = root.formatDateWithCapitalMonth(d, "dd MMM");
             const timePart = item?.allDay === true
                 ? "--:--"
-                : d.toLocaleTimeString(Qt.locale(), "HH:mm");
+                : d.toLocaleTimeString(Translation.locale, "HH:mm");
             return `${datePart}, ${timePart}`;
         }
         return root.formatTaskDateTime(item);

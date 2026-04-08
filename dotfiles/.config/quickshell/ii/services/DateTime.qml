@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 import qs
+import qs.services
 import qs.modules.common
 import QtQuick
 import Quickshell
@@ -31,7 +32,7 @@ Singleton {
     function capitalizeItalianWeekdays(text) {
         if (typeof text !== "string" || text.length === 0)
             return text;
-        if (!Qt.locale().name.toLowerCase().startsWith("it"))
+        if (!Translation.languageCode.toLowerCase().startsWith("it"))
             return text;
         return text.replace(italianWeekdayPattern, function(match) {
             return italianWeekdayMap[match] ?? match;
@@ -39,7 +40,7 @@ Singleton {
     }
 
     function formatDate(format) {
-        return capitalizeItalianWeekdays(Qt.locale().toString(clock.date, format));
+        return capitalizeItalianWeekdays(Translation.locale.toString(clock.date, format));
     }
 
     property var clock: SystemClock {
@@ -50,9 +51,9 @@ Singleton {
             return SystemClock.Minutes;
         }
     }
-    property string time: Qt.locale().toString(clock.date, Config.options?.time.format ?? "hh:mm")
-    property string shortDate: capitalizeItalianWeekdays(Qt.locale().toString(clock.date, Config.options?.time.shortDateFormat ?? "dd/MM"))
-    property string date: capitalizeItalianWeekdays(Qt.locale().toString(clock.date, Config.options?.time.dateWithYearFormat ?? "dd/MM/yyyy"))
+    property string time: Translation.locale.toString(clock.date, Config.options?.time.format ?? "hh:mm")
+    property string shortDate: capitalizeItalianWeekdays(Translation.locale.toString(clock.date, Config.options?.time.shortDateFormat ?? "dd/MM"))
+    property string date: capitalizeItalianWeekdays(Translation.locale.toString(clock.date, Config.options?.time.dateWithYearFormat ?? "dd/MM/yyyy"))
     property string longDate: formatDate(Config.options?.time.dateFormat ?? "dddd, dd/MM")
     property string collapsedCalendarFormat: formatDate("dddd, MMMM dd")
     property string uptime: "0h, 0m"

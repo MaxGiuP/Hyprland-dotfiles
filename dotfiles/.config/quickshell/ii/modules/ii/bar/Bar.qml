@@ -37,8 +37,8 @@ Scope {
                 readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === monitor?.name) ?? null
                 readonly property real leftReserved: monitorData?.reserved?.[0] ?? 0
                 readonly property real rightReserved: monitorData?.reserved?.[2] ?? 0
-                property bool fullscreenOnMonitor: false
-                visible: !Config.options.bar.hideWhenFullscreen || !fullscreenOnMonitor
+                readonly property bool fullscreenOnMonitor: monitor?.activeWorkspace?.hasFullscreen ?? false
+                visible: !fullscreenOnMonitor
                 readonly property bool topBarVisible: !Config.options.bar.bottom
                     && visible
                     && !launchpadOnThisScreen
@@ -47,10 +47,6 @@ Scope {
                     ? (Appearance.sizes.baseBarHeight
                         + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0))
                     : Appearance.sizes.hyprlandGapsOut
-
-                function recomputeFullscreenOnMonitor() {
-                    fullscreenOnMonitor = HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name);
-                }
 
                 Timer {
                     id: showBarTimer
@@ -75,7 +71,7 @@ Scope {
                 readonly property bool launchpadOnThisScreen: GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen
                 property bool mustShow: (hoverRegion.containsMouse || superShow) && !launchpadOnThisScreen
                 exclusionMode: ExclusionMode.Normal
-                exclusiveZone: ((!visible) || launchpadOnThisScreen || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
+                exclusiveZone: ((!visible) || launchpadOnThisScreen || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows)) || fullscreenOnMonitor) ? 0 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
                 WlrLayershell.namespace: "quickshell:bar"
                 implicitHeight: Appearance.sizes.barHeight + Appearance.rounding.screenRounding
@@ -101,9 +97,9 @@ Scope {
                 // Include in focus grab
                 Component.onCompleted: {
                     GlobalFocusGrab.addPersistent(barRoot);
-                    barRoot.recomputeFullscreenOnMonitor();
                     GlobalStates.setBarTopClearance(screenScope.modelData.name, barRoot.topBarClearance);
                 }
+
                 Component.onDestruction: {
                     GlobalFocusGrab.removePersistent(barRoot);
                     GlobalStates.clearBarTopClearance(screenScope.modelData.name);
@@ -111,19 +107,6 @@ Scope {
 
                 onTopBarClearanceChanged: {
                     GlobalStates.setBarTopClearance(screenScope.modelData.name, barRoot.topBarClearance);
-                }
-
-                Connections {
-                    target: HyprlandData
-                    function onMonitorsChanged() {
-                        Qt.callLater(barRoot.recomputeFullscreenOnMonitor);
-                    }
-                    function onWindowListChanged() {
-                        Qt.callLater(barRoot.recomputeFullscreenOnMonitor);
-                    }
-                    function onWorkspacesChanged() {
-                        Qt.callLater(barRoot.recomputeFullscreenOnMonitor);
-                    }
                 }
 
                 MouseArea  {

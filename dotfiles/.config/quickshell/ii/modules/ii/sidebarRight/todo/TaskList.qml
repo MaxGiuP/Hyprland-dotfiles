@@ -70,10 +70,10 @@ Item {
         const dueAt = parseInt(task?.dueAt ?? 0);
         if (!dueAt || dueAt <= 0) return "";
         const dueDate = new Date(dueAt);
-        const datePart = dueDate.toLocaleDateString(Qt.locale(), "dd MMM");
+        const datePart = dueDate.toLocaleDateString(Translation.locale, "dd MMM");
         const timePart = root.isAllDayTask(task, dueDate)
             ? "--:--"
-            : dueDate.toLocaleTimeString(Qt.locale(), "HH:mm");
+            : dueDate.toLocaleTimeString(Translation.locale, "HH:mm");
         return Translation.tr("Due: %1").arg(`${datePart}, ${timePart}`);
     }
 

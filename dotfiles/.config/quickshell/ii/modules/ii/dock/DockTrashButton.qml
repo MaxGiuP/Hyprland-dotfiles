@@ -2,6 +2,7 @@ import qs.modules.common
 import qs.modules.common.functions
 import qs.modules.common.widgets
 import qs
+import qs.services
 import QtQuick
 import Qt.labs.folderlistmodel
 import Quickshell
@@ -12,9 +13,10 @@ DockButton {
 
     property string screenName: ""
     property bool trashDropHovered: false
+    property bool _desktopTrashHeld: false
     readonly property bool desktopDragHovering: {
         const rect = GlobalStates.desktopTrashRects?.[screenName]
-        if (!GlobalStates.desktopDragActive || GlobalStates.desktopDragScreen !== screenName || !rect || !rect.visible)
+        if (!GlobalStates.desktopDragActive || !rect || !rect.visible)
             return false
 
         const px = GlobalStates.desktopDragPointerX
@@ -53,17 +55,45 @@ DockButton {
         Quickshell.execDetached(["gio", "trash", ...filePaths])
     }
 
+    function maybeDropPendingDesktopDrag() {
+        if (!_desktopTrashHeld || !desktopDragHovering)
+            return
+
+        const urls = Array.isArray(GlobalStates.desktopDragUrls) ? GlobalStates.desktopDragUrls.slice() : []
+        if (urls.length === 0) {
+            _desktopTrashHeld = false
+            return
+        }
+
+        root.dropUrlsToTrash(urls)
+        _desktopTrashHeld = false
+        GlobalStates.clearDesktopDragState()
+    }
+
+    function updateDesktopDragPointer(mouseX, mouseY) {
+        if (!GlobalStates.desktopDragActive || screenName.length === 0)
+            return
+
+        const pos = root.mapToItem(null, mouseX, mouseY)
+        const windowHeight = root.QsWindow.window?.height ?? 0
+        const screenHeight = root.QsWindow.window?.screen?.height ?? 0
+        GlobalStates.updateDesktopDragPointer(screenName, pos.x, screenHeight - windowHeight + pos.y)
+    }
+
     function updateTrashRect() {
         if (screenName.length === 0)
             return
 
+        const monitor = HyprlandData.monitors.find(m => m.name === screenName)
+        const monitorX = Number(monitor?.x ?? 0)
+        const monitorY = Number(monitor?.y ?? 0)
         const pos = root.mapToItem(null, 0, 0)
         const windowHeight = root.QsWindow.window?.height ?? 0
         const screenHeight = root.QsWindow.window?.screen?.height ?? 0
         const rects = Object.assign({}, GlobalStates.desktopTrashRects ?? {})
         rects[screenName] = {
-            x: pos.x,
-            y: screenHeight - windowHeight + pos.y,
+            x: monitorX + pos.x,
+            y: monitorY + screenHeight - windowHeight + pos.y,
             width: root.width,
             height: root.height,
             visible: root.visible
@@ -139,6 +169,43 @@ DockButton {
                 }
             }
             root.trashDropHovered = false
+        }
+    }
+
+    MouseArea {
+        id: desktopDragTracker
+        anchors.fill: parent
+        z: 10
+        enabled: GlobalStates.desktopDragActive
+        visible: enabled
+        acceptedButtons: Qt.LeftButton
+        hoverEnabled: true
+        preventStealing: false
+        propagateComposedEvents: true
+
+        onPositionChanged: mouse => {
+            root.updateDesktopDragPointer(mouse.x, mouse.y)
+            root._desktopTrashHeld = !!(mouse.buttons & Qt.LeftButton) || !!(pressedButtons & Qt.LeftButton)
+        }
+
+        onContainsMouseChanged: {
+            if (containsMouse)
+                root.updateDesktopDragPointer(mouseX, mouseY)
+            else
+                root._desktopTrashHeld = false
+        }
+
+        onPressedButtonsChanged: {
+            const leftHeld = !!(pressedButtons & Qt.LeftButton)
+            if (leftHeld && containsMouse && root.desktopDragHovering) {
+                root._desktopTrashHeld = true
+                return
+            }
+
+            if (!leftHeld) {
+                root.maybeDropPendingDesktopDrag()
+                root._desktopTrashHeld = false
+            }
         }
     }
 

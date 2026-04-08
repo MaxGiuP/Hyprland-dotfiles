@@ -18,7 +18,7 @@ Item {
     implicitHeight: rowLayout.implicitHeight
 
     property string updateTitle: "QSUpdate"
-    property string updateScriptPath: "/home/linmax/.config/hypr/custom/scripts/update.sh"
+    property string updateScriptPath: "/home/linmax/.config/hypr/hyprland/scripts/update.sh"
 
     property bool barAutoHideEnabled: Config.options.bar.autoHide.enable
 
@@ -80,9 +80,10 @@ Item {
                     anchors.topMargin: -5
 
                     property int badgeH: 14
+                    property int badgeHorizontalPadding: 4
                     property string badgeTextValue: displayCount > 999 ? "999+" : String(displayCount)
 
-                    width: Math.max(badgeH, badgeTextItem.implicitWidth + 9)
+                    width: Math.max(badgeH, badgeTextItem.implicitWidth + badgeHorizontalPadding * 2)
                     height: badgeH
 
                     Rectangle {

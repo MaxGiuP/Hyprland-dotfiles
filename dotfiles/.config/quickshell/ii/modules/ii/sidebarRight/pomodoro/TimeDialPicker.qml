@@ -110,7 +110,7 @@ Item {
         TimeSegment {
             segValue: root.hourValue
             segMax: 23
-            segLabel: Translation.tr("or")
+            segLabel: Translation.tr("hr")
             onSegChanged: v => {
                 root.hourValue = v;
                 root.valuesChanged(root.hourValue, root.minuteValue, root.secondValue);
@@ -130,7 +130,7 @@ Item {
         TimeSegment {
             segValue: root.minuteValue
             segMax: 59
-            segLabel: "min"
+            segLabel: Translation.tr("min")
             onSegChanged: v => {
                 root.minuteValue = v;
                 root.valuesChanged(root.hourValue, root.minuteValue, root.secondValue);
@@ -150,7 +150,7 @@ Item {
         TimeSegment {
             segValue: root.secondValue
             segMax: 59
-            segLabel: "sec"
+            segLabel: Translation.tr("sec")
             onSegChanged: v => {
                 root.secondValue = v;
                 root.valuesChanged(root.hourValue, root.minuteValue, root.secondValue);
