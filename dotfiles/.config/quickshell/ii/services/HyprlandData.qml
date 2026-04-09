@@ -25,9 +25,29 @@ Singleton {
 
     // Convenient stuff
 
+    function toplevelAddress(toplevel) {
+        const rawAddress = toplevel?.HyprlandToplevel?.address;
+        return rawAddress == null ? "" : `0x${rawAddress}`;
+    }
+
+    function windowHasValidSize(win) {
+        const size = win?.size ?? [];
+        const width = Number(size[0] ?? 0);
+        const height = Number(size[1] ?? 0);
+        return isFinite(width) && isFinite(height) && width > 0 && height > 0;
+    }
+
+    function toplevelHasValidSize(toplevel) {
+        return root.windowHasValidSize(root.clientForToplevel(toplevel));
+    }
+
+    function captureSourceForToplevel(toplevel) {
+        return root.toplevelHasValidSize(toplevel) ? toplevel : null;
+    }
+
     function toplevelsForWorkspace(workspace) {
         return ToplevelManager.toplevels.values.filter(toplevel => {
-            const address = `0x${toplevel.HyprlandToplevel?.address}`;
+            const address = root.toplevelAddress(toplevel);
             var win = HyprlandData.windowByAddress[address];
             return win?.workspace?.id === workspace;
         })
@@ -38,10 +58,10 @@ Singleton {
     }
 
     function clientForToplevel(toplevel) {
-        if (!toplevel || !toplevel.HyprlandToplevel) {
+        const address = root.toplevelAddress(toplevel);
+        if (!address) {
             return null;
         }
-        const address = `0x${toplevel?.HyprlandToplevel?.address}`;
         return root.windowByAddress[address];
     }
 
@@ -150,6 +170,10 @@ Singleton {
         return Number(win?.fullscreen ?? 0) !== 0;
     }
 
+    function windowHidesShell(win) {
+        return root.isVideoFullscreenState(Number(win?.fullscreen ?? 0));
+    }
+
     function activeWorkspaceHasFullscreenForMonitor(monitorName) {
         if (!monitorName)
             return false;
@@ -164,16 +188,12 @@ Singleton {
         if (root.windowList.some(win =>
             win.workspace?.id === activeWorkspaceId
             && (monitorId == null || win.monitor === monitorId)
-            && root.windowIsFullscreen(win)
+            && root.windowHidesShell(win)
         )) {
             return true;
         }
 
-        return root.workspaces.some(workspace =>
-            workspace.monitor === monitorName &&
-            workspace.id === activeWorkspaceId &&
-            workspace.hasfullscreen === true
-        );
+        return false;
     }
 
     Component.onCompleted: {

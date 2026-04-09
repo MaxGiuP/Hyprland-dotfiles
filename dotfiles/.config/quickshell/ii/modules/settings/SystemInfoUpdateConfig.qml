@@ -12,6 +12,13 @@ ContentPage {
     baseWidth: 760
     readonly property bool settingsApp: Quickshell.env("II_SETTINGS_APP") === "1"
 
+    function normalizeGpuName(value) {
+        return (value || "")
+            .replace(/^[^:]*controller:\s*/i, "")
+            .replace(/\s+\(rev .*?\)\s*$/i, "")
+            .trim()
+    }
+
     property string _hostname: ""
     property string _kernel: ""
     property string _cpu: ""
@@ -27,7 +34,7 @@ ContentPage {
             "cpu=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | tr -s ' ' | sed 's/^ //'); " +
             "echo \"cpu:${cpu:-Unknown}\"; " +
             "awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{printf \"memory:%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; " +
-            "gpu=$(lspci 2>/dev/null | grep -Ei '3D controller|VGA compatible' | head -1 | sed 's/^[^:]*: //'); " +
+            "gpu=$(lspci 2>/dev/null | grep -Ei '3D controller|VGA compatible controller' | head -1 | awk -F': ' '{print $2}' | sed -E 's/ \\(rev .*$//'); " +
             "echo \"gpu:${gpu:-Unknown}\"; " +
             "echo \"uptime:$(uptime -p 2>/dev/null | sed 's/^up //')\""
         ]
@@ -42,7 +49,7 @@ ContentPage {
                     case "kernel": root._kernel = value; break
                     case "cpu": root._cpu = value; break
                     case "memory": root._memory = value; break
-                    case "gpu": root._gpu = value; break
+                    case "gpu": root._gpu = root.normalizeGpuName(value); break
                     case "uptime": root._uptime = value; break
                 }
             }

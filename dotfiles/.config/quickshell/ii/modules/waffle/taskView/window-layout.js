@@ -1,8 +1,12 @@
 function scaleWindow(hyprlandClient, maxWindowWidth, maxWindowHeight) {
-    const [width, height] = hyprlandClient.size;
-    const [xScale, yScale] = [maxWindowWidth / width, maxWindowHeight / height];
+    const fallbackWidth = Math.max(Number(maxWindowWidth) || 0, 1);
+    const fallbackHeight = Math.max(Number(maxWindowHeight) || 0, 1);
+    const size = hyprlandClient?.size ?? [];
+    const width = Math.max(Number(size[0] ?? fallbackWidth) || fallbackWidth, 1);
+    const height = Math.max(Number(size[1] ?? fallbackHeight) || fallbackHeight, 1);
+    const [xScale, yScale] = [fallbackWidth / width, fallbackHeight / height];
     const scale = Math.min(xScale, yScale);
-    return Qt.size(width * scale, height * scale)
+    return Qt.size(Math.max(width * scale, 1), Math.max(height * scale, 1))
 }
 
 function arrangedClients(hyprlandClients, maxRowWidth, maxWindowWidth, maxWindowHeight) {

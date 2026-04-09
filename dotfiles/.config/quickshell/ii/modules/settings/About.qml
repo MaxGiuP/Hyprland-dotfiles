@@ -11,6 +11,13 @@ ContentPage {
     id: root
     forceWidth: true
 
+    function normalizeGpuName(value) {
+        return (value || "")
+            .replace(/^[^:]*controller:\s*/i, "")
+            .replace(/\s+\(rev .*?\)\s*$/i, "")
+            .trim()
+    }
+
     // ── Hardware spec properties ──────────────────────────────────────────
     property string _hostname: ""
     property string _kernel: ""
@@ -30,8 +37,8 @@ ContentPage {
             "cores=$(nproc 2>/dev/null); " +
             "echo \"cpu:${cpu:-Unknown} (${cores} cores)\"; " +
             "awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{printf \"memory:%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; " +
-            "gpu=$(lspci 2>/dev/null | grep -Ei '3D controller' | head -1 | sed 's/^[^:]*: //'); " +
-            "[ -z \"$gpu\" ] && gpu=$(lspci 2>/dev/null | grep -Ei 'VGA compatible' | head -1 | sed 's/^[^:]*: //'); " +
+            "gpu=$(lspci 2>/dev/null | grep -Ei '3D controller' | head -1 | awk -F': ' '{print $2}' | sed -E 's/ \\(rev .*$//'); " +
+            "[ -z \"$gpu\" ] && gpu=$(lspci 2>/dev/null | grep -Ei 'VGA compatible controller' | head -1 | awk -F': ' '{print $2}' | sed -E 's/ \\(rev .*$//'); " +
             "echo \"gpu:${gpu:-Unknown}\"; " +
             "echo \"shell:$(basename ${SHELL:-sh})\"; " +
             "echo \"uptime:$(uptime -p 2>/dev/null | sed 's/^up //' || echo Unknown)\""
@@ -47,7 +54,7 @@ ContentPage {
                     case 'kernel':   root._kernel   = val; break
                     case 'cpu':      root._cpu      = val; break
                     case 'memory':   root._memory   = val; break
-                    case 'gpu':      root._gpu      = val; break
+                    case 'gpu':      root._gpu      = root.normalizeGpuName(val); break
                     case 'shell':    root._shell    = val; break
                     case 'uptime':   root._uptime   = val; break
                 }

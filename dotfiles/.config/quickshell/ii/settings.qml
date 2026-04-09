@@ -53,7 +53,7 @@ ApplicationWindow {
 
     visible: true
     onClosing: Qt.quit()
-    title: "illogical-impulse Settings"
+    title: Translation.tr("illogical-impulse Settings")
 
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()

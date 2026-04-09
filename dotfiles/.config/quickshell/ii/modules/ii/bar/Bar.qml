@@ -37,7 +37,7 @@ Scope {
                 readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === monitor?.name) ?? null
                 readonly property real leftReserved: monitorData?.reserved?.[0] ?? 0
                 readonly property real rightReserved: monitorData?.reserved?.[2] ?? 0
-                readonly property bool fullscreenOnMonitor: monitor?.activeWorkspace?.hasFullscreen ?? false
+                readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
                 visible: !fullscreenOnMonitor
                 readonly property bool topBarVisible: !Config.options.bar.bottom
                     && visible

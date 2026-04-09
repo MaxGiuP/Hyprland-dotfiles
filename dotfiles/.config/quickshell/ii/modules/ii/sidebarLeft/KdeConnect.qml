@@ -984,13 +984,13 @@ Item {
 
                                 Repeater {
                                     model: [
-                                        { icon: "notifications_active", tip: "Ping",      args: ["--device", modelData.id, "--ping", "--ping-msg", "Ping from Quickshell"] },
-                                        { icon: "ring_volume",          tip: "Ring",      args: ["--device", modelData.id, "--ring"] },
+                                        { icon: "notifications_active", tip: Translation.tr("Ping"),      args: ["--device", modelData.id, "--ping", "--ping-msg", Translation.tr("Ping from Quickshell")] },
+                                        { icon: "ring_volume",          tip: Translation.tr("Ring"),      args: ["--device", modelData.id, "--ring"] },
                                         { icon: "content_paste",        tip: Translation.tr("Clipboard"), args: ["--device", modelData.id, "--send-clipboard"] },
                                         { icon: "lock",                 tip: Translation.tr("Lock"),      args: ["--device", modelData.id, "--lock"] },
-                                        { icon: "lock_open",            tip: "Unlock",    args: ["--device", modelData.id, "--unlock"] },
-                                        { icon: "hard_drive",           tip: "Mount",     args: ["--device", modelData.id, "--mount"] },
-                                        { icon: "folder",               tip: "Storage",   openPath: true }
+                                        { icon: "lock_open",            tip: Translation.tr("Unlock"),    args: ["--device", modelData.id, "--unlock"] },
+                                        { icon: "hard_drive",           tip: Translation.tr("Mount"),     args: ["--device", modelData.id, "--mount"] },
+                                        { icon: "folder",               tip: Translation.tr("Storage"),   openPath: true }
                                     ]
                                     delegate: RippleButton {
                                         required property var modelData

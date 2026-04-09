@@ -237,8 +237,9 @@ Item {
                                 }
                                 ScreencopyView {
                                     id: screencopyView
-                                    captureSource: previewPopup ? windowButton.modelData : null
-                                    live: true
+                                    readonly property var previewSource: previewPopup ? HyprlandData.captureSourceForToplevel(windowButton.modelData) : null
+                                    captureSource: previewSource
+                                    live: previewSource !== null
                                     paintCursor: true
                                     constraintSize: Qt.size(root.maxWindowPreviewWidth, root.maxWindowPreviewHeight)
                                     layer.enabled: true

@@ -51,4 +51,4 @@ wait_for_wireplumber() {
 }
 wait_for_wireplumber
 
-exec "$QS_BIN" -c "$QS_CONFIG"
+exec "$QS_BIN" --no-duplicate -c "$QS_CONFIG"

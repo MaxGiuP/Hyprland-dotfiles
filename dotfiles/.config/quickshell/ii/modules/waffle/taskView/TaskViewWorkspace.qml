@@ -96,12 +96,14 @@ WMouseAreaButton {
                         delegate: ScreencopyView {
                             required property var modelData
                             readonly property var hyprlandWindowData: HyprlandData.windowByAddress[`0x${modelData.HyprlandToplevel?.address}`]
-                            captureSource: modelData
-                            live: true
-                            width: hyprlandWindowData?.size[0] * root.windowScale
-                            height: hyprlandWindowData?.size[1] * root.windowScale
-                            x: hyprlandWindowData?.at[0] * root.windowScale
-                            y: hyprlandWindowData?.at[1] * root.windowScale
+                            readonly property var previewSource: HyprlandData.captureSourceForToplevel(modelData)
+                            captureSource: previewSource
+                            live: previewSource !== null
+                            visible: previewSource !== null
+                            width: previewSource ? ((hyprlandWindowData?.size[0] ?? 0) * root.windowScale) : 0
+                            height: previewSource ? ((hyprlandWindowData?.size[1] ?? 0) * root.windowScale) : 0
+                            x: (hyprlandWindowData?.at[0] ?? 0) * root.windowScale
+                            y: (hyprlandWindowData?.at[1] ?? 0) * root.windowScale
                         }
                     }
                 }

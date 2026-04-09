@@ -24,6 +24,7 @@ WMouseAreaButton {
     property string address: hyprlandClient?.address
 
     property string iconName: AppSearch.guessIcon(hyprlandClient?.class)
+    readonly property var previewSource: HyprlandData.captureSourceForToplevel(root.toplevel)
 
     color: drag.active ? ColorUtils.transparentize(Looks.colors.bg1Base) : (containsMouse ? Looks.colors.bg1Base : Looks.colors.bgPanelFooterBackground)
     borderColor: ColorUtils.transparentize(Looks.colors.bg2Border, drag.active ? 1 : 0)
@@ -32,7 +33,10 @@ WMouseAreaButton {
     property real titleBarImplicitHeight: titleBar.implicitHeight
     property bool scaleSize: true
     property size openedSize: WindowLayout.scaleWindow(hyprlandClient, maxWidth, maxHeight);
-    property size fullSize: Qt.size(hyprlandClient?.size[0] ?? maxWidth, hyprlandClient?.size[1] ?? maxHeight)
+    property size fullSize: Qt.size(
+        Math.max(1, Number(hyprlandClient?.size[0] ?? maxWidth)),
+        Math.max(1, Number(hyprlandClient?.size[1] ?? maxHeight))
+    )
     property size size: scaleSize ? openedSize : fullSize
     implicitWidth: Math.max(Math.round(contentItem.implicitWidth), 138)
     implicitHeight: Math.round(contentItem.implicitHeight)
@@ -119,7 +123,10 @@ WMouseAreaButton {
             Layout.alignment: Qt.AlignHCenter
             implicitWidth: Math.round(root.size.width)
             implicitHeight: Math.round(root.size.height)
-            constraintSize: Qt.size(Math.round(root.size.width), Math.round(root.size.height))
+            constraintSize: Qt.size(
+                Math.max(1, Math.round(root.size.width)),
+                Math.max(1, Math.round(root.size.height))
+            )
 
             Behavior on implicitWidth {
                 animation: Looks.transition.enter.createObject(this)
@@ -128,8 +135,8 @@ WMouseAreaButton {
                 animation: Looks.transition.enter.createObject(this)
             }
 
-            captureSource: root.toplevel ?? null
-            live: true
+            captureSource: root.previewSource
+            live: root.previewSource !== null
         }
     }
 

@@ -52,6 +52,7 @@ Item { // Window
     property bool compactMode: Appearance.font.pixelSize.smaller * 4 > targetWindowHeight || Appearance.font.pixelSize.smaller * 4 > targetWindowWidth
 
     property bool indicateXWayland: windowData?.xwayland ?? false
+    readonly property var previewSource: GlobalStates.overviewOpen ? HyprlandData.captureSourceForToplevel(root.toplevel) : null
 
     x: initX
     y: initY
@@ -92,8 +93,8 @@ Item { // Window
     ScreencopyView {
         id: windowPreview
         anchors.fill: parent
-        captureSource: GlobalStates.overviewOpen ? root.toplevel : null
-        live: true
+        captureSource: root.previewSource
+        live: root.previewSource !== null
 
         // Color overlay for interactions
         Rectangle {

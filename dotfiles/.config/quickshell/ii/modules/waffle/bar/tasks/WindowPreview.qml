@@ -14,6 +14,7 @@ Button {
     id: root
 
     required property var toplevel
+    readonly property var previewSource: HyprlandData.captureSourceForToplevel(root.toplevel)
     property real previewWidthConstraint: 200
     property real previewHeightConstraint: 110
     padding: 5
@@ -83,8 +84,8 @@ Button {
             ScreencopyView {
                 id: screencopyView
                 anchors.centerIn: parent
-                captureSource: root.toplevel
-                live: true
+                captureSource: root.previewSource
+                live: root.previewSource !== null
                 paintCursor: true
                 constraintSize: Qt.size(root.previewWidthConstraint, root.previewHeightConstraint)
             }
