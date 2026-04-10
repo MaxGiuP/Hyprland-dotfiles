@@ -15,11 +15,18 @@ ContentPage {
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
 
+    function scrollToSection(sectionId) {
+        const map = { "overview": btOverviewSection, "devices": btDevicesSection, "other": btOtherSection }
+        const target = map[sectionId]
+        if (target) root.contentY = Math.max(0, target.y - 10)
+    }
+
     PwObjectTracker {
         objects: root.trackedOutputDevices
     }
 
     ContentSection {
+        id: btOverviewSection
         icon: "devices"
         title: Translation.tr("Bluetooth & devices")
 
@@ -57,6 +64,7 @@ ContentPage {
     }
 
     ContentSection {
+        id: btDevicesSection
         icon: "bluetooth"
         title: Translation.tr("Bluetooth devices")
 
@@ -118,6 +126,7 @@ ContentPage {
     }
 
     ContentSection {
+        id: btOtherSection
         icon: "desktop_windows"
         title: Translation.tr("Other devices")
 

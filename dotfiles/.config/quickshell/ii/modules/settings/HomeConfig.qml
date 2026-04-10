@@ -22,40 +22,44 @@ ContentPage {
     }
 
     // ── Search index ──────────────────────────────────────────────────────
+    // Page map (after Bluetooth+Internet merged into Connectivity at index 1):
+    // 0:Home  1:Connectivity  2:Display  3:Audio  4:Customisation
+    // 5:Interface  6:Account  7:DateTime  8:Accessibility
+    // 9:Security  10:SystemInfo  11:Services  12:Hyprland
     readonly property var searchIndex: [
-        // 5 · Customisation (including former Quick config)
-        { label: "Wallpaper & Colors", page: 5, icon: "tune" },
-        { label: "Color palette style", page: 5, icon: "tune" },
-        { label: "Transparency", page: 5, icon: "tune" },
-        { label: "Bar position", page: 5, icon: "tune" },
-        { label: "Bar style", page: 5, icon: "tune" },
-        { label: "Bar transparency", page: 5, icon: "tune" },
-        { label: "Screen rounded corners", page: 5, icon: "tune" },
-        { label: "GTK theme", page: 5, icon: "palette" },
-        { label: "Icon theme", page: 5, icon: "palette" },
-        { label: "Cursor theme", page: 5, icon: "palette" },
-        { label: "Cursor size", page: 5, icon: "palette" },
-        { label: "Font family", page: 5, icon: "palette" },
-        { label: "Font size", page: 5, icon: "palette" },
-        { label: "Change wallpaper", page: 5, icon: "palette" },
-        { label: "Dark mode", page: 5, icon: "palette" },
-        { label: "Light mode", page: 5, icon: "palette" },
-        { label: "Color scheme", page: 5, icon: "palette" },
-        { label: "Kvantum theme", page: 5, icon: "palette" },
-        { label: "KDE theme", page: 5, icon: "palette" },
-        { label: "GNOME interface settings", page: 5, icon: "palette" },
-        { label: "GTK 3 settings", page: 5, icon: "palette" },
-        { label: "GTK 4 settings", page: 5, icon: "palette" },
-        { label: "kdeglobals", page: 5, icon: "palette" },
-        { label: "Prefer dark apps", page: 5, icon: "palette" },
-        { label: "Text scaling", page: 5, icon: "palette" },
-        { label: "Hot corners", page: 5, icon: "palette" },
-        { label: "Animations", page: 5, icon: "palette" },
-        // 1 · Bluetooth & devices
-        { label: "Bluetooth devices", page: 1, icon: "bluetooth" },
-        { label: "Pair device", page: 1, icon: "bluetooth" },
-        { label: "Audio output device", page: 1, icon: "bluetooth" },
-        { label: "Open Bluetooth app", page: 1, icon: "bluetooth" },
+        // 4 · Customisation
+        { label: "Wallpaper & Colors", page: 4, icon: "tune" },
+        { label: "Color palette style", page: 4, icon: "tune" },
+        { label: "Transparency", page: 4, icon: "tune" },
+        { label: "Bar position", page: 4, icon: "tune" },
+        { label: "Bar style", page: 4, icon: "tune" },
+        { label: "Bar transparency", page: 4, icon: "tune" },
+        { label: "Screen rounded corners", page: 4, icon: "tune" },
+        { label: "GTK theme", page: 4, icon: "palette" },
+        { label: "Icon theme", page: 4, icon: "palette" },
+        { label: "Cursor theme", page: 4, icon: "palette" },
+        { label: "Cursor size", page: 4, icon: "palette" },
+        { label: "Font family", page: 4, icon: "palette" },
+        { label: "Font size", page: 4, icon: "palette" },
+        { label: "Change wallpaper", page: 4, icon: "palette" },
+        { label: "Dark mode", page: 4, icon: "palette" },
+        { label: "Light mode", page: 4, icon: "palette" },
+        { label: "Color scheme", page: 4, icon: "palette" },
+        { label: "Kvantum theme", page: 4, icon: "palette" },
+        { label: "KDE theme", page: 4, icon: "palette" },
+        { label: "GNOME interface settings", page: 4, icon: "palette" },
+        { label: "GTK 3 settings", page: 4, icon: "palette" },
+        { label: "GTK 4 settings", page: 4, icon: "palette" },
+        { label: "kdeglobals", page: 4, icon: "palette" },
+        { label: "Prefer dark apps", page: 4, icon: "palette" },
+        { label: "Text scaling", page: 4, icon: "palette" },
+        { label: "Hot corners", page: 4, icon: "palette" },
+        { label: "Animations", page: 4, icon: "palette" },
+        // 1 · Connectivity → Bluetooth sub-tab
+        { label: "Bluetooth devices", page: 1, subTab: 1, sectionId: "devices", icon: "bluetooth" },
+        { label: "Pair device", page: 1, subTab: 1, sectionId: "devices", icon: "bluetooth" },
+        { label: "Audio output device", page: 1, subTab: 1, sectionId: "overview", icon: "bluetooth" },
+        { label: "Open Bluetooth app", page: 1, subTab: 1, sectionId: "other", icon: "bluetooth" },
         // 2 · Display
         { label: "Night light", page: 2, icon: "desktop_windows" },
         { label: "Color temperature", page: 2, icon: "desktop_windows" },
@@ -77,81 +81,81 @@ ContentPage {
         { label: "System sounds", page: 3, icon: "volume_up" },
         { label: "Battery alert sound", page: 3, icon: "volume_up" },
         { label: "Microphone input", page: 3, icon: "volume_up" },
-        // 4 · Internet
-        { label: "Wi-Fi networks", page: 4, icon: "language" },
-        { label: "Scan Wi-Fi", page: 4, icon: "language" },
-        { label: "Ethernet", page: 4, icon: "language" },
-        { label: "Network settings", page: 4, icon: "language" },
-        { label: "Captive portal", page: 4, icon: "language" },
-        // 6 · Interface & Apps
-        { label: "Dock", page: 6, icon: "preview" },
-        { label: "Dock pinned apps", page: 6, icon: "preview" },
-        { label: "Lock screen", page: 6, icon: "preview" },
-        { label: "Auto-lock delay", page: 6, icon: "preview" },
-        { label: "Lock screen style", page: 6, icon: "preview" },
-        { label: "Require password to power off", page: 6, icon: "preview" },
-        { label: "Notifications timeout", page: 6, icon: "preview" },
-        { label: "Crosshair overlay", page: 6, icon: "preview" },
-        { label: "Floating image overlay", page: 6, icon: "preview" },
-        { label: "Overview layout", page: 6, icon: "preview" },
-        { label: "Corner open sidebar", page: 6, icon: "preview" },
-        { label: "Quick toggles layout", page: 6, icon: "preview" },
-        { label: "Main font", page: 6, icon: "preview" },
-        { label: "Monospace font", page: 6, icon: "preview" },
-        { label: "Numbers font", page: 6, icon: "preview" },
-        { label: "Cheat sheet super key symbol", page: 6, icon: "preview" },
-        { label: "On-screen display timeout", page: 6, icon: "preview" },
-        { label: "Region selector / screen snip", page: 6, icon: "preview" },
-        { label: "Wallpaper file picker", page: 6, icon: "preview" },
-        { label: "Translator sidebar", page: 6, icon: "preview" },
-        { label: "Bluetooth app command", page: 6, icon: "apps" },
-        { label: "Network settings command", page: 6, icon: "apps" },
-        { label: "Terminal command", page: 6, icon: "apps" },
-        { label: "System update command", page: 6, icon: "apps" },
-        { label: "Volume mixer command", page: 6, icon: "apps" },
-        { label: "Task manager command", page: 6, icon: "apps" },
-        { label: "Change password command", page: 6, icon: "apps" },
-        { label: "Launcher pinned apps", page: 6, icon: "apps" },
-        // 7 · Account
-        { label: "Manage users", page: 7, icon: "person" },
-        { label: "Change password", page: 7, icon: "person" },
-        // 8 · Date, time & language
-        { label: "Language / locale", page: 8, icon: "schedule" },
-        { label: "System locale", page: 8, icon: "schedule" },
-        { label: "Generate translation", page: 8, icon: "schedule" },
-        { label: "Clock format 24h 12h", page: 8, icon: "schedule" },
-        { label: "Second precision clock", page: 8, icon: "schedule" },
-        { label: "Translation map", page: 8, icon: "schedule" },
-        // 9 · Accessibility
-        { label: "Cursor size", page: 9, icon: "accessibility_new" },
-        { label: "Text scaling accessibility", page: 9, icon: "accessibility_new" },
-        { label: "Disable animations", page: 9, icon: "accessibility_new" },
-        { label: "Readability", page: 9, icon: "accessibility_new" },
-        // 10 · Security & privacy
-        { label: "AI policy", page: 10, icon: "shield_lock" },
-        { label: "Clipboard privacy", page: 10, icon: "shield_lock" },
-        { label: "Wallpaper privacy", page: 10, icon: "shield_lock" },
-        // 11 · System info & update
-        { label: "Check for updates", page: 11, icon: "system_update" },
-        { label: "System information", page: 11, icon: "system_update" },
-        { label: "CPU memory GPU info", page: 11, icon: "system_update" },
-        // 12 · Services
-        { label: "AI system prompt", page: 12, icon: "widgets" },
-        { label: "Music recognition timeout", page: 12, icon: "widgets" },
-        { label: "User agent", page: 12, icon: "widgets" },
-        { label: "Search engine URL", page: 12, icon: "widgets" },
-        { label: "Search prefixes", page: 12, icon: "widgets" },
-        { label: "Weather city GPS", page: 12, icon: "widgets" },
-        { label: "Screenshot save path", page: 12, icon: "widgets" },
-        { label: "Video recording path", page: 12, icon: "widgets" },
-        // 13 · Hyprland
-        { label: "Hyprland config files", page: 13, icon: "deployed_code" },
-        { label: "Keybinds", page: 13, icon: "deployed_code" },
-        { label: "Window rules", page: 13, icon: "deployed_code" },
-        { label: "Workspace bindings", page: 13, icon: "deployed_code" },
-        { label: "Monitor overrides", page: 13, icon: "deployed_code" },
-        { label: "Environment variables", page: 13, icon: "deployed_code" },
-        { label: "Startup commands autostart", page: 13, icon: "deployed_code" },
+        // 1 · Connectivity → Internet sub-tab
+        { label: "Wi-Fi networks", page: 1, subTab: 0, sectionId: "internet", icon: "language" },
+        { label: "Scan Wi-Fi", page: 1, subTab: 0, sectionId: "networks", icon: "language" },
+        { label: "Ethernet", page: 1, subTab: 0, sectionId: "internet", icon: "language" },
+        { label: "Network settings", page: 1, subTab: 0, sectionId: "extra", icon: "language" },
+        { label: "Captive portal", page: 1, subTab: 0, sectionId: "extra", icon: "language" },
+        // 5 · Interface & Apps
+        { label: "Dock", page: 5, icon: "preview" },
+        { label: "Dock pinned apps", page: 5, icon: "preview" },
+        { label: "Lock screen", page: 5, icon: "preview" },
+        { label: "Auto-lock delay", page: 5, icon: "preview" },
+        { label: "Lock screen style", page: 5, icon: "preview" },
+        { label: "Require password to power off", page: 5, icon: "preview" },
+        { label: "Notifications timeout", page: 5, icon: "preview" },
+        { label: "Crosshair overlay", page: 5, icon: "preview" },
+        { label: "Floating image overlay", page: 5, icon: "preview" },
+        { label: "Overview layout", page: 5, icon: "preview" },
+        { label: "Corner open sidebar", page: 5, icon: "preview" },
+        { label: "Quick toggles layout", page: 5, icon: "preview" },
+        { label: "Main font", page: 5, icon: "preview" },
+        { label: "Monospace font", page: 5, icon: "preview" },
+        { label: "Numbers font", page: 5, icon: "preview" },
+        { label: "Cheat sheet super key symbol", page: 5, icon: "preview" },
+        { label: "On-screen display timeout", page: 5, icon: "preview" },
+        { label: "Region selector / screen snip", page: 5, icon: "preview" },
+        { label: "Wallpaper file picker", page: 5, icon: "preview" },
+        { label: "Translator sidebar", page: 5, icon: "preview" },
+        { label: "Bluetooth app command", page: 5, icon: "apps" },
+        { label: "Network settings command", page: 5, icon: "apps" },
+        { label: "Terminal command", page: 5, icon: "apps" },
+        { label: "System update command", page: 5, icon: "apps" },
+        { label: "Volume mixer command", page: 5, icon: "apps" },
+        { label: "Task manager command", page: 5, icon: "apps" },
+        { label: "Change password command", page: 5, icon: "apps" },
+        { label: "Launcher pinned apps", page: 5, icon: "apps" },
+        // 6 · Account
+        { label: "Manage users", page: 6, icon: "person" },
+        { label: "Change password", page: 6, icon: "person" },
+        // 7 · Date, time & language
+        { label: "Language / locale", page: 7, icon: "schedule" },
+        { label: "System locale", page: 7, icon: "schedule" },
+        { label: "Generate translation", page: 7, icon: "schedule" },
+        { label: "Clock format 24h 12h", page: 7, icon: "schedule" },
+        { label: "Second precision clock", page: 7, icon: "schedule" },
+        { label: "Translation map", page: 7, icon: "schedule" },
+        // 8 · Accessibility
+        { label: "Cursor size", page: 8, icon: "accessibility_new" },
+        { label: "Text scaling accessibility", page: 8, icon: "accessibility_new" },
+        { label: "Disable animations", page: 8, icon: "accessibility_new" },
+        { label: "Readability", page: 8, icon: "accessibility_new" },
+        // 9 · Security & privacy
+        { label: "AI policy", page: 9, icon: "shield_lock" },
+        { label: "Clipboard privacy", page: 9, icon: "shield_lock" },
+        { label: "Wallpaper privacy", page: 9, icon: "shield_lock" },
+        // 10 · System info & update
+        { label: "Check for updates", page: 10, icon: "system_update" },
+        { label: "System information", page: 10, icon: "system_update" },
+        { label: "CPU memory GPU info", page: 10, icon: "system_update" },
+        // 11 · Services
+        { label: "AI system prompt", page: 11, icon: "widgets" },
+        { label: "Music recognition timeout", page: 11, icon: "widgets" },
+        { label: "User agent", page: 11, icon: "widgets" },
+        { label: "Search engine URL", page: 11, icon: "widgets" },
+        { label: "Search prefixes", page: 11, icon: "widgets" },
+        { label: "Weather city GPS", page: 11, icon: "widgets" },
+        { label: "Screenshot save path", page: 11, icon: "widgets" },
+        { label: "Video recording path", page: 11, icon: "widgets" },
+        // 12 · Hyprland
+        { label: "Hyprland config files", page: 12, icon: "deployed_code" },
+        { label: "Keybinds", page: 12, icon: "deployed_code" },
+        { label: "Window rules", page: 12, icon: "deployed_code" },
+        { label: "Workspace bindings", page: 12, icon: "deployed_code" },
+        { label: "Monitor overrides", page: 12, icon: "deployed_code" },
+        { label: "Environment variables", page: 12, icon: "deployed_code" },
+        { label: "Startup commands autostart", page: 12, icon: "deployed_code" },
     ]
 
     // ── Search ────────────────────────────────────────────────────────────
@@ -179,7 +183,9 @@ ContentPage {
                             icon: entry.icon,
                             label: entry.label,
                             pageName: pages[entry.page]?.displayName ?? "",
-                            pageIndex: entry.page
+                            pageIndex: entry.page,
+                            subTab: entry.subTab ?? 0,
+                            sectionId: entry.sectionId ?? ""
                         })
                     }
                 }
@@ -191,7 +197,13 @@ ContentPage {
                 Layout.fillWidth: true
                 implicitHeight: resultRow.implicitHeight + 16
                 buttonRadius: Appearance.rounding.normal
-                onClicked: Window.window.currentPage = modelData.pageIndex
+                onClicked: {
+                    const win = Window.window
+                    // Only set subTab nav when there's actually a subtab specified
+                    win.requestedSubTab = modelData.subTab !== undefined ? modelData.subTab : -1
+                    win.requestedSectionId = modelData.sectionId ?? ""
+                    win.currentPage = modelData.pageIndex
+                }
 
                 RowLayout {
                     id: resultRow

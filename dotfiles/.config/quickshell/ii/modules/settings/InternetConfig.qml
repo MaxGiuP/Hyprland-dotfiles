@@ -426,6 +426,12 @@ ContentPage {
         root.selectedAdapterMode = root.adapterOptions[0]?.value ?? ""
     }
 
+    function scrollToSection(sectionId) {
+        const map = { "internet": internetMainSection, "networks": networksSection, "extra": extraSettingsSection }
+        const target = map[sectionId]
+        if (target) root.contentY = Math.max(0, target.y - 10)
+    }
+
     Component.onCompleted: root.refreshSnapshot()
 
     Timer {
@@ -560,6 +566,7 @@ ContentPage {
     }
 
     ContentSection {
+        id: internetMainSection
         icon: root.wifiEnabled ? "wifi" : "wifi_off"
         title: Translation.tr("Internet")
 
@@ -808,6 +815,7 @@ ContentPage {
     }
 
     ContentSection {
+        id: networksSection
         visible: root.wifiCards.length > 0 && !root.showingEthernet
         icon: "network_wifi"
         title: Translation.tr("Available networks")
@@ -1081,6 +1089,7 @@ ContentPage {
     }
 
     ContentSection {
+        id: extraSettingsSection
         icon: "expand_content"
         title: Translation.tr("Extra settings")
 

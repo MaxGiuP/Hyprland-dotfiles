@@ -22,12 +22,15 @@ ApplicationWindow {
     property int currentPage: 0
     property bool configPathCopied: false
     readonly property bool showWindowHeader: Config.options?.windows?.showTitlebar ?? true
+    // Sub-tab + scroll-target forwarded from search results (-1 = no pending nav)
+    property int requestedSubTab: -1
+    property string requestedSectionId: ""
+
     property var pages: [
         { displayName: Translation.tr("Home"), icon: "home", component: "modules/settings/HomeConfig.qml" },
-        { displayName: Translation.tr("Bluetooth & devices"), icon: "bluetooth", component: "modules/settings/BluetoothDevicesConfig.qml" },
+        { displayName: Translation.tr("Connectivity"), icon: "language", component: "modules/settings/ConnectivityConfig.qml" },
         { displayName: Translation.tr("Display"), icon: "desktop_windows", component: "modules/settings/DisplayPowerConfig.qml" },
         { displayName: Translation.tr("Audio"), icon: "volume_up", component: "modules/settings/AudioControlConfig.qml" },
-        { displayName: Translation.tr("Internet"), icon: "language", component: "modules/settings/InternetConfig.qml" },
         { displayName: Translation.tr("Customisation"), icon: "palette", component: "modules/settings/DesktopThemeConfig.qml" },
         { displayName: Translation.tr("Interface & Apps"), icon: "preview", component: "modules/settings/InterfaceConfig.qml" },
         { displayName: Translation.tr("Account"), icon: "person", component: "modules/settings/AccountsConfig.qml" },
@@ -234,6 +237,14 @@ ApplicationWindow {
                         function onCurrentPageChanged() {
                             switchAnim.complete()
                             switchAnim.start()
+                        }
+                    }
+
+                    onLoaded: {
+                        if (root.requestedSubTab >= 0 && typeof item.applySubTab === "function") {
+                            item.applySubTab(root.requestedSubTab, root.requestedSectionId)
+                            root.requestedSubTab = -1
+                            root.requestedSectionId = ""
                         }
                     }
 

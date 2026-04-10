@@ -263,8 +263,8 @@
     "language": {
         "translator": {
             "engine": "auto",
-            "sourceLanguage": "Deutsch",
-            "targetLanguage": "English"
+            "sourceLanguage": "English",
+            "targetLanguage": "Deutsch"
         },
         "ui": "de_DE"
     },

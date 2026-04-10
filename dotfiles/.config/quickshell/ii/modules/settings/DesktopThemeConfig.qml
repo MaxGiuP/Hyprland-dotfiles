@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -9,6 +10,137 @@ ContentPage {
     id: root
     forceWidth: true
     baseWidth: 860
+
+    // ── Cursor preview: extracts the left_ptr SVG from the .hlc zip ──────
+    component CursorThemePreview: Item {
+        id: cursorPreviewItem
+        required property string themeName
+        property string svgPath: ""
+        implicitWidth: 64
+        implicitHeight: 64
+
+        onThemeNameChanged: {
+            svgPath = ""
+            if (themeName.length > 0) extractProc.running = true
+        }
+
+        Process {
+            id: extractProc
+            running: false
+            command: ["bash", "-c",
+                `theme="${cursorPreviewItem.themeName}"
+                 for dir in "$HOME/.icons" "/usr/share/icons"; do
+                   f="$dir/$theme/hyprcursors/left_ptr.hlc"
+                   [ -f "$f" ] || continue
+                   out="/tmp/qs-cursor-preview-${theme}.svg"
+                   unzip -p "$f" "*.svg" 2>/dev/null | head -c 65536 > "$out" && echo "$out"
+                   exit 0
+                 done`
+            ]
+            stdout: SplitParser {
+                onRead: data => cursorPreviewItem.svgPath = data.trim()
+            }
+        }
+
+        Image {
+            anchors.fill: parent
+            visible: cursorPreviewItem.svgPath.length > 0
+            source: cursorPreviewItem.svgPath
+            sourceSize.width: 64
+            sourceSize.height: 64
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+        }
+
+        MaterialSymbol {
+            visible: cursorPreviewItem.svgPath.length === 0
+            anchors.centerIn: parent
+            text: "mouse"
+            iconSize: 40
+            color: Appearance.colors.colOnLayer1
+            opacity: 0.35
+        }
+    }
+
+    // ── Icon theme preview: finds icons directly from theme dir ───────────
+    component IconThemePreview: Item {
+        id: iconPreviewItem
+        required property string themeName
+        property var iconPaths: []
+        implicitHeight: 52
+        Layout.fillWidth: true
+
+        onThemeNameChanged: {
+            iconPaths = []
+            if (themeName.length > 0) findIconsProc.running = true
+        }
+
+        Process {
+            id: findIconsProc
+            running: false
+            command: ["bash", "-c",
+                `theme="${iconPreviewItem.themeName}"
+                 icons="folder text-x-generic image-x-generic audio-x-generic application-x-executable"
+                 for icon in $icons; do
+                   result=""
+                   for dir in "$HOME/.icons" "/usr/share/icons"; do
+                     td="$dir/$theme"
+                     [ -d "$td" ] || continue
+                     f=$(find "$td" -name "${icon}.svg" -o -name "${icon}.png" 2>/dev/null | sort -t '/' -k 5 -rn | head -1)
+                     [ -n "$f" ] && result="$f" && break
+                   done
+                   echo "${result:-none}"
+                 done`
+            ]
+            stdout: SplitParser {
+                onRead: data => {
+                    if (data.trim() !== "none")
+                        iconPreviewItem.iconPaths = [...iconPreviewItem.iconPaths, data.trim()]
+                }
+            }
+        }
+
+        Row {
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 8
+
+            Repeater {
+                model: iconPreviewItem.iconPaths
+
+                delegate: Image {
+                    required property string modelData
+                    width: 40; height: 40
+                    source: modelData
+                    sourceSize.width: 40
+                    sourceSize.height: 40
+                    fillMode: Image.PreserveAspectFit
+                    smooth: true
+                    asynchronous: true
+                    opacity: status === Image.Ready ? 1 : 0
+                    Behavior on opacity {
+                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                    }
+                }
+            }
+
+            // Placeholder dots while loading
+            Repeater {
+                model: Math.max(0, 5 - iconPreviewItem.iconPaths.length)
+                delegate: Rectangle {
+                    width: 40; height: 40
+                    radius: Appearance.rounding.full
+                    color: Appearance.colors.colLayer2
+                    opacity: 0.5
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: ["folder", "description", "image", "music_note", "terminal"][index] ?? "apps"
+                        iconSize: 22
+                        color: Appearance.colors.colSubtext
+                    }
+                }
+            }
+        }
+    }
 
     component OverviewCard: Rectangle {
         id: overviewCard
@@ -190,6 +322,228 @@ ContentPage {
         icon: "wallpaper"
         title: Translation.tr("Personalisation")
 
+        // ── Wallpaper live preview ─────────────────────────────────────────
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 200
+            radius: Appearance.rounding.normal
+            color: Appearance.colors.colLayer1
+            clip: true
+
+            Image {
+                id: wallpaperPreviewImg
+                anchors.fill: parent
+                source: Config.options.background?.wallpaperPath ?? ""
+                fillMode: Image.PreserveAspectCrop
+                asynchronous: true
+                cache: false
+                smooth: true
+                opacity: status === Image.Ready ? 1 : 0
+                Behavior on opacity {
+                    animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                }
+            }
+
+            // Dim + info overlay
+            Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: 56
+                color: Qt.rgba(0, 0, 0, 0.45)
+
+                RowLayout {
+                    anchors { fill: parent; margins: 12 }
+                    spacing: 10
+
+                    MaterialSymbol {
+                        text: "image"
+                        iconSize: 20
+                        color: "white"
+                        opacity: 0.8
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: {
+                            const p = Config.options.background?.wallpaperPath ?? ""
+                            return p.length > 0 ? p.split("/").pop() : Translation.tr("No wallpaper set")
+                        }
+                        color: "white"
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        elide: Text.ElideLeft
+                    }
+
+                    RippleButton {
+                        buttonRadius: Appearance.rounding.full
+                        implicitWidth: 36; implicitHeight: 36
+                        onClicked: Wallpapers.openFallbackPicker(Appearance.m3colors.darkmode)
+                        contentItem: MaterialSymbol {
+                            anchors.centerIn: parent
+                            text: "edit"
+                            iconSize: 18
+                            color: "white"
+                        }
+                        StyledToolTip { text: Translation.tr("Change wallpaper") }
+                    }
+                }
+            }
+
+            // Placeholder when no wallpaper
+            ColumnLayout {
+                visible: wallpaperPreviewImg.status !== Image.Ready
+                anchors.centerIn: parent
+                spacing: 8
+
+                MaterialSymbol {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: "wallpaper"
+                    iconSize: 48
+                    color: Appearance.colors.colSubtext
+                    opacity: 0.5
+                }
+                StyledText {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: Translation.tr("Wallpaper preview")
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.small
+                }
+            }
+        }
+
+        // ── Material You color palette ─────────────────────────────────────
+        ContentSubsection {
+            title: Translation.tr("Current color palette")
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 0
+
+                Repeater {
+                    model: [
+                        { label: Translation.tr("Primary"),   color: Appearance.m3colors.m3primary },
+                        { label: Translation.tr("Secondary"), color: Appearance.m3colors.m3secondary },
+                        { label: Translation.tr("Tertiary"),  color: Appearance.m3colors.m3tertiary },
+                        { label: Translation.tr("Error"),     color: Appearance.m3colors.m3error },
+                        { label: Translation.tr("Surface"),   color: Appearance.m3colors.m3surfaceVariant },
+                        { label: Translation.tr("Container"), color: Appearance.m3colors.m3primaryContainer },
+                        { label: Translation.tr("On Pri."),   color: Appearance.m3colors.m3onPrimary },
+                        { label: Translation.tr("On Sec."),   color: Appearance.m3colors.m3onSecondary },
+                    ]
+
+                    delegate: ColumnLayout {
+                        required property var modelData
+                        required property int index
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        Rectangle {
+                            Layout.alignment: Qt.AlignHCenter
+                            width: 36; height: 36
+                            radius: Appearance.rounding.full
+                            color: modelData.color
+                            border.width: 1
+                            border.color: Qt.rgba(0, 0, 0, 0.15)
+
+                            StyledToolTip { text: modelData.label }
+                        }
+
+                        StyledText {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: modelData.label
+                            font.pixelSize: Appearance.font.pixelSize.smallest
+                            color: Appearance.colors.colSubtext
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── Cursor theme preview ───────────────────────────────────────────
+        ContentSubsection {
+            title: Translation.tr("Cursor preview")
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 16
+
+                // Preview box for current applied cursor
+                Rectangle {
+                    implicitWidth: 100; implicitHeight: 80
+                    radius: Appearance.rounding.normal
+                    color: Appearance.colors.colLayer2
+                    border.width: 1
+                    border.color: Appearance.colors.colOutlineVariant
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 6
+
+                        CursorThemePreview {
+                            id: appliedCursorPreview
+                            Layout.alignment: Qt.AlignHCenter
+                            themeName: DesktopThemeSettings.gtk3CursorTheme
+                            implicitWidth: 48; implicitHeight: 48
+                        }
+
+                        StyledText {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Translation.tr("Applied")
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: Appearance.colors.colSubtext
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    StyledText {
+                        text: DesktopThemeSettings.gtk3CursorTheme || Translation.tr("None")
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        font.weight: Font.Medium
+                        color: Appearance.colors.colOnLayer1
+                    }
+
+                    StyledText {
+                        text: Translation.tr("Size: %1px").arg(DesktopThemeSettings.gtk3CursorSize)
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                    }
+
+                    StyledText {
+                        text: Translation.tr("Change cursor theme in GTK 3 or GTK 4 sections below")
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Appearance.colors.colSubtext
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+        }
+
+        // ── Icon theme preview (current applied) ───────────────────────────
+        ContentSubsection {
+            title: Translation.tr("Icon theme preview")
+
+            IconThemePreview {
+                id: appliedIconPreview
+                themeName: DesktopThemeSettings.gtk3IconTheme
+                Layout.fillWidth: true
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                text: Translation.tr("Applied icon theme: %1").arg(DesktopThemeSettings.gtk3IconTheme || Translation.tr("system default"))
+                font.pixelSize: Appearance.font.pixelSize.smaller
+                color: Appearance.colors.colSubtext
+                wrapMode: Text.Wrap
+            }
+        }
+
+        // ── Light / dark mode toggle ───────────────────────────────────────
         ConfigRow {
             uniform: true
 
@@ -225,6 +579,102 @@ ContentPage {
                 materialIcon: "bottom_app_bar"
                 mainText: Translation.tr("Open shell interface files")
                 onClicked: Qt.openUrlExternally(`file://${Directories.config}/illogical-impulse`)
+            }
+        }
+
+        // ── Wallpaper folder thumbnails ────────────────────────────────────
+        ContentSubsection {
+            title: Translation.tr("Wallpaper folder")
+
+            Component.onCompleted: Wallpapers.load()
+
+            StyledFlickable {
+                Layout.fillWidth: true
+                implicitHeight: 108
+                contentWidth: wallpaperRow.implicitWidth
+                contentHeight: height
+                flickableDirection: Flickable.HorizontalFlick
+                clip: true
+
+                Row {
+                    id: wallpaperRow
+                    spacing: 6
+
+                    Repeater {
+                        model: Wallpapers.wallpapers.slice(0, 20)
+
+                        delegate: Rectangle {
+                            required property string modelData
+                            width: 160; height: 100
+                            radius: Appearance.rounding.small
+                            clip: true
+                            color: Appearance.colors.colLayer2
+                            border.width: modelData === (Config.options.background?.wallpaperPath ?? "") ? 2 : 0
+                            border.color: Appearance.colors.colPrimary
+
+                            ThumbnailImage {
+                                anchors.fill: parent
+                                sourcePath: modelData
+                                fillMode: Image.PreserveAspectCrop
+                                sourceSize.width: 160
+                                sourceSize.height: 100
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: Wallpapers.apply(modelData)
+                            }
+
+                            // Active indicator badge
+                            Rectangle {
+                                visible: modelData === (Config.options.background?.wallpaperPath ?? "")
+                                anchors { top: parent.top; right: parent.right; margins: 6 }
+                                width: 20; height: 20
+                                radius: width / 2
+                                color: Appearance.colors.colPrimary
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "check"
+                                    iconSize: 13
+                                    color: Appearance.colors.colOnPrimary
+                                }
+                            }
+                        }
+                    }
+
+                    // "Browse more" tile
+                    Rectangle {
+                        width: 80; height: 100
+                        radius: Appearance.rounding.small
+                        color: Appearance.colors.colLayer2
+                        border.width: 1
+                        border.color: Appearance.colors.colOutlineVariant
+
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            spacing: 6
+                            MaterialSymbol {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: "folder_open"
+                                iconSize: 28
+                                color: Appearance.colors.colSubtext
+                            }
+                            StyledText {
+                                Layout.alignment: Qt.AlignHCenter
+                                text: Translation.tr("Browse")
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                color: Appearance.colors.colSubtext
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: Wallpapers.openFallbackPicker(Appearance.m3colors.darkmode)
+                        }
+                    }
+                }
             }
         }
 
@@ -377,6 +827,54 @@ ContentPage {
                 }
             }
 
+            // ── Live cursor + icon previews for GTK 3 ─────────────────────
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                // Cursor preview
+                Rectangle {
+                    implicitWidth: 88; implicitHeight: 72
+                    radius: Appearance.rounding.normal
+                    color: Appearance.colors.colLayer2
+                    border.width: 1
+                    border.color: Appearance.colors.colOutlineVariant
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        CursorThemePreview {
+                            Layout.alignment: Qt.AlignHCenter
+                            themeName: gtk3CursorCombo.combo.model[gtk3CursorCombo.combo.currentIndex]?.value ?? ""
+                            implicitWidth: 44; implicitHeight: 44
+                        }
+                        StyledText {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Translation.tr("Cursor")
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: Appearance.colors.colSubtext
+                        }
+                    }
+                }
+
+                // Icon theme preview
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    StyledText {
+                        text: Translation.tr("Icons: %1").arg(gtk3IconCombo.combo.model[gtk3IconCombo.combo.currentIndex]?.value ?? "—")
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Appearance.colors.colSubtext
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    IconThemePreview {
+                        themeName: gtk3IconCombo.combo.model[gtk3IconCombo.combo.currentIndex]?.value ?? ""
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
             RowLayout {
                 id: gtk3Row
                 Layout.fillWidth: true
@@ -473,6 +971,52 @@ ContentPage {
                     label: Translation.tr("Font family")
                     options: DesktopThemeSettings.fontFamilyOptions
                     currentValue: DesktopThemeSettings.parseGtkFontFamily(DesktopThemeSettings.gtk4Font)
+                }
+            }
+
+            // ── Live cursor + icon previews for GTK 4 ─────────────────────
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                Rectangle {
+                    implicitWidth: 88; implicitHeight: 72
+                    radius: Appearance.rounding.normal
+                    color: Appearance.colors.colLayer2
+                    border.width: 1
+                    border.color: Appearance.colors.colOutlineVariant
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 4
+                        CursorThemePreview {
+                            Layout.alignment: Qt.AlignHCenter
+                            themeName: gtk4CursorCombo.combo.model[gtk4CursorCombo.combo.currentIndex]?.value ?? ""
+                            implicitWidth: 44; implicitHeight: 44
+                        }
+                        StyledText {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Translation.tr("Cursor")
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            color: Appearance.colors.colSubtext
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    StyledText {
+                        text: Translation.tr("Icons: %1").arg(gtk4IconCombo.combo.model[gtk4IconCombo.combo.currentIndex]?.value ?? "—")
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Appearance.colors.colSubtext
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    IconThemePreview {
+                        themeName: gtk4IconCombo.combo.model[gtk4IconCombo.combo.currentIndex]?.value ?? ""
+                        Layout.fillWidth: true
+                    }
                 }
             }
 
