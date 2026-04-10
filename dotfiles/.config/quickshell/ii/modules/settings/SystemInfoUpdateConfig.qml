@@ -13,10 +13,13 @@ ContentPage {
     readonly property bool settingsApp: Quickshell.env("II_SETTINGS_APP") === "1"
 
     function normalizeGpuName(value) {
-        return (value || "")
+        let s = (value || "")
             .replace(/^[^:]*controller:\s*/i, "")
             .replace(/\s+\(rev .*?\)\s*$/i, "")
             .trim()
+        const bracketed = s.match(/\[([^\]]+)\]/)
+        if (bracketed) return bracketed[1]
+        return s.replace(/^(NVIDIA Corporation|Advanced Micro Devices, Inc\. \[AMD\/ATI\]|Intel Corporation)\s+[A-Z0-9]+\s+/i, "").trim() || s
     }
 
     property string _hostname: ""
@@ -29,11 +32,22 @@ ContentPage {
     Process {
         running: true
         command: ["bash", "-c",
-            "echo \"hostname:$(hostname 2>/dev/null)\"; " +
+            "echo \"hostname:$(cat /proc/sys/kernel/hostname 2>/dev/null)\"; " +
             "echo \"kernel:$(uname -r)\"; " +
             "cpu=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | tr -s ' ' | sed 's/^ //'); " +
-            "echo \"cpu:${cpu:-Unknown}\"; " +
-            "awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{printf \"memory:%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; " +
+            "cores=$(awk -F': ' '/^physical id/{pid=$2} /^core id/{print pid\"_\"$2}' /proc/cpuinfo | sort -u | wc -l 2>/dev/null); " +
+            "threads=$(nproc 2>/dev/null); " +
+            "echo \"cpu:${cpu:-Unknown} (${cores}C / ${threads}T)\"; " +
+            "dmi=$(sudo -n dmidecode -t 17 2>/dev/null); " +
+            "if [ -n \"$dmi\" ]; then " +
+            "  memtype=$(echo \"$dmi\" | awk '/^\\tType:/ && !/Detail/ && $2 != \"Unknown\"{print $2; exit}'); " +
+            "  memspeed=$(echo \"$dmi\" | awk '/^\\tSpeed:/ && $2 != \"Unknown\"{print $2,$3; exit}'); " +
+            "  memtotal=$(awk '/MemTotal/{t=$2}END{total_gib=t/1048576; rounded=4; while(rounded<total_gib*0.98) rounded*=2; printf \"%d GiB\",rounded}' /proc/meminfo); " +
+            "  echo \"memory:${memtype:-?} · ${memtotal} · ${memspeed:-?}\"; " +
+            "else " +
+            "  memtotal=$(awk '/MemTotal/{t=$2}END{total_gib=t/1048576; rounded=4; while(rounded<total_gib*0.98) rounded*=2; printf \"%d GiB\",rounded}' /proc/meminfo); " +
+            "  echo \"memory:${memtotal}\"; " +
+            "fi; " +
             "gpu=$(lspci 2>/dev/null | grep -Ei '3D controller|VGA compatible controller' | head -1 | awk -F': ' '{print $2}' | sed -E 's/ \\(rev .*$//'); " +
             "echo \"gpu:${gpu:-Unknown}\"; " +
             "echo \"uptime:$(uptime -p 2>/dev/null | sed 's/^up //')\""

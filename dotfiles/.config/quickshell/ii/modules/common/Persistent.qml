@@ -63,6 +63,10 @@ Singleton {
             property JsonObject ai: JsonObject {
                 property string model: "gemini-flash-latest"
                 property real temperature: 0.5
+                property string lastAutoFreeGeminiModelId: ""
+                property bool modelNotificationsInitialized: false
+                property list<string> seenGeminiModelIds: []
+                property list<string> seenRelevantOllamaModelIds: []
             }
 
             property JsonObject cheatsheet: JsonObject {

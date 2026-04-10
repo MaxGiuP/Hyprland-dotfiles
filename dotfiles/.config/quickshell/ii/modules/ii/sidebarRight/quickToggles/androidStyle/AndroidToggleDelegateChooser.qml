@@ -19,6 +19,7 @@ DelegateChooser {
     signal openBluetoothDialog()
     signal openNightLightDialog()
     signal openWifiDialog()
+    signal openIdleLockDialog()
 
     role: "type"
 
@@ -146,6 +147,9 @@ DelegateChooser {
         baseCellHeight: root.baseCellHeight
         cellSpacing: root.spacing
         cellSize: modelData.size
+        onOpenIdleLockDialog: {
+            root.openIdleLockDialog()
+        }
     } }
 
     DelegateChoice { roleValue: "mic"; AndroidMicToggle {

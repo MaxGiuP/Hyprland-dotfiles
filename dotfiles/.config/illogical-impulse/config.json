@@ -302,6 +302,7 @@
             "unlockKeyring": true
         },
         "showLockedText": true,
+        "timeout": 20,
         "useHyprlock": false
     },
     "media": {

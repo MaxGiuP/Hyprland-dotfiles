@@ -22,6 +22,7 @@ Singleton {
     property bool wifiScanning: false
     property bool wifiConnecting: connectProc.running
     property WifiAccessPoint wifiConnectTarget
+    property WifiAccessPoint pendingWifiSwitchTarget
     readonly property list<WifiAccessPoint> wifiNetworks: []
     readonly property WifiAccessPoint active: wifiNetworks.find(n => n.active) ?? null
     readonly property list<var> friendlyWifiNetworks: [...wifiNetworks].sort((a, b) => {
@@ -70,7 +71,23 @@ Singleton {
     }
 
     function connectToWifiNetwork(accessPoint: WifiAccessPoint): void {
+        if (!accessPoint)
+            return;
+
+        if (accessPoint.active) {
+            root.wifiConnectTarget = null;
+            root.pendingWifiSwitchTarget = null;
+            return;
+        }
+
         accessPoint.askingPassword = false;
+        if (root.active && root.active.ssid !== accessPoint.ssid) {
+            root.pendingWifiSwitchTarget = accessPoint;
+            disconnectWifiNetwork();
+            return;
+        }
+
+        root.pendingWifiSwitchTarget = null;
         root.wifiConnectTarget = accessPoint;
         // We use this instead of `nmcli connection up SSID` because this also creates a connection profile
         connectProc.exec(["nmcli", "dev", "wifi", "connect", accessPoint.ssid])
@@ -78,7 +95,8 @@ Singleton {
     }
 
     function disconnectWifiNetwork(): void {
-        if (active) disconnectProc.exec(["nmcli", "connection", "down", active.ssid]);
+        if (active)
+            disconnectProc.exec(["nmcli", "connection", "down", active.ssid]);
     }
 
     function openPublicWifiPortal() {
@@ -122,8 +140,10 @@ Singleton {
             }
         }
         onExited: (exitCode, exitStatus) => {
-            root.wifiConnectTarget.askingPassword = (exitCode !== 0)
+            if (root.wifiConnectTarget)
+                root.wifiConnectTarget.askingPassword = (exitCode !== 0)
             root.wifiConnectTarget = null
+            root.pendingWifiSwitchTarget = null
         }
     }
 
@@ -131,6 +151,17 @@ Singleton {
         id: disconnectProc
         stdout: SplitParser {
             onRead: getNetworks.running = true
+        }
+        onExited: exitCode => {
+            getNetworks.running = true;
+            if (exitCode !== 0)
+                return;
+            if (!root.pendingWifiSwitchTarget)
+                return;
+
+            const target = root.pendingWifiSwitchTarget;
+            root.pendingWifiSwitchTarget = null;
+            root.connectToWifiNetwork(target);
         }
     }
 

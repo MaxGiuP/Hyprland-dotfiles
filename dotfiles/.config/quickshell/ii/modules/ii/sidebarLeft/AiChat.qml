@@ -20,6 +20,8 @@ Item {
     property var suggestionQuery: ""
     property var suggestionList: []
     property var supportedCliAgents: ["codex", "claude", "gemini"]
+    property bool showOllamaManagerDialog: false
+    property string ollamaDialogMode: "suggested"
 
     onFocusChanged: focus => {
         if (focus) {
@@ -49,7 +51,7 @@ Item {
             description: Translation.tr("Choose model"),
             execute: args => {
                 if (args.length === 0 || (args[0] ?? "").trim().length === 0) {
-                    const entries = Ai.previewModelList.map(modelId => {
+                    const entries = Ai.accessibleModelSuggestionList.map(modelId => {
                         const m = Ai.models[modelId];
                         if (!m) return `- ${modelId}`;
                         const where = m.endpoint && m.endpoint.includes("localhost") ? "local" : "online";
@@ -259,6 +261,12 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         messageListView.positionViewAtEnd();
     }
 
+    function openOllamaManagerDialog(mode) {
+        root.ollamaDialogMode = mode;
+        root.showOllamaManagerDialog = true;
+        Qt.callLater(() => ollamaManagerDialog.forceActiveFocus());
+    }
+
     Process {
         id: decodeImageAndAttachProc
         property string imageDecodePath: Directories.cliphistDecode
@@ -459,6 +467,93 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                 }
             }
 
+            Rectangle {
+                id: modelUpdatesCard
+                z: 2
+                visible: Ai.ollamaMutationBusy || Ai.discoveredOllamaRecommendations.length > 0 || Ai.localOllamaModels.length > 0 || Ai.recentGeminiArrivals.length > 0
+                anchors {
+                    top: statusBg.bottom
+                    topMargin: 8
+                    left: parent.left
+                    right: parent.right
+                    leftMargin: 8
+                    rightMargin: 8
+                }
+                implicitHeight: modelUpdatesLayout.implicitHeight + 18
+                radius: Appearance.rounding.normal - root.padding
+                color: Appearance.colors.colLayer2
+                border.width: 1
+                border.color: Appearance.colors.colOutlineVariant
+
+                ColumnLayout {
+                    id: modelUpdatesLayout
+                    anchors.fill: parent
+                    anchors.margins: 9
+                    spacing: 8
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        MaterialSymbol {
+                            text: "system_update_alt"
+                            iconSize: Appearance.font.pixelSize.large
+                            color: Appearance.colors.colPrimary
+                        }
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: Translation.tr("Ollama models")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.bold: true
+                            color: Appearance.colors.colOnLayer1
+                        }
+
+                        DialogButton {
+                            buttonText: Translation.tr("Refresh")
+                            downAction: () => {
+                                Ai.refreshOnlineModels();
+                                Ai.refreshOllamaStatus();
+                            }
+                        }
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: Appearance.colors.colSubtext
+                        text: Ai.ollamaMutationBusy
+                            ? (Ai.ollamaInstallingModelId.length > 0
+                                ? Ai.ollamaInstallStatusText
+                                : Ai.ollamaRemoveStatusText)
+                            : Translation.tr("%1 installed | %2 suggested | %3 successors")
+                                .arg(Ai.localOllamaModels.length)
+                                .arg(Ai.storeOllamaRecommendations.length)
+                                .arg(Ai.successorStoreOllamaRecommendations.length)
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        DialogButton {
+                            buttonText: Translation.tr("Installed")
+                            downAction: () => root.openOllamaManagerDialog("installed")
+                        }
+
+                        DialogButton {
+                            buttonText: Translation.tr("Suggested")
+                            downAction: () => root.openOllamaManagerDialog("suggested")
+                        }
+
+                        DialogButton {
+                            buttonText: Translation.tr("Successors")
+                            downAction: () => root.openOllamaManagerDialog("successors")
+                        }
+                    }
+                }
+            }
+
             ScrollEdgeFade {
                 z: 1
                 target: messageListView
@@ -468,10 +563,15 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             StyledListView { // Message list
                 id: messageListView
                 z: 0
-                anchors.fill: parent
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    bottom: parent.bottom
+                    top: modelUpdatesCard.visible ? modelUpdatesCard.bottom : statusBg.bottom
+                    topMargin: 8
+                }
                 spacing: 10
                 popin: false
-                topMargin: statusBg.implicitHeight + statusBg.anchors.topMargin * 2
 
                 touchpadScrollFactor: Config.options.interactions.scrolling.touchpadScrollFactor * 1.4
                 mouseScrollFactor: Config.options.interactions.scrolling.mouseScrollFactor * 1.4
@@ -507,8 +607,15 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             }
 
             PagePlaceholder {
-                z: 2
+                z: 1
                 shown: Ai.messageIDs.length === 0
+                anchors {
+                    left: parent.left
+                    right: parent.right
+                    bottom: parent.bottom
+                    top: modelUpdatesCard.visible ? modelUpdatesCard.bottom : statusBg.bottom
+                    topMargin: 8
+                }
                 icon: "neurology"
                 title: Translation.tr("Large language models")
                 description: Translation.tr("Type /key to get started with online models\nCtrl+O to expand sidebar\nCtrl+P to pin sidebar\nCtrl+D to detach sidebar")
@@ -635,8 +742,9 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                             return;
                         } else if (messageInputField.text.startsWith(`${root.commandPrefix}model`)) {
                             root.suggestionQuery = messageInputField.text.split(" ")[1] ?? "";
+                            const suggestedModels = Ai.accessibleModelSuggestionList;
                             if (root.suggestionQuery.trim().length === 0) {
-                                root.suggestionList = Ai.previewModelList.map(modelId => {
+                                root.suggestionList = suggestedModels.map(modelId => {
                                     return {
                                         name: `${root.commandPrefix}model ${modelId}`,
                                         displayName: `${Ai.models[modelId].name}`,
@@ -644,7 +752,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                     };
                                 });
                             } else {
-                                const modelResults = Fuzzy.go(root.suggestionQuery, Ai.previewModelList.map(model => {
+                                const modelResults = Fuzzy.go(root.suggestionQuery, suggestedModels.map(model => {
                                     return {
                                         name: Fuzzy.prepare(model),
                                         obj: model
@@ -915,6 +1023,505 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: ollamaManagerDialog
+        property string customModelId: ""
+        readonly property string dialogMode: root.ollamaDialogMode
+        readonly property var shownRecommendations: dialogMode === "successors" ? Ai.successorStoreOllamaRecommendations : Ai.storeOllamaRecommendations
+        property string selectedUseCaseFilter: "all"
+        readonly property var useCaseFilters: [
+            {"id": "all", "label": Translation.tr("All")},
+            {"id": "chat", "label": Translation.tr("Chat")},
+            {"id": "coding", "label": Translation.tr("Coding")},
+            {"id": "reasoning", "label": Translation.tr("Reasoning")},
+            {"id": "agents", "label": Translation.tr("Agents")},
+            {"id": "lightweight", "label": Translation.tr("Lightweight")},
+        ]
+
+        signal dismiss()
+        onDismiss: root.showOllamaManagerDialog = false
+        onVisibleChanged: {
+            if (visible)
+                selectedUseCaseFilter = "all";
+        }
+
+        anchors.fill: parent
+        z: 100
+        visible: root.showOllamaManagerDialog
+        color: Appearance.colors.colScrim
+        focus: visible
+
+        function recommendationUseCases(entry) {
+            return entry?.use_cases ?? [];
+        }
+
+        function matchesUseCase(entry) {
+            if (selectedUseCaseFilter === "all")
+                return true;
+            return recommendationUseCases(entry).indexOf(selectedUseCaseFilter) !== -1;
+        }
+
+        function filteredRecommendations() {
+            return shownRecommendations.filter(entry => matchesUseCase(entry));
+        }
+
+        Keys.onPressed: event => {
+            if (event.key === Qt.Key_Escape) {
+                ollamaManagerDialog.dismiss();
+                event.accepted = true;
+            }
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onPressed: ollamaManagerDialog.dismiss()
+        }
+
+        Rectangle {
+            id: ollamaDialogSurface
+            anchors.centerIn: parent
+            width: Math.min(ollamaManagerDialog.width - 20, 760)
+            height: Math.min(ollamaDialogContent.implicitHeight + 32, ollamaManagerDialog.height - 20, 700)
+            radius: Appearance.rounding.large
+            color: Appearance.m3colors.m3surfaceContainerHigh
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.AllButtons
+            }
+
+            ColumnLayout {
+                id: ollamaDialogContent
+                anchors.fill: parent
+                anchors.margins: 16
+                spacing: 14
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: ollamaManagerDialog.dialogMode === "installed"
+                        ? Translation.tr("Installed Ollama models")
+                        : (ollamaManagerDialog.dialogMode === "successors"
+                            ? Translation.tr("Potential Ollama successors")
+                            : Translation.tr("Latest suggested Ollama models"))
+                    font.family: Appearance.font.family.title
+                    font.pixelSize: Appearance.font.pixelSize.large
+                    color: Appearance.colors.colOnLayer1
+                    font.bold: true
+                    wrapMode: Text.WordWrap
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: Appearance.colors.colSubtext
+                    text: ollamaManagerDialog.dialogMode === "installed"
+                        ? Translation.tr("These are the Ollama models currently available on this machine. Remove the ones you no longer want.")
+                        : (ollamaManagerDialog.dialogMode === "successors"
+                            ? Translation.tr("These suggestions are newer models that fit families you already have installed.")
+                            : Translation.tr("These are the latest suggested Ollama models for your setup. Install them from here."))
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    implicitHeight: 1
+                    color: Appearance.colors.colOutlineVariant
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: ollamaManagerDialog.dialogMode !== "installed"
+                    wrapMode: Text.WordWrap
+                    color: Appearance.colors.colSubtext
+                    text: Translation.tr("Browse curated local models by use case, compare storage size, then install directly from here.")
+                }
+
+                Flow {
+                    Layout.fillWidth: true
+                    visible: ollamaManagerDialog.dialogMode !== "installed"
+                    spacing: 8
+
+                    Repeater {
+                        model: ollamaManagerDialog.useCaseFilters
+                        delegate: DialogButton {
+                            required property var modelData
+                            buttonText: modelData.label
+                            toggled: ollamaManagerDialog.selectedUseCaseFilter === modelData.id
+                            colBackground: Appearance.colors.colLayer2
+                            colBackgroundHover: Appearance.colors.colLayer2Hover
+                            colBackgroundToggled: Appearance.colors.colPrimary
+                            colBackgroundToggledHover: Appearance.colors.colPrimaryHover
+                            colText: toggled ? colForegroundToggled : Appearance.colors.colOnLayer1
+                            downAction: () => ollamaManagerDialog.selectedUseCaseFilter = modelData.id
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    visible: false
+
+                    MaterialTextField {
+                        id: customInstallField
+                        Layout.fillWidth: true
+                        placeholderText: Translation.tr("Custom model id, e.g. qwen3:4b")
+                        text: ollamaManagerDialog.customModelId
+                        onTextChanged: ollamaManagerDialog.customModelId = text
+                        onAccepted: {
+                            const modelId = text.trim();
+                            if (modelId.length === 0) return;
+                            Ai.queueOllamaInstall([modelId]);
+                            text = "";
+                            ollamaManagerDialog.customModelId = "";
+                        }
+                    }
+
+                    DialogButton {
+                        buttonText: Translation.tr("Install")
+                        downAction: () => {
+                            const modelId = customInstallField.text.trim();
+                            if (modelId.length === 0) return;
+                            Ai.queueOllamaInstall([modelId]);
+                            customInstallField.text = "";
+                            ollamaManagerDialog.customModelId = "";
+                        }
+                    }
+
+                    DialogButton {
+                        buttonText: Translation.tr("Refresh")
+                        downAction: () => {
+                            Ai.refreshOnlineModels();
+                            Ai.refreshOllamaStatus();
+                        }
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: Ai.ollamaInstallingModelId.length > 0 || Ai.ollamaRemovingModelId.length > 0
+                    wrapMode: Text.WordWrap
+                    color: Appearance.colors.colOnSecondaryContainer
+                    text: Ai.ollamaInstallingModelId.length > 0 ? Ai.ollamaInstallStatusText : Ai.ollamaRemoveStatusText
+                }
+
+                StyledProgressBar {
+                    Layout.fillWidth: true
+                    visible: Ai.ollamaInstallingModelId.length > 0 && Ai.ollamaInstallProgress >= 0
+                    value: Ai.ollamaInstallProgress
+                }
+
+                StyledIndeterminateProgressBar {
+                    Layout.fillWidth: true
+                    visible: (Ai.ollamaInstallingModelId.length > 0 && Ai.ollamaInstallProgress < 0) || Ai.ollamaRemovingModelId.length > 0
+                }
+
+                ScrollView {
+                    id: ollamaManagerScroll
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+
+                    Column {
+                        width: ollamaManagerScroll.availableWidth
+                        spacing: 14
+
+                        Column {
+                            width: parent.width
+                            spacing: 8
+                            visible: ollamaManagerDialog.dialogMode !== "installed"
+
+                            StyledText {
+                                width: parent.width
+                                text: ollamaManagerDialog.dialogMode === "successors"
+                                    ? Translation.tr("Potential successors")
+                                    : Translation.tr("Recommended models")
+                                color: Appearance.colors.colOnLayer1
+                                font.bold: true
+                            }
+
+                            StyledText {
+                                width: parent.width
+                                visible: ollamaManagerDialog.filteredRecommendations().length === 0
+                                wrapMode: Text.WordWrap
+                                color: Appearance.colors.colSubtext
+                                text: ollamaManagerDialog.dialogMode === "successors"
+                                    ? Translation.tr("No successor suggestions match this filter right now.")
+                                    : Translation.tr("No suggested models match this filter right now.")
+                            }
+
+                            Repeater {
+                                model: ollamaManagerDialog.filteredRecommendations()
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    readonly property string installId: modelData.install_id ?? ""
+                                    readonly property string installState: Ai.ollamaInstallStateFor(installId)
+                                    readonly property string successorContext: Ai.successorContextForRecommendation(modelData)
+                                    readonly property string storageSize: modelData.storage_size?.length > 0
+                                        ? modelData.storage_size
+                                        : ""
+                                    readonly property var useCases: modelData.use_cases ?? []
+                                    readonly property string hardwareHint: modelData.hardware_hint ?? ""
+                                    width: parent.width
+                                    implicitHeight: recommendedCardLayout.implicitHeight + 16
+                                    radius: Appearance.rounding.normal
+                                    color: Appearance.colors.colLayer3
+                                    border.width: 1
+                                    border.color: Appearance.colors.colOutlineVariant
+
+                                    ColumnLayout {
+                                        id: recommendedCardLayout
+                                        anchors.fill: parent
+                                        anchors.margins: 8
+                                        spacing: 8
+
+                                        RowLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 8
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 2
+
+                                                StyledText {
+                                                    Layout.fillWidth: true
+                                                    text: modelData.display_name ?? installId
+                                                    color: Appearance.colors.colOnLayer1
+                                                    font.bold: true
+                                                    elide: Text.ElideRight
+                                                }
+
+                                                StyledText {
+                                                    Layout.fillWidth: true
+                                                    color: Appearance.colors.colSubtext
+                                                    text: installId
+                                                    elide: Text.ElideRight
+                                                }
+                                            }
+
+                                            DialogButton {
+                                                enabled: !Ai.ollamaRemoveBusy && installState === "available"
+                                                buttonText: installState === "installed"
+                                                    ? Translation.tr("Installed")
+                                                    : (installState === "installing"
+                                                    ? Translation.tr("Installing")
+                                                    : (installState === "queued" ? Translation.tr("Queued") : Translation.tr("Install")))
+                                                colBackground: installState === "installed"
+                                                    ? Appearance.colors.colLayer2
+                                                    : Appearance.colors.colLayer3
+                                                colBackgroundHover: installState === "installed"
+                                                    ? Appearance.colors.colLayer2
+                                                    : Appearance.colors.colLayer3Hover
+                                                colText: installState === "installed"
+                                                    ? Appearance.colors.colSubtext
+                                                    : Appearance.colors.colPrimary
+                                                downAction: () => Ai.queueOllamaInstall([installId])
+                                            }
+                                        }
+
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            wrapMode: Text.WordWrap
+                                            color: Appearance.colors.colOnLayer1
+                                            text: modelData.reason?.length > 0 ? modelData.reason : (modelData.description ?? "")
+                                        }
+
+                                        Flow {
+                                            Layout.fillWidth: true
+                                            spacing: 6
+
+                                            Repeater {
+                                                model: [
+                                                    ...(storageSize.length > 0 ? [Translation.tr("Storage: %1").arg(storageSize)] : []),
+                                                    ...(hardwareHint.length > 0 ? [hardwareHint] : []),
+                                                    ...useCases.map(tag => {
+                                                        if (tag === "chat") return Translation.tr("Chat");
+                                                        if (tag === "coding") return Translation.tr("Coding");
+                                                        if (tag === "reasoning") return Translation.tr("Reasoning");
+                                                        if (tag === "agents") return Translation.tr("Agents");
+                                                        if (tag === "lightweight") return Translation.tr("Lightweight");
+                                                        return tag;
+                                                    }),
+                                                ]
+                                                delegate: Rectangle {
+                                                    required property var modelData
+                                                    implicitHeight: chipLabel.implicitHeight + 8
+                                                    implicitWidth: chipLabel.implicitWidth + 12
+                                                    radius: Appearance.rounding.full
+                                                    color: Appearance.colors.colLayer2
+
+                                                    StyledText {
+                                                        id: chipLabel
+                                                        anchors.centerIn: parent
+                                                        text: parent.modelData
+                                                        color: Appearance.colors.colSubtext
+                                                        font.pixelSize: Appearance.font.pixelSize.small
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        StyledText {
+                                            Layout.fillWidth: true
+                                            visible: successorContext.length > 0
+                                            color: Appearance.colors.colPrimary
+                                            wrapMode: Text.WordWrap
+                                            text: Translation.tr("Successor to your %1").arg(successorContext)
+                                        }
+
+                                        StyledText {
+                                                Layout.fillWidth: true
+                                            visible: modelData.updated_label?.length > 0
+                                            color: Appearance.colors.colSubtext
+                                            text: Translation.tr("Updated %1").arg(modelData.updated_label ?? "")
+                                        }
+                                    }
+                                }
+                            }
+
+                            Rectangle {
+                                width: parent.width
+                                visible: ollamaManagerDialog.dialogMode !== "installed"
+                                implicitHeight: manualInstallLayout.implicitHeight + 16
+                                radius: Appearance.rounding.normal
+                                color: Appearance.colors.colLayer2
+                                border.width: 1
+                                border.color: Appearance.colors.colOutlineVariant
+
+                                ColumnLayout {
+                                    id: manualInstallLayout
+                                    anchors.fill: parent
+                                    anchors.margins: 8
+                                    spacing: 8
+
+                                    StyledText {
+                                        Layout.fillWidth: true
+                                        text: Translation.tr("Manual install")
+                                        color: Appearance.colors.colOnLayer1
+                                        font.bold: true
+                                    }
+
+                                    StyledText {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        color: Appearance.colors.colSubtext
+                                        text: Translation.tr("Know the exact Ollama model id already? Install it manually here.")
+                                    }
+
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 8
+
+                                        MaterialTextField {
+                                            Layout.fillWidth: true
+                                            placeholderText: Translation.tr("Custom model id, e.g. qwen3:4b")
+                                            text: ollamaManagerDialog.customModelId
+                                            onTextChanged: ollamaManagerDialog.customModelId = text
+                                            onAccepted: {
+                                                const modelId = text.trim();
+                                                if (modelId.length === 0) return;
+                                                Ai.queueOllamaInstall([modelId]);
+                                                text = "";
+                                                ollamaManagerDialog.customModelId = "";
+                                            }
+                                        }
+
+                                        DialogButton {
+                                            buttonText: Translation.tr("Install")
+                                            downAction: () => {
+                                                const modelId = ollamaManagerDialog.customModelId.trim();
+                                                if (modelId.length === 0) return;
+                                                Ai.queueOllamaInstall([modelId]);
+                                                ollamaManagerDialog.customModelId = "";
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Column {
+                            width: parent.width
+                            spacing: 8
+                            visible: ollamaManagerDialog.dialogMode === "installed"
+
+                            StyledText {
+                                width: parent.width
+                                text: Translation.tr("Installed")
+                                color: Appearance.colors.colOnLayer1
+                                font.bold: true
+                            }
+
+                            StyledText {
+                                width: parent.width
+                                visible: Ai.localOllamaModels.length === 0
+                                wrapMode: Text.WordWrap
+                                color: Appearance.colors.colSubtext
+                                text: Translation.tr("No local Ollama models are installed yet.")
+                            }
+
+                            Repeater {
+                                model: Ai.localOllamaModels
+                                delegate: Rectangle {
+                                    required property string modelData
+                                    readonly property string removeState: Ai.ollamaRemoveStateFor(modelData)
+                                    width: parent.width
+                                    implicitHeight: installedRow.implicitHeight + 12
+                                    radius: Appearance.rounding.small
+                                    color: Appearance.colors.colLayer3
+
+                                    RowLayout {
+                                        id: installedRow
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        spacing: 8
+
+                                        ColumnLayout {
+                                            Layout.fillWidth: true
+                                            spacing: 2
+
+                                            StyledText {
+                                                Layout.fillWidth: true
+                                                text: Ai.guessModelName(modelData)
+                                                color: Appearance.colors.colOnLayer1
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                            }
+
+                                            StyledText {
+                                                Layout.fillWidth: true
+                                                color: Appearance.colors.colSubtext
+                                                text: modelData
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        ApiCommandButton {
+                                            enabled: !Ai.ollamaInstallBusy && removeState === "installed"
+                                            buttonText: removeState === "removing"
+                                                ? Translation.tr("Removing")
+                                                : (removeState === "queued" ? Translation.tr("Queued") : Translation.tr("Remove"))
+                                            downAction: () => Ai.queueOllamaRemoval([modelData])
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.alignment: Qt.AlignRight
+
+                    DialogButton {
+                        buttonText: Translation.tr("Close")
+                        downAction: () => ollamaManagerDialog.dismiss()
                     }
                 }
             }

@@ -25,6 +25,7 @@ ShellRoot {
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()
         Hyprsunset.load()
+        IdleLockConfig.load()
         FirstRunExperience.load()
         ConflictKiller.load()
         Cliphist.refresh()
@@ -74,4 +75,3 @@ ShellRoot {
         onPressed: root.cyclePanelFamily()
     }
 }
-

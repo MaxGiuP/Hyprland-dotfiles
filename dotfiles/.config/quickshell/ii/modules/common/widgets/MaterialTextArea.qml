@@ -50,4 +50,14 @@ TextArea {
         variableAxes: Appearance.disableVariableFonts ? ({}) : Appearance.font.variableAxes.main
     }
     wrapMode: TextEdit.Wrap
+
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: eventPoint => editContextMenu.openAt(root, eventPoint.position.x, eventPoint.position.y)
+    }
+
+    MaterialEditContextMenu {
+        id: editContextMenu
+        target: root
+    }
 }

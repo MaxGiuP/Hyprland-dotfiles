@@ -29,6 +29,7 @@ Item {
     property bool showBluetoothDialog: false
     property bool showNightLightDialog: false
     property bool showWifiDialog: false
+    property bool showIdleLockDialog: false
     property bool editMode: false
 
     Connections {
@@ -39,6 +40,7 @@ Item {
                 root.showBluetoothDialog = false;
                 root.showAudioOutputDialog = false;
                 root.showAudioInputDialog = false;
+                root.showIdleLockDialog = false;
             }
         }
     }
@@ -155,6 +157,11 @@ Item {
         }
     }
 
+    ToggleDialog {
+        shownPropertyString: "showIdleLockDialog"
+        dialog: IdleLockDialogComponent {}
+    }
+
     component ToggleDialog: Loader {
         id: toggleDialogLoader
         required property string shownPropertyString
@@ -182,6 +189,58 @@ Item {
         }
     }
 
+    component IdleLockDialogComponent: WindowDialog {
+        id: idleLockDialog
+        backgroundHeight: 260
+
+        WindowDialogTitle {
+            text: Translation.tr("Auto-lock")
+        }
+
+        WindowDialogSeparator {
+            Layout.topMargin: -22
+            Layout.leftMargin: 0
+            Layout.rightMargin: 0
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            color: Appearance.colors.colOnSecondaryContainer
+            wrapMode: Text.WordWrap
+            text: Translation.tr("Adjust how many idle minutes pass before the session locks automatically. Set it to 0 to disable idle auto-lock.")
+        }
+
+        ConfigSpinBox {
+            Layout.fillWidth: true
+            icon: "timer"
+            text: Translation.tr("Lock delay")
+            value: Config.options.lock.timeout
+            from: 0
+            to: 240
+            stepSize: 1
+            onValueChanged: Config.options.lock.timeout = value
+        }
+
+        WindowDialogButtonRow {
+            DialogButton {
+                buttonText: Translation.tr("Disable")
+                onClicked: {
+                    Idle.toggleInhibit(true);
+                    idleLockDialog.dismiss();
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+            }
+
+            DialogButton {
+                buttonText: Translation.tr("Done")
+                onClicked: idleLockDialog.dismiss()
+            }
+        }
+    }
+
     component LoaderedQuickPanelImplementation: Loader {
         id: quickPanelImplLoader
         required property string styleName
@@ -205,6 +264,9 @@ Item {
             }
             function onOpenWifiDialog() {
                 root.showWifiDialog = true;
+            }
+            function onOpenIdleLockDialog() {
+                root.showIdleLockDialog = true;
             }
         }
     }
@@ -245,6 +307,7 @@ Item {
                     textFormat: Text.MarkdownText
                 }
             }
+
         }
 
         ButtonGroup {

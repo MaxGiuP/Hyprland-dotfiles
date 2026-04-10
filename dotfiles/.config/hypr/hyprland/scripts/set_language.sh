@@ -25,25 +25,24 @@ SYSTEMD_USER_CONF="/etc/systemd/user.conf"
 echo "Setting locale to: $LOCALE_NAME"
 
 # /etc/locale.conf
-sudo bash -c "cat > '$LOCALE_CONF' <<EOF
-LANG=${LOCALE_NAME}
-LC_TIME=${LOCALE_NAME}
-LC_CTYPE=${LOCALE_NAME}
-LC_ALL=${LOCALE_NAME}
-EOF"
+printf 'LANG=%s\nLC_TIME=%s\nLC_CTYPE=%s\nLC_ALL=%s\n' \
+    "$LOCALE_NAME" "$LOCALE_NAME" "$LOCALE_NAME" "$LOCALE_NAME" \
+    > "$LOCALE_CONF"
 
 # /etc/locale.gen — enable locale if not already active
 if grep -qE "^[#[:space:]]*${LOCALE_ENTRY}\$" /etc/locale.gen; then
-  sudo sed -i "s/^#[[:space:]]*${LOCALE_ENTRY}/${LOCALE_ENTRY}/" /etc/locale.gen
+  sed -i "s/^#[[:space:]]*${LOCALE_ENTRY}/${LOCALE_ENTRY}/" /etc/locale.gen
 else
-  echo "$LOCALE_ENTRY" | sudo tee -a /etc/locale.gen >/dev/null
+  echo "$LOCALE_ENTRY" >> /etc/locale.gen
 fi
 
 echo "Regenerating locales..."
-sudo locale-gen
+locale-gen
 
 # Hypr env.conf
 if [[ -f "$ENV_CONF" ]]; then
+  original_owner=$(stat -c '%U:%G' "$ENV_CONF")
+  original_perms=$(stat -c '%a' "$ENV_CONF")
   tmpfile=$(mktemp)
   awk -v newlang="$LOCALE_NAME" '
     BEGIN {found_LANG=0; found_LCTIME=0; found_LCTYPE=0; found_LCALL=0}
@@ -60,6 +59,8 @@ if [[ -f "$ENV_CONF" ]]; then
     }
   ' "$ENV_CONF" > "$tmpfile"
   mv "$tmpfile" "$ENV_CONF"
+  chown "$original_owner" "$ENV_CONF"
+  chmod "$original_perms" "$ENV_CONF"
 else
   cat > "$ENV_CONF" <<EOF
 env = LANG=${LOCALE_NAME}
@@ -70,41 +71,32 @@ EOF
 fi
 
 # /etc/environment
-sudo bash -c "cat > '$ENV_SYSTEM' <<EOF
-LANG=${LOCALE_NAME}
-LC_TIME=${LOCALE_NAME}
-LC_CTYPE=${LOCALE_NAME}
-LC_ALL=${LOCALE_NAME}
-EOF"
+printf 'LANG=%s\nLC_TIME=%s\nLC_CTYPE=%s\nLC_ALL=%s\n' \
+    "$LOCALE_NAME" "$LOCALE_NAME" "$LOCALE_NAME" "$LOCALE_NAME" \
+    > "$ENV_SYSTEM"
 
 # /etc/default/locale
-sudo bash -c "cat > '$DEFAULT_LOCALE' <<EOF
-LANG=${LOCALE_NAME}
-LC_TIME=${LOCALE_NAME}
-LC_CTYPE=${LOCALE_NAME}
-LC_ALL=${LOCALE_NAME}
-EOF"
+printf 'LANG=%s\nLC_TIME=%s\nLC_CTYPE=%s\nLC_ALL=%s\n' \
+    "$LOCALE_NAME" "$LOCALE_NAME" "$LOCALE_NAME" "$LOCALE_NAME" \
+    > "$DEFAULT_LOCALE"
 
 # /etc/profile.d/locale.sh
-sudo bash -c "cat > '$PROFILE_LOCALE' <<EOF
-export LANG=${LOCALE_NAME}
-export LC_TIME=${LOCALE_NAME}
-export LC_CTYPE=${LOCALE_NAME}
-export LC_ALL=${LOCALE_NAME}
-EOF"
+printf 'export LANG=%s\nexport LC_TIME=%s\nexport LC_CTYPE=%s\nexport LC_ALL=%s\n' \
+    "$LOCALE_NAME" "$LOCALE_NAME" "$LOCALE_NAME" "$LOCALE_NAME" \
+    > "$PROFILE_LOCALE"
 
 # /etc/systemd/system.conf
 if grep -q '^DefaultEnvironment=' "$SYSTEMD_SYSTEM_CONF"; then
-  sudo sed -i "s/^DefaultEnvironment=.*/DefaultEnvironment=LANG=${LOCALE_NAME} LC_TIME=${LOCALE_NAME} LC_CTYPE=${LOCALE_NAME} LC_ALL=${LOCALE_NAME}/" "$SYSTEMD_SYSTEM_CONF"
+  sed -i "s/^DefaultEnvironment=.*/DefaultEnvironment=LANG=${LOCALE_NAME} LC_TIME=${LOCALE_NAME} LC_CTYPE=${LOCALE_NAME} LC_ALL=${LOCALE_NAME}/" "$SYSTEMD_SYSTEM_CONF"
 else
-  echo "DefaultEnvironment=LANG=${LOCALE_NAME} LC_TIME=${LOCALE_NAME} LC_CTYPE=${LOCALE_NAME} LC_ALL=${LOCALE_NAME}" | sudo tee -a "$SYSTEMD_SYSTEM_CONF" >/dev/null
+  echo "DefaultEnvironment=LANG=${LOCALE_NAME} LC_TIME=${LOCALE_NAME} LC_CTYPE=${LOCALE_NAME} LC_ALL=${LOCALE_NAME}" >> "$SYSTEMD_SYSTEM_CONF"
 fi
 
 # /etc/systemd/user.conf
 if grep -q '^DefaultEnvironment=' "$SYSTEMD_USER_CONF"; then
-  sudo sed -i "s/^DefaultEnvironment=.*/DefaultEnvironment=LANG=${LOCALE_NAME} LC_TIME=${LOCALE_NAME} LC_CTYPE=${LOCALE_NAME} LC_ALL=${LOCALE_NAME}/" "$SYSTEMD_USER_CONF"
+  sed -i "s/^DefaultEnvironment=.*/DefaultEnvironment=LANG=${LOCALE_NAME} LC_TIME=${LOCALE_NAME} LC_CTYPE=${LOCALE_NAME} LC_ALL=${LOCALE_NAME}/" "$SYSTEMD_USER_CONF"
 else
-  echo "DefaultEnvironment=LANG=${LOCALE_NAME} LC_TIME=${LOCALE_NAME} LC_CTYPE=${LOCALE_NAME} LC_ALL=${LOCALE_NAME}" | sudo tee -a "$SYSTEMD_USER_CONF" >/dev/null
+  echo "DefaultEnvironment=LANG=${LOCALE_NAME} LC_TIME=${LOCALE_NAME} LC_CTYPE=${LOCALE_NAME} LC_ALL=${LOCALE_NAME}" >> "$SYSTEMD_USER_CONF"
 fi
 
 echo "Done. Log out and back in (or reboot) to apply everywhere."

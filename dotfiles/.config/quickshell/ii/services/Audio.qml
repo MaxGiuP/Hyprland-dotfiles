@@ -46,6 +46,19 @@ Singleton {
         return (node.properties["application.name"] || node.description || node.name)
     }
 
+    function appNodeDirection(node) {
+        const mediaClass = `${node?.properties["media.class"] ?? ""}`;
+        if (mediaClass === "Stream/Output/Audio")
+            return "sink";
+        if (mediaClass === "Stream/Input/Audio")
+            return "source";
+        if (node?.isSink === true)
+            return "sink";
+        if (node?.isSink === false)
+            return "source";
+        return "";
+    }
+
     function parseVolumeState(output) {
         const text = `${output ?? ""}`;
         const match = text.match(/Volume:\s+([0-9.]+)/);
@@ -253,7 +266,9 @@ Singleton {
     // Lists
     function appNodes(isSink) {
         return Pipewire.nodes.values.filter((node) => { // Should be list<PwNode> but it breaks ScriptModel
-            return (node.isSink === isSink) && node.isStream
+            if (!node?.isStream)
+                return false;
+            return root.appNodeDirection(node) === (isSink ? "sink" : "source");
         })
     }
     function devices(isSink) {
@@ -377,7 +392,7 @@ Singleton {
     // Track all device nodes so node.audio is populated for volume/mute control.
     // Defaults (sink/source) are included so their Connections blocks get live updates.
     PwObjectTracker {
-        objects: root.settingsApp ? [] : ([...root.outputDevices, ...root.inputDevices, root.sink, root.source]).filter(n => n != null)
+        objects: root.settingsApp ? [] : ([...root.outputDevices, ...root.inputDevices, ...root.outputAppNodes, ...root.inputAppNodes, root.sink, root.source]).filter(n => n != null)
     }
 
     Timer {

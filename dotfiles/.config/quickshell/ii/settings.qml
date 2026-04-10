@@ -24,14 +24,12 @@ ApplicationWindow {
     readonly property bool showWindowHeader: Config.options?.windows?.showTitlebar ?? true
     property var pages: [
         { displayName: Translation.tr("Home"), icon: "home", component: "modules/settings/HomeConfig.qml" },
-        { displayName: Translation.tr("Quick config"), icon: "tune", component: "modules/settings/QuickConfig.qml" },
         { displayName: Translation.tr("Bluetooth & devices"), icon: "bluetooth", component: "modules/settings/BluetoothDevicesConfig.qml" },
         { displayName: Translation.tr("Display"), icon: "desktop_windows", component: "modules/settings/DisplayPowerConfig.qml" },
         { displayName: Translation.tr("Audio"), icon: "volume_up", component: "modules/settings/AudioControlConfig.qml" },
         { displayName: Translation.tr("Internet"), icon: "language", component: "modules/settings/InternetConfig.qml" },
         { displayName: Translation.tr("Customisation"), icon: "palette", component: "modules/settings/DesktopThemeConfig.qml" },
-        { displayName: Translation.tr("Interface"), icon: "preview", component: "modules/settings/InterfaceConfig.qml" },
-        { displayName: Translation.tr("Apps"), icon: "apps", component: "modules/settings/AppsHubConfig.qml" },
+        { displayName: Translation.tr("Interface & Apps"), icon: "preview", component: "modules/settings/InterfaceConfig.qml" },
         { displayName: Translation.tr("Account"), icon: "person", component: "modules/settings/AccountsConfig.qml" },
         { displayName: Translation.tr("Date, time & language"), icon: "schedule", component: "modules/settings/DateTimeLanguageConfig.qml" },
         { displayName: Translation.tr("Accessibility"), icon: "accessibility_new", component: "modules/settings/AccessibilityConfig.qml" },

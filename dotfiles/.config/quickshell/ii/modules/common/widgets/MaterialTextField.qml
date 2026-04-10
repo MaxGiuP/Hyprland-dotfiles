@@ -37,4 +37,14 @@ TextField {
         hoverEnabled: true
         cursorShape: Qt.IBeamCursor
     }
+
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: eventPoint => editContextMenu.openAt(root, eventPoint.position.x, eventPoint.position.y)
+    }
+
+    MaterialEditContextMenu {
+        id: editContextMenu
+        target: root
+    }
 }

@@ -1,8 +1,9 @@
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Window
 import Quickshell
-import Quickshell.Io
 import Quickshell.Services.Pipewire
+import Quickshell.Bluetooth
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -13,10 +14,6 @@ ContentPage {
     baseWidth: 760
     readonly property bool settingsApp: Quickshell.env("II_SETTINGS_APP") === "1"
 
-    property string _hostname: ""
-    property string _memory: ""
-    property string _uptime: ""
-
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
 
@@ -24,219 +21,211 @@ ContentPage {
         objects: root.trackedOutputDevices
     }
 
-    component SummaryCard: Rectangle {
-        id: summaryCard
-        required property string title
-        required property string icon
-        property string subtitle: ""
-        property string detail: ""
+    // ── Search index ──────────────────────────────────────────────────────
+    readonly property var searchIndex: [
+        // 5 · Customisation (including former Quick config)
+        { label: "Wallpaper & Colors", page: 5, icon: "tune" },
+        { label: "Color palette style", page: 5, icon: "tune" },
+        { label: "Transparency", page: 5, icon: "tune" },
+        { label: "Bar position", page: 5, icon: "tune" },
+        { label: "Bar style", page: 5, icon: "tune" },
+        { label: "Bar transparency", page: 5, icon: "tune" },
+        { label: "Screen rounded corners", page: 5, icon: "tune" },
+        { label: "GTK theme", page: 5, icon: "palette" },
+        { label: "Icon theme", page: 5, icon: "palette" },
+        { label: "Cursor theme", page: 5, icon: "palette" },
+        { label: "Cursor size", page: 5, icon: "palette" },
+        { label: "Font family", page: 5, icon: "palette" },
+        { label: "Font size", page: 5, icon: "palette" },
+        { label: "Change wallpaper", page: 5, icon: "palette" },
+        { label: "Dark mode", page: 5, icon: "palette" },
+        { label: "Light mode", page: 5, icon: "palette" },
+        { label: "Color scheme", page: 5, icon: "palette" },
+        { label: "Kvantum theme", page: 5, icon: "palette" },
+        { label: "KDE theme", page: 5, icon: "palette" },
+        { label: "GNOME interface settings", page: 5, icon: "palette" },
+        { label: "GTK 3 settings", page: 5, icon: "palette" },
+        { label: "GTK 4 settings", page: 5, icon: "palette" },
+        { label: "kdeglobals", page: 5, icon: "palette" },
+        { label: "Prefer dark apps", page: 5, icon: "palette" },
+        { label: "Text scaling", page: 5, icon: "palette" },
+        { label: "Hot corners", page: 5, icon: "palette" },
+        { label: "Animations", page: 5, icon: "palette" },
+        // 1 · Bluetooth & devices
+        { label: "Bluetooth devices", page: 1, icon: "bluetooth" },
+        { label: "Pair device", page: 1, icon: "bluetooth" },
+        { label: "Audio output device", page: 1, icon: "bluetooth" },
+        { label: "Open Bluetooth app", page: 1, icon: "bluetooth" },
+        // 2 · Display
+        { label: "Night light", page: 2, icon: "desktop_windows" },
+        { label: "Color temperature", page: 2, icon: "desktop_windows" },
+        { label: "Night light schedule", page: 2, icon: "desktop_windows" },
+        { label: "Anti-flashbang", page: 2, icon: "desktop_windows" },
+        { label: "Low battery threshold", page: 2, icon: "desktop_windows" },
+        { label: "Critical battery threshold", page: 2, icon: "desktop_windows" },
+        { label: "Automatic suspend on low battery", page: 2, icon: "desktop_windows" },
+        { label: "Monitor positions", page: 2, icon: "desktop_windows" },
+        { label: "Brightness", page: 2, icon: "desktop_windows" },
+        // 3 · Audio
+        { label: "Default output device", page: 3, icon: "volume_up" },
+        { label: "Default input device", page: 3, icon: "volume_up" },
+        { label: "Mono output", page: 3, icon: "volume_up" },
+        { label: "App streams", page: 3, icon: "volume_up" },
+        { label: "Earbang protection", page: 3, icon: "volume_up" },
+        { label: "Volume ceiling", page: 3, icon: "volume_up" },
+        { label: "Max volume increase per step", page: 3, icon: "volume_up" },
+        { label: "System sounds", page: 3, icon: "volume_up" },
+        { label: "Battery alert sound", page: 3, icon: "volume_up" },
+        { label: "Microphone input", page: 3, icon: "volume_up" },
+        // 4 · Internet
+        { label: "Wi-Fi networks", page: 4, icon: "language" },
+        { label: "Scan Wi-Fi", page: 4, icon: "language" },
+        { label: "Ethernet", page: 4, icon: "language" },
+        { label: "Network settings", page: 4, icon: "language" },
+        { label: "Captive portal", page: 4, icon: "language" },
+        // 6 · Interface & Apps
+        { label: "Dock", page: 6, icon: "preview" },
+        { label: "Dock pinned apps", page: 6, icon: "preview" },
+        { label: "Lock screen", page: 6, icon: "preview" },
+        { label: "Auto-lock delay", page: 6, icon: "preview" },
+        { label: "Lock screen style", page: 6, icon: "preview" },
+        { label: "Require password to power off", page: 6, icon: "preview" },
+        { label: "Notifications timeout", page: 6, icon: "preview" },
+        { label: "Crosshair overlay", page: 6, icon: "preview" },
+        { label: "Floating image overlay", page: 6, icon: "preview" },
+        { label: "Overview layout", page: 6, icon: "preview" },
+        { label: "Corner open sidebar", page: 6, icon: "preview" },
+        { label: "Quick toggles layout", page: 6, icon: "preview" },
+        { label: "Main font", page: 6, icon: "preview" },
+        { label: "Monospace font", page: 6, icon: "preview" },
+        { label: "Numbers font", page: 6, icon: "preview" },
+        { label: "Cheat sheet super key symbol", page: 6, icon: "preview" },
+        { label: "On-screen display timeout", page: 6, icon: "preview" },
+        { label: "Region selector / screen snip", page: 6, icon: "preview" },
+        { label: "Wallpaper file picker", page: 6, icon: "preview" },
+        { label: "Translator sidebar", page: 6, icon: "preview" },
+        { label: "Bluetooth app command", page: 6, icon: "apps" },
+        { label: "Network settings command", page: 6, icon: "apps" },
+        { label: "Terminal command", page: 6, icon: "apps" },
+        { label: "System update command", page: 6, icon: "apps" },
+        { label: "Volume mixer command", page: 6, icon: "apps" },
+        { label: "Task manager command", page: 6, icon: "apps" },
+        { label: "Change password command", page: 6, icon: "apps" },
+        { label: "Launcher pinned apps", page: 6, icon: "apps" },
+        // 7 · Account
+        { label: "Manage users", page: 7, icon: "person" },
+        { label: "Change password", page: 7, icon: "person" },
+        // 8 · Date, time & language
+        { label: "Language / locale", page: 8, icon: "schedule" },
+        { label: "System locale", page: 8, icon: "schedule" },
+        { label: "Generate translation", page: 8, icon: "schedule" },
+        { label: "Clock format 24h 12h", page: 8, icon: "schedule" },
+        { label: "Second precision clock", page: 8, icon: "schedule" },
+        { label: "Translation map", page: 8, icon: "schedule" },
+        // 9 · Accessibility
+        { label: "Cursor size", page: 9, icon: "accessibility_new" },
+        { label: "Text scaling accessibility", page: 9, icon: "accessibility_new" },
+        { label: "Disable animations", page: 9, icon: "accessibility_new" },
+        { label: "Readability", page: 9, icon: "accessibility_new" },
+        // 10 · Security & privacy
+        { label: "AI policy", page: 10, icon: "shield_lock" },
+        { label: "Clipboard privacy", page: 10, icon: "shield_lock" },
+        { label: "Wallpaper privacy", page: 10, icon: "shield_lock" },
+        // 11 · System info & update
+        { label: "Check for updates", page: 11, icon: "system_update" },
+        { label: "System information", page: 11, icon: "system_update" },
+        { label: "CPU memory GPU info", page: 11, icon: "system_update" },
+        // 12 · Services
+        { label: "AI system prompt", page: 12, icon: "widgets" },
+        { label: "Music recognition timeout", page: 12, icon: "widgets" },
+        { label: "User agent", page: 12, icon: "widgets" },
+        { label: "Search engine URL", page: 12, icon: "widgets" },
+        { label: "Search prefixes", page: 12, icon: "widgets" },
+        { label: "Weather city GPS", page: 12, icon: "widgets" },
+        { label: "Screenshot save path", page: 12, icon: "widgets" },
+        { label: "Video recording path", page: 12, icon: "widgets" },
+        // 13 · Hyprland
+        { label: "Hyprland config files", page: 13, icon: "deployed_code" },
+        { label: "Keybinds", page: 13, icon: "deployed_code" },
+        { label: "Window rules", page: 13, icon: "deployed_code" },
+        { label: "Workspace bindings", page: 13, icon: "deployed_code" },
+        { label: "Monitor overrides", page: 13, icon: "deployed_code" },
+        { label: "Environment variables", page: 13, icon: "deployed_code" },
+        { label: "Startup commands autostart", page: 13, icon: "deployed_code" },
+    ]
 
-        Layout.fillWidth: true
-        implicitHeight: 118
-        radius: Appearance.rounding.normal
-        color: Appearance.colors.colLayer1
-        border.width: 1
-        border.color: Appearance.colors.colOutlineVariant
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 14
-            spacing: 6
-
-            RowLayout {
-                spacing: 8
-                MaterialSymbol {
-                    text: summaryCard.icon
-                    iconSize: 22
-                    color: Appearance.colors.colOnLayer1
-                }
-                StyledText {
-                    text: summaryCard.title
-                    color: Appearance.colors.colOnLayer1
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                    font.weight: Font.Medium
-                }
-            }
-
-            StyledText {
-                text: summaryCard.subtitle
-                color: Appearance.colors.colOnLayer1
-                wrapMode: Text.Wrap
-            }
-
-            StyledText {
-                visible: text.length > 0
-                text: summaryCard.detail
-                color: Appearance.colors.colSubtext
-                wrapMode: Text.Wrap
-            }
-        }
-    }
-
-    Process {
-        running: true
-        command: ["bash", "-c",
-            "echo \"hostname:$(hostname 2>/dev/null)\"; " +
-            "awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{printf \"memory:%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; " +
-            "echo \"uptime:$(uptime -p 2>/dev/null | sed 's/^up //' || echo Unknown)\""
-        ]
-        stdout: SplitParser {
-            onRead: data => {
-                const idx = data.indexOf(':')
-                if (idx < 0) return
-                const key = data.slice(0, idx)
-                const val = data.slice(idx + 1)
-                switch (key) {
-                    case 'hostname': root._hostname = val; break
-                    case 'memory':   root._memory   = val; break
-                    case 'uptime':   root._uptime   = val; break
-                }
-            }
-        }
-    }
-
-    // ── Welcome ───────────────────────────────────────────────────────────
+    // ── Search ────────────────────────────────────────────────────────────
     ContentSection {
-        icon: "person"
-        title: `${SystemInfo.username} \u2014 ${SystemInfo.distroName}`
+        icon: "search"
+        title: Translation.tr("Search settings")
 
-        RowLayout {
+        MaterialTextField {
+            id: searchField
             Layout.fillWidth: true
-            spacing: 16
-            Layout.topMargin: 4
-            Layout.bottomMargin: 4
+            placeholderText: Translation.tr("Type to search…")
+        }
 
-            // Wallpaper preview
-            Rectangle {
-                implicitWidth: 200
-                implicitHeight: 112
-                radius: Appearance.rounding.normal
-                color: "transparent"
-                clip: true
-
-                StyledImage {
-                    anchors.fill: parent
-                    sourceSize.width: parent.implicitWidth
-                    sourceSize.height: parent.implicitHeight
-                    fillMode: Image.PreserveAspectCrop
-                    source: Config.options.background.wallpaperPath
-                    cache: false
-                }
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 8
-
-                // Dark / Light toggle
-                RowLayout {
-                    spacing: 6
-                    Layout.fillWidth: true
-
-                    Repeater {
-                        model: [{ dark: false, icon: "light_mode", label: Translation.tr("Light") },
-                                { dark: true,  icon: "dark_mode",  label: Translation.tr("Dark")  }]
-                        delegate: RippleButton {
-                            id: modeToggleButton
-                            required property var modelData
-                            readonly property color colText: toggled ? colForegroundToggled : Appearance.colors.colOnLayer2
-                            Layout.fillWidth: true
-                            implicitHeight: 48
-                            buttonRadius: Appearance.rounding.normal
-                            toggled: Appearance.m3colors.darkmode === modelData.dark
-                            colBackground: Appearance.colors.colLayer2
-                            onClicked: Quickshell.execDetached(["bash", "-c",
-                                `${Directories.wallpaperSwitchScriptPath} --mode ${modelData.dark ? "dark" : "light"} --noswitch`])
-                            contentItem: ColumnLayout {
-                                anchors.centerIn: parent
-                                spacing: 2
-                                MaterialSymbol {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    iconSize: 22
-                                    text: modelData.icon
-                                    color: modeToggleButton.colText
-                                }
-                                StyledText {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    text: modelData.label
-                                    font.pixelSize: Appearance.font.pixelSize.smaller
-                                    color: modeToggleButton.colText
-                                }
-                            }
-                        }
+        Repeater {
+            model: {
+                const q = searchField.text.trim().toLowerCase()
+                if (!q) return []
+                const pages = Window.window?.pages ?? []
+                const seen = new Set()
+                const results = []
+                for (const entry of root.searchIndex) {
+                    if (entry.label.toLowerCase().includes(q) && !seen.has(entry.label)) {
+                        seen.add(entry.label)
+                        results.push({
+                            icon: entry.icon,
+                            label: entry.label,
+                            pageName: pages[entry.page]?.displayName ?? "",
+                            pageIndex: entry.page
+                        })
                     }
                 }
+                return results
+            }
 
-                // Wallpaper picker
-                RippleButtonWithIcon {
-                    Layout.fillWidth: true
-                    materialIcon: "wallpaper"
-                    mainText: Translation.tr("Change wallpaper")
-                    onClicked: Wallpapers.openFallbackPicker(Appearance.m3colors.darkmode)
+            delegate: RippleButton {
+                required property var modelData
+                Layout.fillWidth: true
+                implicitHeight: resultRow.implicitHeight + 16
+                buttonRadius: Appearance.rounding.normal
+                onClicked: Window.window.currentPage = modelData.pageIndex
+
+                RowLayout {
+                    id: resultRow
+                    anchors { fill: parent; margins: 8 }
+                    spacing: 10
+
+                    MaterialSymbol {
+                        text: modelData.icon
+                        iconSize: 18
+                        color: Appearance.colors.colOnLayer1
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+
+                        StyledText {
+                            text: modelData.label
+                            color: Appearance.colors.colOnLayer1
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                        }
+                        StyledText {
+                            text: modelData.pageName
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                    }
+
+                    MaterialSymbol {
+                        text: "chevron_right"
+                        iconSize: 18
+                        color: Appearance.colors.colSubtext
+                    }
                 }
-            }
-        }
-    }
-
-    ContentSection {
-        icon: "stylus"
-        title: Translation.tr("Desktop theme stack")
-
-        StyledText {
-            Layout.fillWidth: true
-            wrapMode: Text.Wrap
-            color: Appearance.colors.colSubtext
-            text: Translation.tr("This settings app now exposes the theme layers below Quickshell as well, so you can see your GTK files, GNOME interface values, and KDE or Qt theme files in one place.")
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 10
-
-            SummaryCard {
-                title: Translation.tr("GTK")
-                icon: "palette"
-                subtitle: `${DesktopThemeSettings.gtk4Theme || DesktopThemeSettings.gtk3Theme || "-"}`
-                detail: `${Translation.tr("Icons")}: ${DesktopThemeSettings.gtk4IconTheme || DesktopThemeSettings.gtk3IconTheme || "-"}`
-            }
-
-            SummaryCard {
-                title: Translation.tr("GNOME")
-                icon: "deployed_code"
-                subtitle: DesktopThemeSettings.gnomeGtkTheme || "-"
-                detail: `${Translation.tr("Scheme")}: ${DesktopThemeSettings.gnomeColorScheme || "-"}`
-            }
-
-            SummaryCard {
-                title: Translation.tr("KDE / Qt")
-                icon: "widgets"
-                subtitle: DesktopThemeSettings.kdeColorScheme || "-"
-                detail: `${Translation.tr("Kvantum")}: ${DesktopThemeSettings.kvantumTheme || "-"}`
-            }
-        }
-
-        ConfigRow {
-            uniform: true
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "edit_document"
-                mainText: Translation.tr("GTK files")
-                onClicked: DesktopThemeSettings.openFile(DesktopThemeSettings.gtk4Path)
-            }
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "edit_document"
-                mainText: Translation.tr("kdeglobals")
-                onClicked: DesktopThemeSettings.openFile(DesktopThemeSettings.kdeGlobalsPath)
-            }
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "refresh"
-                mainText: Translation.tr("Refresh system theme state")
-                onClicked: DesktopThemeSettings.refreshAll()
             }
         }
     }
@@ -289,40 +278,313 @@ ContentPage {
         }
     }
 
-    // ── System snapshot ───────────────────────────────────────────────────
+    // ── Wi-Fi ─────────────────────────────────────────────────────────────
     ContentSection {
-        icon: "monitor_heart"
-        title: Translation.tr("System")
+        icon: Network.wifiEnabled ? "wifi" : "wifi_off"
+        title: Translation.tr("Wi-Fi")
 
         ConfigRow {
             uniform: true
 
-            ContentSubsection {
-                title: Translation.tr("Memory")
-                StyledText {
-                    text: root._memory || "\u2026"
-                    color: Appearance.colors.colOnLayer1
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                }
+            ConfigSwitch {
+                buttonIcon: Network.wifiEnabled ? "wifi" : "wifi_off"
+                text: Network.wifiEnabled
+                    ? (Network.wifi
+                        ? Translation.tr("Connected")
+                        : Network.wifiStatus === "connecting"
+                            ? Translation.tr("Connecting…")
+                            : Translation.tr("On, searching"))
+                    : Translation.tr("Off")
+                checked: Network.wifiEnabled
+                onClicked: Network.toggleWifi()
             }
 
-            ContentSubsection {
-                title: Translation.tr("Uptime")
-                StyledText {
-                    text: root._uptime || "\u2026"
-                    color: Appearance.colors.colOnLayer1
-                    font.pixelSize: Appearance.font.pixelSize.normal
-                }
+            RippleButtonWithIcon {
+                Layout.fillWidth: true
+                materialIcon: Network.wifiScanning ? "radar" : "refresh"
+                mainText: Network.wifiScanning ? Translation.tr("Scanning…") : Translation.tr("Scan networks")
+                enabled: !Network.wifiScanning && Network.wifiEnabled
+                onClicked: Network.rescanWifi()
             }
+        }
 
-            ContentSubsection {
-                title: Translation.tr("Host")
+        Rectangle {
+            visible: Network.active !== null && Network.wifi
+            Layout.fillWidth: true
+            implicitHeight: connRow.implicitHeight + 16
+            radius: Appearance.rounding.normal
+            color: Appearance.colors.colSecondaryContainer
+
+            RowLayout {
+                id: connRow
+                anchors { fill: parent; margins: 8 }
+                spacing: 8
+                MaterialSymbol {
+                    text: "check_circle"
+                    iconSize: 20
+                    color: Appearance.colors.colOnSecondaryContainer
+                }
                 StyledText {
-                    text: root._hostname || "\u2026"
-                    color: Appearance.colors.colOnLayer1
-                    font.pixelSize: Appearance.font.pixelSize.normal
+                    Layout.fillWidth: true
+                    text: Network.networkName + (Network.networkStrength > 0 ? " • " + Network.networkStrength + "%" : "")
+                    color: Appearance.colors.colOnSecondaryContainer
+                    font.weight: Font.Medium
+                }
+                RippleButton {
+                    buttonRadius: Appearance.rounding.full
+                    implicitWidth: 90
+                    implicitHeight: 28
+                    colBackground: Appearance.colors.colLayer2
+                    onClicked: Network.disconnectWifiNetwork()
+                    contentItem: StyledText {
+                        anchors.centerIn: parent
+                        text: Translation.tr("Disconnect")
+                        color: Appearance.colors.colOnLayer1
+                        font.pixelSize: Appearance.font.pixelSize.small
+                    }
                 }
             }
         }
+
+        Repeater {
+            model: Network.friendlyWifiNetworks
+            delegate: Rectangle {
+                id: netItem
+                required property var modelData
+                Layout.fillWidth: true
+                implicitHeight: netCol.implicitHeight + 16
+                radius: Appearance.rounding.normal
+                color: modelData.active
+                    ? Appearance.colors.colPrimaryContainer
+                    : netHover.containsMouse
+                        ? Appearance.colors.colLayer1Hover
+                        : Appearance.colors.colLayer1
+
+                Behavior on color {
+                    animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+                }
+
+                ColumnLayout {
+                    id: netCol
+                    anchors { fill: parent; margins: 8 }
+                    spacing: 4
+
+                    RowLayout {
+                        spacing: 8
+                        MaterialSymbol {
+                            property int s: netItem.modelData?.strength ?? 0
+                            text: s > 80 ? "signal_wifi_4_bar"
+                                : s > 60 ? "network_wifi_3_bar"
+                                : s > 40 ? "network_wifi_2_bar"
+                                : s > 20 ? "network_wifi_1_bar"
+                                : "signal_wifi_0_bar"
+                            iconSize: 20
+                            color: netItem.modelData.active ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: netItem.modelData?.ssid ?? Translation.tr("Unknown")
+                            color: netItem.modelData.active ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                            font.weight: netItem.modelData.active ? Font.Medium : Font.Normal
+                            elide: Text.ElideRight
+                        }
+                        StyledText {
+                            visible: netItem.modelData?.strength > 0
+                            text: netItem.modelData?.strength + "%"
+                            color: netItem.modelData.active ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                        }
+                        MaterialSymbol {
+                            visible: !!(netItem.modelData?.isSecure || netItem.modelData?.active)
+                            text: netItem.modelData?.active ? "check" : "lock"
+                            iconSize: 16
+                            color: netItem.modelData.active ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                        }
+                    }
+
+                    ColumnLayout {
+                        visible: netItem.modelData?.askingPassword ?? false
+                        Layout.fillWidth: true
+                        spacing: 4
+                        MaterialTextField {
+                            id: pwField
+                            Layout.fillWidth: true
+                            placeholderText: Translation.tr("Password")
+                            echoMode: TextInput.Password
+                            inputMethodHints: Qt.ImhSensitiveData
+                            onAccepted: Network.changePassword(netItem.modelData, pwField.text)
+                        }
+                        RowLayout {
+                            Item { Layout.fillWidth: true }
+                            DialogButton {
+                                buttonText: Translation.tr("Cancel")
+                                onClicked: netItem.modelData.askingPassword = false
+                            }
+                            DialogButton {
+                                buttonText: Translation.tr("Connect")
+                                onClicked: Network.changePassword(netItem.modelData, pwField.text)
+                            }
+                        }
+                    }
+                }
+
+                MouseArea {
+                    id: netHover
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    visible: !(netItem.modelData?.askingPassword ?? false)
+                    onClicked: Network.connectToWifiNetwork(netItem.modelData)
+                }
+            }
+        }
+
+        StyledText {
+            visible: !Network.wifiEnabled || Network.friendlyWifiNetworks.length === 0
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: !Network.wifiEnabled ? Translation.tr("Enable Wi-Fi to see networks") : Translation.tr("No networks found — press scan")
+            color: Appearance.colors.colSubtext
+        }
     }
+
+    // ── Bluetooth ──────────────────────────────────────────────────────────
+    ContentSection {
+        icon: BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
+        title: Translation.tr("Bluetooth")
+
+        ConfigRow {
+            uniform: true
+
+            ConfigSwitch {
+                buttonIcon: BluetoothStatus.connected ? "bluetooth_connected"
+                    : BluetoothStatus.enabled ? "bluetooth"
+                    : "bluetooth_disabled"
+                text: BluetoothStatus.connected
+                    ? Translation.tr("Connected: %1").arg(BluetoothStatus.firstActiveDevice?.name ?? "")
+                    : BluetoothStatus.enabled ? Translation.tr("On, not connected") : Translation.tr("Off")
+                checked: BluetoothStatus.enabled
+                onClicked: {
+                    if (Bluetooth.defaultAdapter)
+                        Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter.enabled
+                }
+            }
+
+            RippleButtonWithIcon {
+                Layout.fillWidth: true
+                materialIcon: "search"
+                mainText: (Bluetooth.defaultAdapter?.discovering ?? false) ? Translation.tr("Scanning…") : Translation.tr("Scan devices")
+                enabled: BluetoothStatus.enabled
+                onClicked: {
+                    if (Bluetooth.defaultAdapter)
+                        Bluetooth.defaultAdapter.discovering = !Bluetooth.defaultAdapter.discovering
+                }
+            }
+        }
+
+        Repeater {
+            model: ScriptModel {
+                values: BluetoothStatus.friendlyDeviceList ?? []
+            }
+            delegate: Rectangle {
+                id: btItem
+                required property BluetoothDevice modelData
+                Layout.fillWidth: true
+                implicitHeight: btRow.implicitHeight + 16
+                radius: Appearance.rounding.normal
+                color: modelData.connected ? Appearance.colors.colPrimaryContainer : Appearance.colors.colLayer1
+
+                Behavior on color {
+                    animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+                }
+
+                RowLayout {
+                    id: btRow
+                    anchors { fill: parent; margins: 8 }
+                    spacing: 8
+
+                    MaterialSymbol {
+                        text: modelData.connected ? "bluetooth_connected" : "bluetooth"
+                        iconSize: 20
+                        color: modelData.connected ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        StyledText {
+                            text: modelData.name || Translation.tr("Unknown device")
+                            color: modelData.connected ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer1
+                            font.weight: modelData.connected ? Font.Medium : Font.Normal
+                        }
+                        StyledText {
+                            visible: modelData.paired
+                            text: {
+                                let s = modelData.connected ? Translation.tr("Connected") : Translation.tr("Paired")
+                                if (modelData.batteryAvailable) s += " • " + Math.round(modelData.battery * 100) + "%"
+                                return s
+                            }
+                            color: modelData.connected ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                        }
+                    }
+
+                    RippleButton {
+                        visible: modelData.paired
+                        buttonRadius: Appearance.rounding.full
+                        implicitWidth: 90
+                        implicitHeight: 28
+                        colBackground: modelData.connected ? Appearance.colors.colLayer2 : Appearance.colors.colPrimary
+                        onClicked: modelData.connected ? modelData.disconnect() : modelData.connect()
+                        contentItem: StyledText {
+                            anchors.centerIn: parent
+                            text: btItem.modelData.connected ? Translation.tr("Disconnect") : Translation.tr("Connect")
+                            color: btItem.modelData.connected ? Appearance.colors.colOnLayer1 : Appearance.colors.colOnPrimary
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                    }
+                }
+            }
+        }
+
+        StyledText {
+            visible: !BluetoothStatus.enabled
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: Translation.tr("Enable Bluetooth to see devices")
+            color: Appearance.colors.colSubtext
+        }
+
+        RippleButtonWithIcon {
+            Layout.fillWidth: true
+            materialIcon: "settings_bluetooth"
+            mainText: Translation.tr("Open full Bluetooth settings")
+            onClicked: Quickshell.execDetached(["bash", "-c", Config.options.apps.bluetooth])
+        }
+    }
+
+    // ── Network tools ──────────────────────────────────────────────────────
+    ContentSection {
+        icon: "lan"
+        title: Translation.tr("Network tools")
+
+        ConfigRow {
+            uniform: true
+
+            RippleButtonWithIcon {
+                Layout.fillWidth: true
+                materialIcon: "settings_ethernet"
+                mainText: Translation.tr("Ethernet settings")
+                onClicked: Quickshell.execDetached(["bash", "-c", Config.options.apps.networkEthernet])
+            }
+
+            RippleButtonWithIcon {
+                Layout.fillWidth: true
+                materialIcon: "open_in_browser"
+                mainText: Translation.tr("Portal / captive login")
+                onClicked: Network.openPublicWifiPortal()
+            }
+        }
+    }
+
 }

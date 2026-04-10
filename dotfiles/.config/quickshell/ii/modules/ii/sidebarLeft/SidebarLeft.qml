@@ -67,7 +67,7 @@ Scope {
     }
 
     function pinnedContentParent() {
-        return root.pinnedWindowsByScreen[root.pinnedScreenName]?.contentParent ?? null;
+        return root.panelWindowsByScreen[root.pinnedScreenName]?.contentParent ?? null;
     }
 
     function attachedContentParent() {
@@ -206,9 +206,9 @@ Scope {
                 && root.pin
                 && screenName === root.pinnedScreenName
             readonly property real pinnedTopClearance: GlobalStates.barTopClearanceByScreen[screenName] ?? Appearance.sizes.hyprlandGapsOut
-            readonly property real pinnedBottomClearance: Appearance.sizes.hyprlandGapsOut
+            readonly property real pinnedBottomClearance: 0
             readonly property real flyoutTopClearance: Appearance.sizes.hyprlandGapsOut
-            readonly property real flyoutBottomClearance: Appearance.sizes.barHeight
+            readonly property real flyoutBottomClearance: 0
             property bool flyoutOpen: !root.detach
                 && !root.pin
                 && GlobalStates.sidebarLeftOpen
@@ -231,10 +231,16 @@ Scope {
                     GlobalFocusGrab.removeDismissable(panelWindow);
                     GlobalFocusGrab.removePersistent(panelWindow);
 
-                    if (!screenScope.flyoutOpen || root.detach || root.pin)
+                    if (root.detach)
                         return;
 
-                    GlobalFocusGrab.addDismissable(panelWindow);
+                    if (screenScope.pinnedWindowOpen) {
+                        GlobalFocusGrab.addPersistent(panelWindow);
+                        return;
+                    }
+
+                    if (screenScope.flyoutOpen)
+                        GlobalFocusGrab.addDismissable(panelWindow);
                 }
 
                 Component.onCompleted: {
@@ -248,17 +254,18 @@ Scope {
                 }
 
                 exclusionMode: ExclusionMode.Normal
-                exclusiveZone: 0
-                implicitWidth: Appearance.sizes.sidebarWidthExtended + Appearance.sizes.elevationMargin
+                exclusiveZone: screenScope.pinnedWindowOpen ? Math.ceil(root.sidebarWidth) : 0
+                implicitWidth: root.sidebarWidth
                 implicitHeight: screen?.height ?? 2160
                 WlrLayershell.namespace: "quickshell:sidebarLeft"
-                WlrLayershell.layer: screenScope.pinnedWindowOpen ? WlrLayer.Bottom : WlrLayer.Top
+                WlrLayershell.layer: WlrLayer.Top
                 WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
                 color: "transparent"
 
                 anchors {
                     top: true
                     left: true
+                    bottom: true
                 }
 
                 mask: Region {
@@ -270,6 +277,13 @@ Scope {
                     function onFlyoutOpenChanged() {
                         panelWindow.syncFocusGrab();
                         if (screenScope.flyoutOpen) {
+                            root.relocateSidebarContent();
+                            Qt.callLater(root.focusSidebarContent);
+                        }
+                    }
+                    function onPinnedWindowOpenChanged() {
+                        panelWindow.syncFocusGrab();
+                        if (screenScope.pinnedWindowOpen) {
                             root.relocateSidebarContent();
                             Qt.callLater(root.focusSidebarContent);
                         }
@@ -295,21 +309,21 @@ Scope {
                 Shortcut {
                     sequence: "Ctrl+O"
                     context: Qt.WindowShortcut
-                    enabled: screenScope.flyoutOpen
+                    enabled: screenScope.flyoutOpen || screenScope.pinnedWindowOpen
                     onActivated: root.toggleExtend()
                 }
 
                 Shortcut {
                     sequence: "Ctrl+P"
                     context: Qt.WindowShortcut
-                    enabled: screenScope.flyoutOpen
+                    enabled: screenScope.flyoutOpen || screenScope.pinnedWindowOpen
                     onActivated: root.togglePin()
                 }
 
                 Shortcut {
                     sequence: "Ctrl+D"
                     context: Qt.WindowShortcut
-                    enabled: screenScope.flyoutOpen
+                    enabled: screenScope.flyoutOpen || screenScope.pinnedWindowOpen
                     onActivated: root.toggleDetach()
                 }
 
@@ -317,13 +331,19 @@ Scope {
                     target: sidebarLeftBackground
                     radius: sidebarLeftBackground.radius
                 }
+
                 Rectangle {
                     id: sidebarLeftBackground
                     focus: true
-                    y: screenScope.flyoutTopClearance
-                    x: -panelWindow.implicitWidth
-                    width: root.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
-                    height: Math.max(1, parent.height - y - screenScope.flyoutBottomClearance)
+                    x: screenScope.pinnedWindowOpen ? 0 : -panelWindow.implicitWidth
+                    y: screenScope.pinnedWindowOpen ? screenScope.pinnedTopClearance : screenScope.flyoutTopClearance
+                    width: root.sidebarWidth
+                    height: Math.max(
+                        1,
+                        parent.height - y - (screenScope.pinnedWindowOpen
+                            ? screenScope.pinnedBottomClearance
+                            : screenScope.flyoutBottomClearance)
+                    )
                     color: Appearance.colors.colLayer0
                     border.width: 1
                     border.color: Appearance.colors.colLayer0Border
@@ -331,8 +351,8 @@ Scope {
 
                     states: State {
                         name: "open"
-                        when: screenScope.flyoutOpen
-                        PropertyChanges { target: sidebarLeftBackground; x: Appearance.sizes.hyprlandGapsOut }
+                        when: screenScope.flyoutOpen || screenScope.pinnedWindowOpen
+                        PropertyChanges { target: sidebarLeftBackground; x: 0 }
                     }
                     transitions: [
                         Transition {
@@ -369,119 +389,6 @@ Scope {
                     Keys.onPressed: (event) => {
                         if (event.key === Qt.Key_Escape)
                             panelWindow.hide();
-                    }
-                }
-            }
-
-            ApplicationWindow {
-                id: pinnedWindow
-                visible: screenScope.pinnedWindowOpen
-                flags: Qt.Window | Qt.FramelessWindowHint
-                color: "transparent"
-                width: root.sidebarWidth + Appearance.sizes.elevationMargin
-                height: Math.max(1, (screenScope.modelData?.height ?? 900) - screenScope.pinnedTopClearance - screenScope.pinnedBottomClearance)
-                minimumWidth: Appearance.sizes.sidebarWidth
-                minimumHeight: 500
-                title: "Pinned Sidebar"
-                property var contentParent: pinnedSidebarBackground
-
-                x: screenScope.modelData?.x ?? 0
-                y: (screenScope.modelData?.y ?? 0) + screenScope.pinnedTopClearance
-
-                function hide() {
-                    root.closeSidebar();
-                }
-
-                function syncFocusGrab() {
-                    GlobalFocusGrab.removePersistent(pinnedWindow);
-
-                    if (visible)
-                        GlobalFocusGrab.addPersistent(pinnedWindow);
-                }
-
-                Component.onCompleted: {
-                    root.registerPinnedWindow(screenScope.screenName, pinnedWindow);
-                    pinnedWindow.syncFocusGrab();
-                }
-                Component.onDestruction: {
-                    GlobalFocusGrab.removePersistent(pinnedWindow);
-                    root.unregisterPinnedWindow(screenScope.screenName, pinnedWindow);
-                }
-
-                onVisibleChanged: {
-                    pinnedWindow.syncFocusGrab();
-                    if (visible) {
-                        root.relocateSidebarContent();
-                        Qt.callLater(root.focusSidebarContent);
-                    }
-                }
-
-                Connections {
-                    target: root
-                    function onDetachChanged() {
-                        pinnedWindow.syncFocusGrab();
-                    }
-                    function onPinChanged() {
-                        pinnedWindow.syncFocusGrab();
-                    }
-                }
-
-                Shortcut {
-                    sequence: "Ctrl+O"
-                    context: Qt.WindowShortcut
-                    enabled: pinnedWindow.visible
-                    onActivated: root.toggleExtend()
-                }
-
-                Shortcut {
-                    sequence: "Ctrl+P"
-                    context: Qt.WindowShortcut
-                    enabled: pinnedWindow.visible
-                    onActivated: root.togglePin()
-                }
-
-                Shortcut {
-                    sequence: "Ctrl+D"
-                    context: Qt.WindowShortcut
-                    enabled: pinnedWindow.visible
-                    onActivated: root.toggleDetach()
-                }
-
-                Shortcut {
-                    sequence: "Escape"
-                    context: Qt.WindowShortcut
-                    enabled: pinnedWindow.visible
-                    onActivated: pinnedWindow.hide()
-                }
-
-                StyledRectangularShadow {
-                    target: pinnedSidebarBackground
-                    radius: pinnedSidebarBackground.radius
-                }
-
-                Rectangle {
-                    id: pinnedSidebarBackground
-                    focus: true
-                    x: Appearance.sizes.hyprlandGapsOut
-                    y: 0
-                    width: root.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
-                    height: parent.height
-                    color: Appearance.colors.colLayer0
-                    border.width: 1
-                    border.color: Appearance.colors.colLayer0Border
-                    radius: Appearance.rounding.screenRounding - Appearance.sizes.hyprlandGapsOut + 1
-
-                    TapHandler {
-                        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                        onPressedChanged: {
-                            if (pressed)
-                                pinnedSidebarBackground.forceActiveFocus();
-                        }
-                    }
-
-                    Keys.onPressed: (event) => {
-                        if (event.key === Qt.Key_Escape)
-                            pinnedWindow.hide();
                     }
                 }
             }

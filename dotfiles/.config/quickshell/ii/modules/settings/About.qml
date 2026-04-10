@@ -12,10 +12,15 @@ ContentPage {
     forceWidth: true
 
     function normalizeGpuName(value) {
-        return (value || "")
+        let s = (value || "")
             .replace(/^[^:]*controller:\s*/i, "")
             .replace(/\s+\(rev .*?\)\s*$/i, "")
             .trim()
+        // Extract bracketed model name if present (e.g. "NVIDIA Corp GB206 [GeForce RTX 5060]")
+        const bracketed = s.match(/\[([^\]]+)\]/)
+        if (bracketed) return bracketed[1]
+        // Otherwise strip leading vendor + chip code (e.g. "Advanced Micro Devices GB206 ")
+        return s.replace(/^(NVIDIA Corporation|Advanced Micro Devices, Inc\. \[AMD\/ATI\]|Intel Corporation)\s+[A-Z0-9]+\s+/i, "").trim() || s
     }
 
     // ── Hardware spec properties ──────────────────────────────────────────
@@ -23,6 +28,7 @@ ContentPage {
     property string _kernel: ""
     property string _cpu: ""
     property string _memory: ""
+    property string _memtype: ""
     property string _gpu: ""
     property string _shell: ""
     property string _uptime: ""
@@ -31,12 +37,19 @@ ContentPage {
         id: hwInfoProc
         running: true
         command: ["bash", "-c",
-            "echo \"hostname:$(hostname 2>/dev/null)\"; " +
+            "echo \"hostname:$(cat /proc/sys/kernel/hostname 2>/dev/null)\"; " +
             "echo \"kernel:$(uname -r)\"; " +
             "cpu=$(grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | tr -s ' ' | sed 's/^ //'); " +
-            "cores=$(nproc 2>/dev/null); " +
-            "echo \"cpu:${cpu:-Unknown} (${cores} cores)\"; " +
-            "awk '/MemTotal/{t=$2}/MemAvailable/{a=$2}END{printf \"memory:%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; " +
+            "cores=$(awk -F': ' '/^physical id/{pid=$2} /^core id/{print pid\"_\"$2}' /proc/cpuinfo | sort -u | wc -l 2>/dev/null); " +
+            "threads=$(nproc 2>/dev/null); " +
+            "echo \"cpu:${cpu:-Unknown} (${cores}C / ${threads}T)\"; " +
+            "awk '/MemTotal/{t=$2}END{total_gib=t/1048576; rounded=4; while(rounded<total_gib*0.98) rounded*=2; printf \"memtotal:%d GiB\\n\",rounded}' /proc/meminfo; " +
+            "dmi=$(sudo -n dmidecode -t 17 2>/dev/null); " +
+            "if [ -n \"$dmi\" ]; then " +
+            "  memtype=$(echo \"$dmi\" | awk '/^\\tType:/ && !/Detail/ && $2 != \"Unknown\"{print $2; exit}'); " +
+            "  memspeed=$(echo \"$dmi\" | awk '/^\\tSpeed:/ && $2 != \"Unknown\"{print $2,$3; exit}'); " +
+            "  echo \"memtype:${memtype:-?} @ ${memspeed:-?}\"; " +
+            "else echo \"memtype:\"; fi; " +
             "gpu=$(lspci 2>/dev/null | grep -Ei '3D controller' | head -1 | awk -F': ' '{print $2}' | sed -E 's/ \\(rev .*$//'); " +
             "[ -z \"$gpu\" ] && gpu=$(lspci 2>/dev/null | grep -Ei 'VGA compatible controller' | head -1 | awk -F': ' '{print $2}' | sed -E 's/ \\(rev .*$//'); " +
             "echo \"gpu:${gpu:-Unknown}\"; " +
@@ -53,7 +66,8 @@ ContentPage {
                     case 'hostname': root._hostname = val; break
                     case 'kernel':   root._kernel   = val; break
                     case 'cpu':      root._cpu      = val; break
-                    case 'memory':   root._memory   = val; break
+                    case 'memtotal': root._memory   = val; break
+                    case 'memtype':  root._memtype  = val; break
                     case 'gpu':      root._gpu      = root.normalizeGpuName(val); break
                     case 'shell':    root._shell    = val; break
                     case 'uptime':   root._uptime   = val; break
@@ -98,7 +112,7 @@ ContentPage {
         SpecRow { specIcon: "computer";        specLabel: Translation.tr("Host");   specValue: root._hostname }
         SpecRow { specIcon: "memory";          specLabel: Translation.tr("Kernel"); specValue: root._kernel }
         SpecRow { specIcon: "developer_board"; specLabel: Translation.tr("CPU");    specValue: root._cpu }
-        SpecRow { specIcon: "storage";         specLabel: Translation.tr("Memory"); specValue: root._memory }
+        SpecRow { specIcon: "storage";         specLabel: Translation.tr("Memory"); specValue: root._memtype + (root._memory ? "  ·  " + root._memory : "") }
         SpecRow { specIcon: "monitor";         specLabel: Translation.tr("GPU");    specValue: root._gpu }
         SpecRow { specIcon: "terminal";        specLabel: Translation.tr("Shell");  specValue: root._shell }
         SpecRow { specIcon: "schedule";        specLabel: Translation.tr("Uptime"); specValue: root._uptime }

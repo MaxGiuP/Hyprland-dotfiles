@@ -32,7 +32,11 @@ AbstractQuickPanel {
         }
         NightLight {}
         GameMode {}
-        IdleInhibitor {}
+        IdleInhibitor {
+            altAction: () => {
+                root.openIdleLockDialog();
+            }
+        }
         EasyEffectsToggle {}
         CloudflareWarp {}
     }

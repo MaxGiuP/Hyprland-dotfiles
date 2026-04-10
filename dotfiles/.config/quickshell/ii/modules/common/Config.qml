@@ -552,6 +552,7 @@ Singleton {
             property JsonObject lock: JsonObject {
                 property bool useHyprlock: false
                 property bool launchOnStartup: false
+                property int timeout: 10
                 property JsonObject blur: JsonObject {
                     property bool enable: true
                     property real radius: 100

@@ -339,16 +339,31 @@ Singleton {
     property bool ollamaInstalled: false
     property bool ollamaRunning: false
     property list<string> localOllamaModels: []
-    property list<string> onlineSuggestedOllamaModels: [
-        "llama3.2:3b",
-        "llama3.1:8b",
-        "qwen2.5:7b",
-        "qwen2.5-coder:7b",
-        "mistral:7b",
-        "phi4:14b",
-        "deepseek-r1:8b",
-        "gemma3:4b",
-    ]
+    property list<string> discoveredGeminiModelIds: []
+    property var discoveredOllamaRecommendations: []
+    property list<string> recentGeminiArrivals: []
+    property list<string> recentOllamaArrivals: []
+    property string preferredFreeGeminiModelId: ""
+    property list<string> ollamaInstallQueue: []
+    property string ollamaInstallingModelId: ""
+    property string ollamaInstallStatusText: ""
+    property real ollamaInstallProgress: -1
+    property list<string> ollamaRemoveQueue: []
+    property string ollamaRemovingModelId: ""
+    property string ollamaRemoveStatusText: ""
+    readonly property bool ollamaInstallBusy: ollamaPullProc.running || root.ollamaInstallQueue.length > 0
+    readonly property bool ollamaRemoveBusy: ollamaRemoveProc.running || root.ollamaRemoveQueue.length > 0
+    readonly property bool ollamaMutationBusy: root.ollamaInstallBusy || root.ollamaRemoveBusy
+    readonly property var storeOllamaRecommendations: root.discoveredOllamaRecommendations.filter(entry => String(entry?.install_id ?? "").trim().length > 0)
+    readonly property var availableOllamaRecommendations: root.discoveredOllamaRecommendations.filter(entry => root.shouldSuggestOllamaRecommendation(entry))
+    readonly property var successorStoreOllamaRecommendations: root.storeOllamaRecommendations.filter(entry => root.successorContextForRecommendation(entry).length > 0)
+    readonly property var successorOllamaRecommendations: root.availableOllamaRecommendations.filter(entry => root.successorContextForRecommendation(entry).length > 0)
+    readonly property var accessibleModelSuggestionList: root.modelList.filter(modelId => {
+        const model = root.models[modelId];
+        if (!model) return false;
+        const isLocal = (model.endpoint ?? "").includes("localhost");
+        return !isLocal || root.dynamicOllamaModelIds.indexOf(modelId) !== -1;
+    })
 
     property var apiStrategies: {
         "openai": openaiApiStrategy.createObject(this),
@@ -396,6 +411,267 @@ Singleton {
         else words[words.length - 1] = `(${words[words.length - 1]})`; // Surround the last word with square brackets
         const result = words.join(' ');
         return result;
+    }
+
+    function uniqueStrings(values) {
+        const seen = ({});
+        return (values ?? []).filter(value => {
+            const text = String(value ?? "").trim();
+            if (text.length === 0 || seen[text]) return false;
+            seen[text] = true;
+            return true;
+        });
+    }
+
+    function ollamaFamilyName(modelId) {
+        return String(modelId ?? "").split(":")[0];
+    }
+
+    function hasInstalledOllamaFamily(modelId) {
+        const family = root.ollamaFamilyName(modelId);
+        return root.localOllamaModels.some(installedModel => root.ollamaFamilyName(installedModel) === family);
+    }
+
+    function shouldSuggestOllamaRecommendation(entry) {
+        const installId = String(entry?.install_id ?? "").trim();
+        if (!installId) return false;
+        return !root.hasInstalledOllamaFamily(installId);
+    }
+
+    function successorContextForRecommendation(entry) {
+        const installId = String(entry?.install_id ?? "").trim();
+        const family = root.ollamaFamilyName(installId).toLowerCase();
+        const rules = [
+            {
+                recommendFamilies: ["qwen3", "qwen3.5"],
+                installedPrefixes: ["qwen", "qwen2", "qwen2.5"],
+            },
+            {
+                recommendFamilies: ["qwen3-coder"],
+                installedPrefixes: ["qwen2.5-coder", "codeqwen", "codellama", "deepseek-coder"],
+            },
+            {
+                recommendFamilies: ["gemma4"],
+                installedPrefixes: ["gemma", "gemma2", "gemma3"],
+            },
+            {
+                recommendFamilies: ["devstral-small-2"],
+                installedPrefixes: ["mistral", "codestral", "mistral-small", "mistral-nemo"],
+            },
+        ];
+
+        const matchingRule = rules.find(rule => rule.recommendFamilies.some(prefix => family.startsWith(prefix)));
+        if (!matchingRule) return "";
+
+        const matches = root.localOllamaModels.filter(installedModel =>
+            matchingRule.installedPrefixes.some(prefix => root.ollamaFamilyName(installedModel).toLowerCase().startsWith(prefix))
+        );
+        if (matches.length === 0) return "";
+        return root.shortJoinedList(matches, 2);
+    }
+
+    function shortJoinedList(values, maxItems = 3) {
+        const items = (values ?? []).slice(0, maxItems);
+        const suffix = (values ?? []).length > maxItems ? ", ..." : "";
+        return items.join(", ") + suffix;
+    }
+
+    function ollamaRecommendationForInstallId(modelId) {
+        return root.discoveredOllamaRecommendations.find(entry => (entry?.install_id ?? "") === modelId) ?? null;
+    }
+
+    function ollamaInstallSizeLabel(modelId) {
+        const recommendation = root.ollamaRecommendationForInstallId(modelId);
+        if (!recommendation) return "";
+        const explicitSize = String(recommendation.storage_size ?? "").trim();
+        if (explicitSize.length > 0) return explicitSize;
+        const fallbackSizes = recommendation.size_tokens ?? [];
+        return fallbackSizes.length > 0 ? String(fallbackSizes[0]) : "";
+    }
+
+    function isGeminiTextModelCandidate(modelId) {
+        const lowered = String(modelId ?? "").toLowerCase();
+        if (lowered.length === 0) return false;
+        if (/(image|tts|audio|live|embedding|vision)/.test(lowered)) return false;
+        return true;
+    }
+
+    function pickPreferredFreeGeminiModel(modelIds) {
+        const ids = root.uniqueStrings(modelIds).filter(modelId => root.isGeminiTextModelCandidate(modelId));
+        const preferredPatterns = [
+            /^gemini-3\.1-flash-lite-preview/i,
+            /^gemini-3-flash-preview/i,
+            /^gemini-2\.5-flash-lite(?:$|-preview)/i,
+            /^gemini-2\.5-flash(?:$|-preview)/i,
+            /^gemini-2\.0-flash-lite$/i,
+            /^gemini-2\.0-flash$/i,
+        ];
+
+        for (const pattern of preferredPatterns) {
+            const match = ids.find(modelId => pattern.test(modelId));
+            if (match)
+                return match;
+        }
+
+        return ids.find(modelId => /flash/i.test(modelId)) ?? "";
+    }
+
+    function maybeTrackPreferredFreeGeminiModel() {
+        const preferredModelCode = root.pickPreferredFreeGeminiModel(root.discoveredGeminiModelIds);
+        if (!preferredModelCode)
+            return;
+
+        const preferredModelId = `gemini-${root.safeModelName(preferredModelCode)}`;
+        root.preferredFreeGeminiModelId = preferredModelId;
+        if (!Persistent.ready) return;
+
+        const lastAutoModelId = Persistent.states.ai.lastAutoFreeGeminiModelId ?? "";
+        const shouldSwitch = root.currentModelId === "gemini-flash-latest"
+            || root.currentModelId === lastAutoModelId
+            || root.currentModelId === "";
+
+        Persistent.states.ai.lastAutoFreeGeminiModelId = preferredModelId;
+        if (shouldSwitch && root.models[preferredModelId]) {
+            root.setModel(preferredModelId, false, true);
+        }
+    }
+
+    function notifyDesktop(summary, body) {
+        Quickshell.execDetached(["notify-send", summary, body, "-a", "Shell"]);
+    }
+
+    function syncSeenModelNotifications() {
+        if (!Persistent.ready) return;
+
+        const currentGeminiIds = root.uniqueStrings(root.discoveredGeminiModelIds);
+        const currentOllamaIds = root.uniqueStrings(root.discoveredOllamaRecommendations.map(entry => entry.install_id ?? entry.id));
+
+        if (!Persistent.states.ai.modelNotificationsInitialized) {
+            Persistent.states.ai.seenGeminiModelIds = currentGeminiIds;
+            Persistent.states.ai.seenRelevantOllamaModelIds = currentOllamaIds;
+            Persistent.states.ai.modelNotificationsInitialized = true;
+            return;
+        }
+
+        const seenGeminiIds = Persistent.states.ai.seenGeminiModelIds ?? [];
+        const seenOllamaIds = Persistent.states.ai.seenRelevantOllamaModelIds ?? [];
+
+        const newGeminiIds = currentGeminiIds.filter(modelId => seenGeminiIds.indexOf(modelId) === -1);
+        const newOllamaIds = currentOllamaIds.filter(modelId => seenOllamaIds.indexOf(modelId) === -1);
+
+        root.recentGeminiArrivals = newGeminiIds;
+        root.recentOllamaArrivals = newOllamaIds;
+
+        if (newGeminiIds.length > 0) {
+            const geminiSummary = newGeminiIds.length === 1
+                ? Translation.tr("New Gemini model available")
+                : Translation.tr("New Gemini models available");
+            root.notifyDesktop(geminiSummary, root.shortJoinedList(newGeminiIds));
+            root.addMessage(
+                Translation.tr("New Gemini models detected:\n- %1\n\nUse `%2model MODEL_ID` to switch.")
+                    .arg(newGeminiIds.join("\n- "))
+                    .arg("/"),
+                root.interfaceRole
+            );
+        }
+
+        if (newOllamaIds.length > 0) {
+            const ollamaSummary = newOllamaIds.length === 1
+                ? Translation.tr("New Ollama recommendation")
+                : Translation.tr("New Ollama recommendations");
+            root.notifyDesktop(ollamaSummary, root.shortJoinedList(newOllamaIds));
+            root.addMessage(
+                Translation.tr("New relevant Ollama models detected:\n- %1\n\nOpen the model updates card in the AI tab to install them.")
+                    .arg(newOllamaIds.join("\n- ")),
+                root.interfaceRole
+            );
+        }
+
+        if (newGeminiIds.length > 0)
+            Persistent.states.ai.seenGeminiModelIds = root.uniqueStrings([...seenGeminiIds, ...currentGeminiIds]);
+        if (newOllamaIds.length > 0)
+            Persistent.states.ai.seenRelevantOllamaModelIds = root.uniqueStrings([...seenOllamaIds, ...currentOllamaIds]);
+    }
+
+    function queueOllamaInstall(modelIds) {
+        const requested = root.uniqueStrings(modelIds).filter(modelId => !root.hasInstalledOllamaFamily(modelId));
+        if (requested.length === 0) return;
+
+        const combinedQueue = [...root.ollamaInstallQueue];
+        requested.forEach(modelId => {
+            if (combinedQueue.indexOf(modelId) === -1 && modelId !== root.ollamaInstallingModelId)
+                combinedQueue.push(modelId);
+        });
+        root.ollamaInstallQueue = combinedQueue;
+        root.startNextOllamaInstall();
+    }
+
+    function queueOllamaRemoval(modelIds) {
+        const requested = root.uniqueStrings(modelIds).filter(modelId => root.localOllamaModels.indexOf(modelId) !== -1);
+        if (requested.length === 0) return;
+
+        const combinedQueue = [...root.ollamaRemoveQueue];
+        requested.forEach(modelId => {
+            if (combinedQueue.indexOf(modelId) === -1 && modelId !== root.ollamaRemovingModelId)
+                combinedQueue.push(modelId);
+        });
+        root.ollamaRemoveQueue = combinedQueue;
+        root.startNextOllamaRemoval();
+    }
+
+    function installAllSuggestedOllamaModels() {
+        root.queueOllamaInstall(root.availableOllamaRecommendations.map(entry => entry.install_id));
+    }
+
+    function startNextOllamaInstall() {
+        if (ollamaPullProc.running || ollamaRemoveProc.running || root.ollamaInstallQueue.length === 0) return;
+
+        root.ollamaInstallingModelId = root.ollamaInstallQueue[0];
+        root.ollamaInstallQueue = root.ollamaInstallQueue.slice(1);
+        const installSize = root.ollamaInstallSizeLabel(root.ollamaInstallingModelId);
+        root.ollamaInstallStatusText = installSize.length > 0
+            ? Translation.tr("Installing %1 (%2)").arg(root.ollamaInstallingModelId).arg(installSize)
+            : Translation.tr("Installing %1").arg(root.ollamaInstallingModelId);
+        root.ollamaInstallProgress = -1;
+        ollamaPullProc.command = ["ollama", "pull", root.ollamaInstallingModelId];
+        ollamaPullProc.running = true;
+    }
+
+    function startNextOllamaRemoval() {
+        if (ollamaRemoveProc.running || ollamaPullProc.running || root.ollamaRemoveQueue.length === 0) return;
+
+        root.ollamaRemovingModelId = root.ollamaRemoveQueue[0];
+        root.ollamaRemoveQueue = root.ollamaRemoveQueue.slice(1);
+        root.ollamaRemoveStatusText = Translation.tr("Removing %1").arg(root.ollamaRemovingModelId);
+        ollamaRemoveProc.command = ["ollama", "rm", root.ollamaRemovingModelId];
+        ollamaRemoveProc.running = true;
+    }
+
+    function handleOllamaPullOutput(data) {
+        const text = String(data ?? "").trim();
+        if (text.length === 0) return;
+        root.ollamaInstallStatusText = text;
+        const progressMatch = text.match(/(\d{1,3})%/);
+        root.ollamaInstallProgress = progressMatch ? Math.max(0, Math.min(100, parseInt(progressMatch[1]))) / 100 : -1;
+    }
+
+    function handleOllamaRemoveOutput(data) {
+        const text = String(data ?? "").trim();
+        if (text.length === 0) return;
+        root.ollamaRemoveStatusText = text;
+    }
+
+    function ollamaInstallStateFor(modelId) {
+        if (root.hasInstalledOllamaFamily(modelId)) return "installed";
+        if (root.ollamaInstallingModelId === modelId) return "installing";
+        if (root.ollamaInstallQueue.indexOf(modelId) !== -1) return "queued";
+        return "available";
+    }
+
+    function ollamaRemoveStateFor(modelId) {
+        if (root.ollamaRemovingModelId === modelId) return "removing";
+        if (root.ollamaRemoveQueue.indexOf(modelId) !== -1) return "queued";
+        return "installed";
     }
 
     function addModel(modelName, data) {
@@ -514,6 +790,92 @@ Singleton {
         }
     }
 
+    Connections {
+        target: Persistent
+        function onReadyChanged() {
+            if (!Persistent.ready) return;
+            root.syncSeenModelNotifications();
+        }
+    }
+
+    Process {
+        id: ollamaPullProc
+        stdout: SplitParser {
+            onRead: data => root.handleOllamaPullOutput(data)
+        }
+        stderr: SplitParser {
+            onRead: data => root.handleOllamaPullOutput(data)
+        }
+        onExited: (exitCode, exitStatus) => {
+            const installedModel = root.ollamaInstallingModelId;
+            const success = exitCode === 0;
+
+            if (success) {
+                root.notifyDesktop(
+                    Translation.tr("Ollama model installed"),
+                    Translation.tr("Installed %1 successfully.").arg(installedModel)
+                );
+                root.addMessage(Translation.tr("Installed %1 successfully.").arg(installedModel), root.interfaceRole);
+                root.refreshOllamaStatus();
+            } else {
+                root.notifyDesktop(
+                    Translation.tr("Ollama install failed"),
+                    Translation.tr("Failed to install %1.").arg(installedModel)
+                );
+                root.addMessage(
+                    Translation.tr("Failed to install %1.\n\nLast status:\n%2")
+                        .arg(installedModel)
+                        .arg(root.ollamaInstallStatusText || Translation.tr("No output")),
+                    root.interfaceRole
+                );
+            }
+
+            root.ollamaInstallingModelId = "";
+            root.ollamaInstallProgress = -1;
+            root.startNextOllamaInstall();
+            root.startNextOllamaRemoval();
+        }
+    }
+
+    Process {
+        id: ollamaRemoveProc
+        stdout: SplitParser {
+            onRead: data => root.handleOllamaRemoveOutput(data)
+        }
+        stderr: SplitParser {
+            onRead: data => root.handleOllamaRemoveOutput(data)
+        }
+        onExited: (exitCode, exitStatus) => {
+            const removedModel = root.ollamaRemovingModelId;
+            const success = exitCode === 0;
+
+            if (success) {
+                root.notifyDesktop(
+                    Translation.tr("Ollama model removed"),
+                    Translation.tr("Removed %1 successfully.").arg(removedModel)
+                );
+                root.addMessage(Translation.tr("Removed %1 successfully.").arg(removedModel), root.interfaceRole);
+                root.refreshOllamaStatus();
+            } else {
+                root.notifyDesktop(
+                    Translation.tr("Ollama removal failed"),
+                    Translation.tr("Failed to remove %1.").arg(removedModel)
+                );
+                root.addMessage(
+                    Translation.tr("Failed to remove %1.\n\nLast status:\n%2")
+                        .arg(removedModel)
+                        .arg(root.ollamaRemoveStatusText || Translation.tr("No output")),
+                    root.interfaceRole
+                );
+            }
+
+            root.ollamaRemovingModelId = "";
+            root.ollamaRemoveStatusText = "";
+            root.startNextOllamaRemoval();
+            root.startNextOllamaInstall();
+        }
+    }
+
     Process {
         id: discoverOnlineModels
         command: ["python3", `${Directories.scriptPath}/ai/discover-online-models.py`.replace(/file:\/\//, "")]
@@ -531,11 +893,14 @@ Singleton {
                     root.removeModels(root.dynamicOnlineModelIds);
                     const registered = [];
                     const discovered = payload.models ?? [];
+                    const discoveredGeminiIds = [];
                     discovered.forEach(model => {
                         const provider = (model.provider ?? "remote").toLowerCase();
                         const modelCode = model.id ?? "";
                         if (!modelCode || modelCode.length === 0) return;
                         const modelKey = `${provider}-${root.safeModelName(modelCode)}`;
+                        if (provider === "gemini")
+                            discoveredGeminiIds.push(modelCode);
                         registered.push(modelKey);
                         root.addModel(modelKey, {
                             "name": model.display_name ?? modelCode,
@@ -556,11 +921,18 @@ Singleton {
                             "api_format": model.api_format ?? "openai",
                         });
                     });
+                    if ((payload.errors ?? []).length > 0)
+                        console.log("[Ai] Online model discovery notices:", (payload.errors ?? []).join(" | "));
+
                     root.dynamicOnlineModelIds = registered;
+                    root.discoveredGeminiModelIds = root.uniqueStrings(discoveredGeminiIds);
+                    root.discoveredOllamaRecommendations = payload.ollama_recommendations ?? [];
+                    root.maybeTrackPreferredFreeGeminiModel();
                     root.modelList = Object.keys(root.models);
                     if (!root.models[root.currentModelId] && root.modelList.length > 0) {
                         root.setModel(root.modelList[0], false, true);
                     }
+                    root.syncSeenModelNotifications();
                 } catch (e) {
                     console.log("[Ai] Could not parse discovered online models:", e);
                 }

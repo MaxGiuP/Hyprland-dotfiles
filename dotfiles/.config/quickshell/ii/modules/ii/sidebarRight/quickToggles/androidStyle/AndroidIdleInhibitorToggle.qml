@@ -6,6 +6,15 @@ import qs.modules.common.widgets
 import QtQuick
 
 AndroidQuickToggleButton {
-    toggleModel: IdleInhibitorToggle {}
-}
+    signal openIdleLockDialog()
 
+    toggleModel: IdleInhibitorToggle {}
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        cursorShape: Qt.PointingHandCursor
+        enabled: !parent.editMode
+        onClicked: openIdleLockDialog()
+    }
+}
