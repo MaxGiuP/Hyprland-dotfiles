@@ -38,7 +38,8 @@ Scope {
                 readonly property real leftReserved: monitorData?.reserved?.[0] ?? 0
                 readonly property real rightReserved: monitorData?.reserved?.[2] ?? 0
                 readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
-                visible: !fullscreenOnMonitor
+                readonly property bool hideWhenFullscreen: Config.options.bar.hideWhenFullscreen ?? false
+                visible: !hideWhenFullscreen || !fullscreenOnMonitor
                 readonly property bool topBarVisible: !Config.options.bar.bottom
                     && visible
                     && !launchpadOnThisScreen
@@ -71,7 +72,7 @@ Scope {
                 readonly property bool launchpadOnThisScreen: GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen
                 property bool mustShow: (hoverRegion.containsMouse || superShow) && !launchpadOnThisScreen
                 exclusionMode: ExclusionMode.Normal
-                exclusiveZone: ((!visible) || launchpadOnThisScreen || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows)) || fullscreenOnMonitor) ? 0 :
+                exclusiveZone: ((!visible) || launchpadOnThisScreen || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
                 WlrLayershell.namespace: "quickshell:bar"
                 implicitHeight: Appearance.sizes.barHeight + Appearance.rounding.screenRounding

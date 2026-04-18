@@ -13,6 +13,13 @@ import qs.modules.ii.overlay.fpsLimiter
 import qs.modules.ii.overlay.recorder
 import qs.modules.ii.overlay.resources
 import qs.modules.ii.overlay.notes
+import qs.modules.ii.overlay.liveCaptions
+import qs.modules.ii.overlay.liveCaptionsTranslation
+import qs.modules.ii.overlay.liveScreenTranslation
+import qs.modules.ii.overlay.liveScreenTranslationOutput
+import qs.modules.ii.overlay.liveCaptionsSettings
+import qs.modules.ii.overlay.settingsMenu
+import qs.modules.ii.overlay.terminal
 
 DelegateChooser {
     id: root
@@ -25,4 +32,11 @@ DelegateChooser {
     DelegateChoice { roleValue: "resources"; Resources {} }
     DelegateChoice { roleValue: "notes"; Notes {} }
     DelegateChoice { roleValue: "volumeMixer"; VolumeMixer {} }
+    DelegateChoice { roleValue: "liveCaptions"; LiveCaptionsOverlay {} }
+    DelegateChoice { roleValue: "liveCaptionsTranslation"; LiveCaptionsTranslationOverlay {} }
+    DelegateChoice { roleValue: "liveScreenTranslation"; LiveScreenTranslationOverlay {} }
+    DelegateChoice { roleValue: "liveScreenTranslationOutput"; LiveScreenTranslationOutputOverlay {} }
+    DelegateChoice { roleValue: "liveCaptionsSettings"; LiveCaptionsSettings {} }
+    DelegateChoice { roleValue: "settingsMenu"; SettingsMenu {} }
+    DelegateChoice { roleValue: "terminal"; Terminal {} }
 }

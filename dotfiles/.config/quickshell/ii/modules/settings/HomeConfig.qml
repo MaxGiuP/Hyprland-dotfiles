@@ -13,6 +13,7 @@ ContentPage {
     forceWidth: true
     baseWidth: 760
     readonly property bool settingsApp: Quickshell.env("II_SETTINGS_APP") === "1"
+    property var settingsHost: null
 
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
@@ -173,7 +174,8 @@ ContentPage {
             model: {
                 const q = searchField.text.trim().toLowerCase()
                 if (!q) return []
-                const pages = Window.window?.pages ?? []
+                const host = root.settingsHost ?? Window.window
+                const pages = host?.pages ?? []
                 const seen = new Set()
                 const results = []
                 for (const entry of root.searchIndex) {
@@ -198,7 +200,9 @@ ContentPage {
                 implicitHeight: resultRow.implicitHeight + 16
                 buttonRadius: Appearance.rounding.normal
                 onClicked: {
-                    const win = Window.window
+                    const win = root.settingsHost ?? Window.window
+                    if (!win)
+                        return
                     // Only set subTab nav when there's actually a subtab specified
                     win.requestedSubTab = modelData.subTab !== undefined ? modelData.subTab : -1
                     win.requestedSectionId = modelData.sectionId ?? ""

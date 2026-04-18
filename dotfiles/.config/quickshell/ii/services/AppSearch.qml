@@ -53,6 +53,33 @@ Singleton {
         return normalizeText(app?.execString ?? "");
     }
 
+    function searchTextForApp(app) {
+        const values = [];
+        const pushValue = value => {
+            const normalized = normalizeText(value);
+            if (normalized.length > 0)
+                values.push(normalized);
+        };
+        const pushList = list => {
+            for (const value of Array.from(list ?? []))
+                pushValue(value);
+        };
+
+        pushValue(app?.name);
+        pushValue(app?.name); // keep the visible app name weighted above aliases
+        pushValue(app?.genericName);
+        pushValue(app?.comment);
+        pushValue(app?.id);
+        pushValue(app?.desktopFilePath);
+        pushValue(app?.startupClass);
+        pushValue(app?.icon);
+        pushValue(normalizedCommand(app));
+        pushList(app?.keywords);
+        pushList(app?.categories);
+
+        return values.join(" ");
+    }
+
     function iconPriority(iconName) {
         if (!iconExists(iconName)) return 0;
 
@@ -150,8 +177,8 @@ Singleton {
         return orderedKeys.map(key => deduped[key]).filter(Boolean);
     }
     
-    readonly property var preppedNames: list.map(a => ({
-        name: Fuzzy.prepare(`${a.name} `),
+    readonly property var preppedSearchTexts: list.map(a => ({
+        searchText: Fuzzy.prepare(`${searchTextForApp(a)} `),
         entry: a
     }))
 
@@ -164,16 +191,16 @@ Singleton {
         if (root.sloppySearch) {
             const results = list.map(obj => ({
                 entry: obj,
-                score: Levendist.computeScore(obj.name.toLowerCase(), search.toLowerCase())
+                score: Levendist.computeScore(searchTextForApp(obj), search.toLowerCase())
             })).filter(item => item.score > root.scoreThreshold)
                 .sort((a, b) => b.score - a.score)
             return results
                 .map(item => item.entry)
         }
 
-        return Fuzzy.go(search, preppedNames, {
+        return Fuzzy.go(search, preppedSearchTexts, {
             all: true,
-            key: "name"
+            key: "searchText"
         }).map(r => {
             return r.obj.entry
         });
@@ -250,9 +277,9 @@ Singleton {
             if (iconExists(guess)) return guess;
         }
 
-        const nameSearchResults = root.fuzzyQuery(str);
-        if (nameSearchResults.length > 0) {
-            const guess = nameSearchResults[0].icon
+        const searchResults = root.fuzzyQuery(str);
+        if (searchResults.length > 0) {
+            const guess = searchResults[0].icon
             if (iconExists(guess)) return guess;
         }
 

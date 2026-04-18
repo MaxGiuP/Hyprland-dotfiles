@@ -317,6 +317,24 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         }
     }
 
+    Process {
+        id: ollamaServeProc
+        command: ["ollama", "serve"]
+        onRunningChanged: {
+            if (!running) {
+                Qt.callLater(() => Ai.refreshOllamaStatus());
+            }
+        }
+    }
+
+    Process {
+        id: ollamaKillProc
+        command: ["pkill", "ollama"]
+        onExited: {
+            Qt.callLater(() => Ai.refreshOllamaStatus());
+        }
+    }
+
     function runCliAgent(agent, prompt) {
         if (root.supportedCliAgents.indexOf(agent) === -1) {
             Ai.addMessage(Translation.tr("Unsupported agent. Use one of: %1").arg(root.supportedCliAgents.join(", ")), Ai.interfaceRole);
@@ -400,6 +418,7 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
             // Messages
             Layout.fillWidth: true
             Layout.fillHeight: true
+            clip: true
             layer.enabled: true
             layer.effect: OpacityMask {
                 maskSource: Rectangle {
@@ -522,17 +541,95 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: Appearance.colors.colSubtext
-                        text: Ai.ollamaMutationBusy
-                            ? (Ai.ollamaInstallingModelId.length > 0
-                                ? Ai.ollamaInstallStatusText
-                                : Ai.ollamaRemoveStatusText)
-                            : Translation.tr("%1 installed | %2 suggested | %3 successors")
-                                .arg(Ai.localOllamaModels.length)
-                                .arg(Ai.storeOllamaRecommendations.length)
-                                .arg(Ai.successorStoreOllamaRecommendations.length)
+                        text: Translation.tr("%1 installed | %2 suggested | %3 successors")
+                            .arg(Ai.localOllamaModels.length)
+                            .arg(Ai.storeOllamaRecommendations.length)
+                            .arg(Ai.successorStoreOllamaRecommendations.length)
                     }
 
-                    RowLayout {
+                    Rectangle {
+                        Layout.fillWidth: true
+                        visible: Ai.ollamaMutationBusy
+                        implicitHeight: installStatusLayout.implicitHeight + 16
+                        radius: Appearance.rounding.small
+                        color: Appearance.colors.colLayer3
+                        border.width: 1
+                        border.color: Appearance.colors.colOutlineVariant
+
+                        ColumnLayout {
+                            id: installStatusLayout
+                            anchors.fill: parent
+                            anchors.margins: 8
+                            spacing: 6
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                color: Appearance.colors.colOnLayer1
+                                font.bold: true
+                                text: Ai.ollamaInstallingModelId.length > 0
+                                    ? (Ai.ollamaInstallPaused
+                                        ? Translation.tr("Paused %1").arg(Ai.ollamaInstallingModelId)
+                                        : Translation.tr("Installing %1").arg(Ai.ollamaInstallingModelId))
+                                    : Translation.tr("Removing %1").arg(Ai.ollamaRemovingModelId)
+                                elide: Text.ElideRight
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                color: Appearance.colors.colSubtext
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 2
+                                elide: Text.ElideRight
+                                text: Ai.ollamaInstallingModelId.length > 0
+                                    ? Ai.ollamaInstallStatusText
+                                    : Ai.ollamaRemoveStatusText
+                            }
+
+                            StyledProgressBar {
+                                Layout.fillWidth: true
+                                visible: Ai.ollamaInstallingModelId.length > 0 && Ai.ollamaInstallProgress >= 0
+                                value: Ai.ollamaInstallProgress
+                            }
+
+                            StyledIndeterminateProgressBar {
+                                Layout.fillWidth: true
+                                visible: (Ai.ollamaInstallingModelId.length > 0 && Ai.ollamaInstallProgress < 0)
+                                    || Ai.ollamaRemovingModelId.length > 0
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                visible: Ai.ollamaInstallingModelId.length > 0
+                                spacing: 8
+
+                                Item {
+                                    Layout.fillWidth: true
+                                }
+
+                                DialogButton {
+                                    enabled: !Ai.ollamaInstallCancelRequested
+                                    buttonText: Ai.ollamaInstallPaused
+                                        ? Translation.tr("Resume")
+                                        : Translation.tr("Pause")
+                                    downAction: () => {
+                                        if (Ai.ollamaInstallPaused)
+                                            Ai.resumeOllamaInstall();
+                                        else
+                                            Ai.pauseOllamaInstall();
+                                    }
+                                }
+
+                                DialogButton {
+                                    enabled: !Ai.ollamaInstallCancelRequested
+                                    buttonText: Translation.tr("Cancel")
+                                    colEnabled: Appearance.colors.colError
+                                    downAction: () => Ai.cancelOllamaInstall()
+                                }
+                            }
+                        }
+                    }
+
+                    Flow {
                         Layout.fillWidth: true
                         spacing: 8
 
@@ -692,11 +789,13 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
         Rectangle { // Input area
             id: inputWrapper
             property real spacing: 5
+            z: 10
             Layout.fillWidth: true
             radius: Appearance.rounding.normal - root.padding
             color: Appearance.colors.colLayer2
             implicitHeight: Math.max(inputFieldRowLayout.implicitHeight + inputFieldRowLayout.anchors.topMargin + commandButtonsRow.implicitHeight + commandButtonsRow.anchors.bottomMargin + spacing, 45) + (attachedFileIndicator.implicitHeight + spacing + attachedFileIndicator.anchors.topMargin)
             clip: true
+            layer.enabled: true
 
             Behavior on implicitHeight {
                 animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
@@ -989,15 +1088,21 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                     tooltipText: Translation.tr("Current model: %1\nSet it with %2model MODEL").arg(Ai.getModel().name).arg(root.commandPrefix)
                 }
 
-                ApiInputBoxIndicator {
-                    // Tool indicator
-                    icon: "service_toolbox"
-                    text: Ai.currentTool.charAt(0).toUpperCase() + Ai.currentTool.slice(1)
-                    tooltipText: Translation.tr("Current tool: %1\nSet it with %2tool TOOL").arg(Ai.currentTool).arg(root.commandPrefix)
-                }
-
                 Item {
                     Layout.fillWidth: true
+                }
+
+                ApiCommandButton {
+                    buttonText: Ai.ollamaRunning ? Translation.tr("■ Ollama") : Translation.tr("▶ Ollama")
+                    toggled: Ai.ollamaRunning
+                    downAction: () => {
+                        if (!Ai.ollamaRunning) {
+                            ollamaServeProc.running = true;
+                        } else {
+                            ollamaServeProc.running = false;
+                            ollamaKillProc.running = true;
+                        }
+                    }
                 }
 
                 ButtonGroup {
@@ -1309,9 +1414,11 @@ Inline w/ backslash and round brackets \\(e^{i\\pi} + 1 = 0\\)
                                                 enabled: !Ai.ollamaRemoveBusy && installState === "available"
                                                 buttonText: installState === "installed"
                                                     ? Translation.tr("Installed")
+                                                    : (installState === "paused"
+                                                    ? Translation.tr("Paused")
                                                     : (installState === "installing"
                                                     ? Translation.tr("Installing")
-                                                    : (installState === "queued" ? Translation.tr("Queued") : Translation.tr("Install")))
+                                                    : (installState === "queued" ? Translation.tr("Queued") : Translation.tr("Install"))))
                                                 colBackground: installState === "installed"
                                                     ? Appearance.colors.colLayer2
                                                     : Appearance.colors.colLayer3

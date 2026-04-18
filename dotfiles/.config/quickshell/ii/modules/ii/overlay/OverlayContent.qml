@@ -19,6 +19,7 @@ Item {
         }
     }
 
+    // The window is bound to one screen, so scale and scrim fill it correctly.
     property real initScale: Config.options.overlay.openingZoomAnimation ? 1.08 : 1.000001
     scale: initScale
     Component.onCompleted: {
@@ -59,7 +60,7 @@ Item {
                 objectProp: "identifier"
             }
             delegate: OverlayWidgetDelegateChooser {
-                
+
             }
         }
     }

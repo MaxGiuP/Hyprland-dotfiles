@@ -13,6 +13,13 @@ Singleton {
         { identifier: "resources", materialSymbol: "browse_activity" },
         { identifier: "notes", materialSymbol: "note_stack" },
         { identifier: "volumeMixer", materialSymbol: "volume_up" },
+        { identifier: "liveCaptions", materialSymbol: "subtitles" },
+        { identifier: "liveCaptionsTranslation", materialSymbol: "translate" },
+        { identifier: "liveScreenTranslation", materialSymbol: "text_snippet" },
+        { identifier: "liveScreenTranslationOutput", materialSymbol: "language" },
+        { identifier: "liveCaptionsSettings", materialSymbol: "settings_voice" },
+        { identifier: "settingsMenu", materialSymbol: "settings" },
+        { identifier: "terminal", materialSymbol: "terminal" },
     ]
     
     readonly property bool hasPinnedWidgets: root.pinnedWidgetIdentifiers.length > 0

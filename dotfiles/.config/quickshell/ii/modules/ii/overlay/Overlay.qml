@@ -16,61 +16,56 @@ Scope {
     property Component regionComponent: Component {
         Region {}
     }
-    
-    Loader {
-        id: overlayLoader
-        active: GlobalStates.overlayOpen || OverlayContext.hasPinnedWidgets
-        sourceComponent: PanelWindow {
-            id: overlayWindow
-            exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.namespace: "quickshell:overlay"
-            WlrLayershell.layer: WlrLayer.Overlay
-            // Use OnDemand for pinned widgets to allow focus switching with mouse clicks
-            WlrLayershell.keyboardFocus: GlobalStates.overlayOpen ? WlrKeyboardFocus.Exclusive : (OverlayContext.clickableWidgets.length > 0 ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
-            visible: true
-            color: "transparent"
 
-            mask: Region {
-                item: GlobalStates.overlayOpen ? overlayContent : null
-                regions: OverlayContext.clickableWidgets.map((widget) => regionComponent.createObject(this, {
-                    item: widget
-                }));
-            }
+    function openOverlay() {
+        GlobalStates.overlayOpen = true
+    }
 
-            anchors {
-                top: true
-                bottom: true
-                left: true
-                right: true
-            }
+    // One overlay window per screen, following the same pattern as Bar.qml.
+    Variants {
+        model: Quickshell.screens
 
-            HyprlandFocusGrab {
-                id: grab
-                windows: [overlayWindow]
-                active: false
-                onCleared: () => {
-                    if (!active) GlobalStates.overlayOpen = false;
+        Scope {
+            id: screenScope
+            required property ShellScreen modelData
+
+            Loader {
+                id: overlayLoader
+                active: GlobalStates.overlayOpen || OverlayContext.hasPinnedWidgets
+
+                sourceComponent: PanelWindow {
+                    id: overlayWindow
+
+                    screen: screenScope.modelData
+
+                    exclusionMode: ExclusionMode.Ignore
+                    WlrLayershell.namespace: "quickshell:overlay"
+                    WlrLayershell.layer: WlrLayer.Overlay
+                    WlrLayershell.keyboardFocus: GlobalStates.overlayOpen
+                        ? WlrKeyboardFocus.OnDemand
+                        : (OverlayContext.clickableWidgets.length > 0 ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None)
+                    visible: true
+                    color: "transparent"
+
+                    mask: Region {
+                        item: GlobalStates.overlayOpen ? overlayContent : null
+                        regions: OverlayContext.clickableWidgets.map((widget) => regionComponent.createObject(this, {
+                            item: widget
+                        }))
+                    }
+
+                    anchors {
+                        top: true
+                        bottom: true
+                        left: true
+                        right: true
+                    }
+
+                    OverlayContent {
+                        id: overlayContent
+                        anchors.fill: parent
+                    }
                 }
-            }
-
-            Connections {
-                target: GlobalStates
-                function onOverlayOpenChanged() {
-                    delayedGrabTimer.restart();
-                }
-            }
-
-            Timer {
-                id: delayedGrabTimer
-                interval: Appearance.animation.elementMoveFast.duration
-                onTriggered: {
-                    grab.active = GlobalStates.overlayOpen;
-                }
-            }
-
-            OverlayContent {
-                id: overlayContent
-                anchors.fill: parent
             }
         }
     }
@@ -79,7 +74,10 @@ Scope {
         target: "overlay"
 
         function toggle(): void {
-            GlobalStates.overlayOpen = !GlobalStates.overlayOpen;
+            if (!GlobalStates.overlayOpen)
+                root.openOverlay()
+            else
+                GlobalStates.overlayOpen = false
         }
     }
 
@@ -88,7 +86,10 @@ Scope {
         description: "Toggles overlay on press"
 
         onPressed: {
-            GlobalStates.overlayOpen = !GlobalStates.overlayOpen;
+            if (!GlobalStates.overlayOpen)
+                root.openOverlay()
+            else
+                GlobalStates.overlayOpen = false
         }
     }
 }

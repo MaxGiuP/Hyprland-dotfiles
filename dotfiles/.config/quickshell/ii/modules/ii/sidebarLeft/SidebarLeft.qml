@@ -20,6 +20,7 @@ Scope {
     property var panelWindowsByScreen: ({})
     property var pinnedWindowsByScreen: ({})
     property string pinnedScreenName: ""
+    property string delayedReservationClearScreenName: ""
     readonly property string targetScreenName: GlobalStates.resolvedSidebarLeftScreen()
     readonly property string attachedScreenName: root.pin
         ? (root.pinnedScreenName || root.targetScreenName)
@@ -106,6 +107,7 @@ Scope {
     }
 
     function closeSidebar() {
+        root.schedulePinnedReservationClear(root.pinnedScreenName);
         root.pin = false;
         root.pinnedScreenName = "";
         GlobalStates.closeSidebarLeft();
@@ -122,10 +124,12 @@ Scope {
         }
 
         if (root.pin) {
+            root.schedulePinnedReservationClear(screenName);
             root.pin = false;
             root.pinnedScreenName = "";
             GlobalStates.openSidebarLeft(screenName);
         } else {
+            root.publishPinnedReservation(screenName);
             root.pinnedScreenName = screenName;
             root.pin = true;
             GlobalStates.openSidebarLeft(screenName);
@@ -139,6 +143,7 @@ Scope {
         if (root.detach)
             root.detach = false;
 
+        root.publishPinnedReservation(screenName);
         root.pinnedScreenName = screenName;
         root.pin = true;
         GlobalStates.openSidebarLeft(screenName);
@@ -152,20 +157,82 @@ Scope {
         root.extend = !root.extend;
     }
 
+    function reservationWidth() {
+        return root.sidebarWidth + Appearance.sizes.hyprlandGapsOut;
+    }
+
+    function publishPinnedReservation(screenName) {
+        if (!screenName)
+            return;
+
+        if (reservationReleaseTimer.running && root.delayedReservationClearScreenName === screenName)
+            reservationReleaseTimer.stop();
+        root.delayedReservationClearScreenName = "";
+        GlobalStates.setSidebarLeftPinnedReservation(screenName, root.reservationWidth());
+    }
+
+    function schedulePinnedReservationClear(screenName) {
+        if (!screenName)
+            return;
+
+        root.delayedReservationClearScreenName = screenName;
+        reservationReleaseTimer.restart();
+    }
+
+    function syncPinnedReservation() {
+        const knownScreens = new Set([
+            ...Object.keys(GlobalStates.sidebarLeftPinnedReservationByScreen ?? {}),
+            root.pinnedScreenName,
+            root.delayedReservationClearScreenName,
+            root.targetScreenName,
+        ].filter(Boolean));
+
+        for (const screenName of knownScreens) {
+            if (root.pin && GlobalStates.sidebarLeftOpen && screenName === root.pinnedScreenName) {
+                root.publishPinnedReservation(screenName);
+            } else if (reservationReleaseTimer.running && screenName === root.delayedReservationClearScreenName) {
+                GlobalStates.setSidebarLeftPinnedReservation(screenName, root.reservationWidth());
+            } else {
+                GlobalStates.clearSidebarLeftPinnedReservation(screenName);
+            }
+        }
+    }
+
+    Timer {
+        id: reservationReleaseTimer
+        interval: 140
+        repeat: false
+        onTriggered: {
+            if (root.delayedReservationClearScreenName.length > 0) {
+                GlobalStates.clearSidebarLeftPinnedReservation(root.delayedReservationClearScreenName);
+                root.delayedReservationClearScreenName = "";
+            }
+        }
+    }
+
     Component.onCompleted: {
         root.sidebarContent = sidebarContentComponent.createObject(null, {
             "scopeRoot": root,
         });
         root.relocateSidebarContent();
+        root.syncPinnedReservation();
+    }
+
+    Component.onDestruction: {
+        const knownScreens = Object.keys(GlobalStates.sidebarLeftPinnedReservationByScreen ?? {});
+        for (const screenName of knownScreens)
+            GlobalStates.clearSidebarLeftPinnedReservation(screenName);
     }
 
     onDetachChanged: {
         if (root.detach) {
+            root.schedulePinnedReservationClear(root.pinnedScreenName);
             root.pin = false;
             root.pinnedScreenName = "";
         }
 
         root.relocateSidebarContent();
+        root.syncPinnedReservation();
 
         if (GlobalStates.sidebarLeftOpen)
             Qt.callLater(root.focusSidebarContent);
@@ -173,17 +240,25 @@ Scope {
 
     onPinChanged: {
         root.relocateSidebarContent();
+        root.syncPinnedReservation();
     }
     onTargetScreenNameChanged: root.relocateSidebarContent()
-    onPinnedScreenNameChanged: root.relocateSidebarContent()
+    onPinnedScreenNameChanged: {
+        root.relocateSidebarContent();
+        root.syncPinnedReservation();
+    }
+    onExtendChanged: root.syncPinnedReservation()
+    onSidebarWidthChanged: root.syncPinnedReservation()
 
     Connections {
         target: GlobalStates
         function onSidebarLeftOpenChanged() {
             if (!GlobalStates.sidebarLeftOpen && root.pin) {
+                root.schedulePinnedReservationClear(root.pinnedScreenName);
                 root.pin = false;
                 root.pinnedScreenName = "";
             }
+            root.syncPinnedReservation();
         }
     }
 
@@ -202,13 +277,26 @@ Scope {
             required property ShellScreen modelData
             property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
             property string screenName: monitor?.name ?? modelData?.name ?? ""
+            readonly property real outerGap: Appearance.sizes.hyprlandGapsOut
+            readonly property real fullTopBarHeight: (!Config.options.bar.bottom && GlobalStates.barOpen)
+                ? (Appearance.sizes.barHeight + Appearance.rounding.screenRounding)
+                : 0
+            readonly property real topBarOvershoot: (!Config.options.bar.bottom && GlobalStates.barOpen)
+                ? Math.max(0, (Appearance.sizes.barHeight + Appearance.rounding.screenRounding)
+                    - (Appearance.sizes.baseBarHeight
+                        + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)))
+                : 0
+            readonly property real pinnedWindowTopGap: (!Config.options.bar.bottom && GlobalStates.barOpen)
+                ? Appearance.sizes.barHeight
+                : outerGap
             property bool pinnedOnThisScreen: !root.detach
                 && root.pin
                 && screenName === root.pinnedScreenName
-            readonly property real pinnedTopClearance: GlobalStates.barTopClearanceByScreen[screenName] ?? Appearance.sizes.hyprlandGapsOut
-            readonly property real pinnedBottomClearance: 0
-            readonly property real flyoutTopClearance: Appearance.sizes.hyprlandGapsOut
-            readonly property real flyoutBottomClearance: 0
+            readonly property real topClearance: outerGap
+            readonly property real pinnedTopClearance: 0
+            readonly property real pinnedBottomClearance: outerGap
+            readonly property real flyoutTopClearance: topClearance
+            readonly property real flyoutBottomClearance: outerGap
             property bool flyoutOpen: !root.detach
                 && !root.pin
                 && GlobalStates.sidebarLeftOpen
@@ -254,8 +342,8 @@ Scope {
                 }
 
                 exclusionMode: ExclusionMode.Normal
-                exclusiveZone: screenScope.pinnedWindowOpen ? Math.ceil(root.sidebarWidth) : 0
-                implicitWidth: root.sidebarWidth
+                exclusiveZone: screenScope.pinnedWindowOpen ? Math.ceil(root.sidebarWidth + screenScope.outerGap) : 0
+                implicitWidth: root.sidebarWidth + screenScope.outerGap
                 implicitHeight: screen?.height ?? 2160
                 WlrLayershell.namespace: "quickshell:sidebarLeft"
                 WlrLayershell.layer: WlrLayer.Top
@@ -266,6 +354,10 @@ Scope {
                     top: true
                     left: true
                     bottom: true
+                }
+
+                margins {
+                    top: screenScope.pinnedWindowOpen ? screenScope.pinnedWindowTopGap : 0
                 }
 
                 mask: Region {
@@ -315,7 +407,7 @@ Scope {
 
                 Shortcut {
                     sequence: "Ctrl+P"
-                    context: Qt.WindowShortcut
+                    context: Qt.ApplicationShortcut
                     enabled: screenScope.flyoutOpen || screenScope.pinnedWindowOpen
                     onActivated: root.togglePin()
                 }
@@ -335,7 +427,7 @@ Scope {
                 Rectangle {
                     id: sidebarLeftBackground
                     focus: true
-                    x: screenScope.pinnedWindowOpen ? 0 : -panelWindow.implicitWidth
+                    x: screenScope.pinnedWindowOpen ? screenScope.outerGap : -root.sidebarWidth
                     y: screenScope.pinnedWindowOpen ? screenScope.pinnedTopClearance : screenScope.flyoutTopClearance
                     width: root.sidebarWidth
                     height: Math.max(
@@ -352,7 +444,7 @@ Scope {
                     states: State {
                         name: "open"
                         when: screenScope.flyoutOpen || screenScope.pinnedWindowOpen
-                        PropertyChanges { target: sidebarLeftBackground; x: 0 }
+                        PropertyChanges { target: sidebarLeftBackground; x: screenScope.outerGap }
                     }
                     transitions: [
                         Transition {

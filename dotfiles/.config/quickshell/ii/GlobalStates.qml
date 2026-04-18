@@ -14,14 +14,17 @@ Singleton {
     property bool sidebarLeftOpen: false
     property bool sidebarRightOpen: false
     property bool mediaControlsOpen: false
+    property bool liveCaptionsOpen: false
     property bool osdBrightnessOpen: false
     property bool osdVolumeOpen: false
     property bool oskOpen: false
     property bool overlayOpen: false
     property bool drawerOpen: false
     property string drawerScreen: ""
+    property string overlayScreen: ""
     property string sidebarRightScreen: ""
     property string sidebarLeftScreen: ""
+    property string liveCaptionsScreen: ""
     property bool overviewDrawerMode: false
     property bool overviewOpen: false
     property bool regionSelectorOpen: false
@@ -31,6 +34,7 @@ Singleton {
     property bool screenLockHideBar: false
     property bool screenLockContainsCharacters: false
     property bool screenUnlockFailed: false
+    property bool lockUseWallpaperFallbackAfterResume: false
     property bool sessionOpen: false
     property bool superDown: false
     property bool superReleaseMightTrigger: true
@@ -46,6 +50,25 @@ Singleton {
     property bool wallpaperSelectorOpen: false
     property bool workspaceShowNumbers: false
     property var barTopClearanceByScreen: ({})
+    property var sidebarLeftPinnedReservationByScreen: ({})
+
+    function setSidebarLeftPinnedReservation(screenName, width) {
+        if (!screenName)
+            return
+
+        const nextMap = Object.assign({}, root.sidebarLeftPinnedReservationByScreen)
+        nextMap[screenName] = width
+        root.sidebarLeftPinnedReservationByScreen = nextMap
+    }
+
+    function clearSidebarLeftPinnedReservation(screenName) {
+        if (!screenName)
+            return
+
+        const nextMap = Object.assign({}, root.sidebarLeftPinnedReservationByScreen)
+        delete nextMap[screenName]
+        root.sidebarLeftPinnedReservationByScreen = nextMap
+    }
 
     function setBarTopClearance(screenName, clearance) {
         if (!screenName)
@@ -63,6 +86,40 @@ Singleton {
         const nextMap = Object.assign({}, root.barTopClearanceByScreen)
         delete nextMap[screenName]
         root.barTopClearanceByScreen = nextMap
+    }
+
+    function openOverlayWidget(identifier, pin = false) {
+        if (!identifier)
+            return
+
+        const currentOpen = [...(Persistent.states.overlay.open ?? [])]
+        if (!currentOpen.includes(identifier))
+            Persistent.states.overlay.open = currentOpen.concat([identifier])
+
+        if (pin && Persistent.states.overlay[identifier])
+            Persistent.states.overlay[identifier].pinned = true
+
+        root.overlayOpen = true
+    }
+
+    function closeOverlayWidget(identifier) {
+        if (!identifier)
+            return
+
+        Persistent.states.overlay.open = (Persistent.states.overlay.open ?? []).filter(id => id !== identifier)
+    }
+
+    function toggleOverlayWidget(identifier, pin = false) {
+        if (!identifier)
+            return
+
+        const currentOpen = Persistent.states.overlay.open ?? []
+        if (currentOpen.includes(identifier)) {
+            root.closeOverlayWidget(identifier)
+            return
+        }
+
+        root.openOverlayWidget(identifier, pin)
     }
 
     function beginDesktopDrag(screenName, urls, hotspotX, hotspotY, visual) {
@@ -178,6 +235,36 @@ Singleton {
 
         root.drawerScreen = targetScreen
         root.drawerOpen = true
+    }
+
+    function resolvedLiveCaptionsScreen(preferredScreen = "") {
+        return preferredScreen
+            || root.liveCaptionsScreen
+            || HyprlandData.monitors.find(m => m.focused)?.name
+            || Hyprland.focusedMonitor?.name
+            || Quickshell.screens[0]?.name
+            || ""
+    }
+
+    function openLiveCaptions(preferredScreen = "") {
+        root.liveCaptionsScreen = root.resolvedLiveCaptionsScreen(preferredScreen)
+        root.liveCaptionsOpen = true
+    }
+
+    function closeLiveCaptions() {
+        root.liveCaptionsOpen = false
+        root.liveCaptionsScreen = ""
+    }
+
+    function toggleLiveCaptions(preferredScreen = "") {
+        const targetScreen = root.resolvedLiveCaptionsScreen(preferredScreen)
+        if (root.liveCaptionsOpen && root.liveCaptionsScreen === targetScreen) {
+            root.closeLiveCaptions()
+            return
+        }
+
+        root.liveCaptionsScreen = targetScreen
+        root.liveCaptionsOpen = true
     }
 
     function resolvedSidebarLeftScreen(preferredScreen = "") {
@@ -300,4 +387,20 @@ Singleton {
             screenZoom = Math.max(screenZoom - 0.4, 1)
         } 
 	}
+
+    IpcHandler {
+        target: "liveCaptionsWindow"
+
+        function open() {
+            root.openLiveCaptions()
+        }
+
+        function close() {
+            root.closeLiveCaptions()
+        }
+
+        function toggle() {
+            root.toggleLiveCaptions()
+        }
+    }
 }

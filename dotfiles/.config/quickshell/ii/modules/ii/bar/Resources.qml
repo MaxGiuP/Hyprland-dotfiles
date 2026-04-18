@@ -25,6 +25,8 @@ MouseArea {
     // GPU (NVIDIA via nvidia-smi -q)
     property string gpuId: "0"
     property bool gpuAvailable: true
+    property bool gpuDriverMismatch: false
+    property bool _gpuMismatchNotified: false
     property int gpuUtil: 0
     property int vramUsedMB: 0
     property int vramTotalMB: 0
@@ -37,6 +39,7 @@ MouseArea {
         repeat: true
         onTriggered: {
             gpuQuery.buf = ""
+            gpuQuery.errBuf = ""
             gpuQuery.running = false
             gpuQuery.running = true
         }
@@ -47,21 +50,42 @@ MouseArea {
         environment: ({ LANG: "C", LC_ALL: "C" })
         command: ["nvidia-smi", "-i", root.gpuId, "-q", "-d", "UTILIZATION,MEMORY"]
         property string buf: ""
+        property string errBuf: ""
         stdout: SplitParser {
             splitMarker: "\n"
             onRead: data => gpuQuery.buf += data + "\n"
         }
+        stderr: SplitParser {
+            splitMarker: "\n"
+            onRead: data => gpuQuery.errBuf += data + "\n"
+        }
         onExited: code => {
             const t = gpuQuery.buf
+            const e = gpuQuery.errBuf
             gpuQuery.buf = ""
+            gpuQuery.errBuf = ""
 
             if (code !== 0) {
                 gpuAvailable = false
                 gpuUtil = 0
                 vramUsedMB = 0
                 vramTotalMB = 0
+                const isMismatch = (t + e).toLowerCase().includes("version mismatch")
+                if (isMismatch && !root._gpuMismatchNotified) {
+                    root.gpuDriverMismatch = true
+                    root._gpuMismatchNotified = true
+                    Quickshell.execDetached([
+                        "notify-send",
+                        "--urgency=critical",
+                        "--icon=nvidia",
+                        "GPU driver version mismatch",
+                        "nvidia-smi failed: kernel module and userspace library versions differ. A reboot is required."
+                    ])
+                }
                 return
             }
+            root.gpuDriverMismatch = false
+            root._gpuMismatchNotified = false
             gpuAvailable = true
 
             const utilM = t.match(/Gpu\s*:\s*(\d+)\s*%/i)
@@ -197,11 +221,11 @@ MouseArea {
 
         // 3) GPU
         Resource {
-            iconName: "jamboard_kiosk"
-            percentage: Math.max(0, Math.min(1, root.gpuUtil / 100))
-            shown: root.gpuAvailable
+            iconName: root.gpuDriverMismatch ? "warning" : "jamboard_kiosk"
+            percentage: root.gpuDriverMismatch ? 1.0 : Math.max(0, Math.min(1, root.gpuUtil / 100))
+            shown: root.gpuAvailable || root.gpuDriverMismatch
             Layout.leftMargin: shown ? 6 : 0
-            warningThreshold: (Config.options?.bar?.resources?.gpuWarningThreshold ?? 90)
+            warningThreshold: root.gpuDriverMismatch ? 0 : (Config.options?.bar?.resources?.gpuWarningThreshold ?? 90)
         }
 
         // 4) SWAP
@@ -339,6 +363,7 @@ MouseArea {
         hoverTarget: root
 
         gpuAvailable: root.gpuAvailable
+        gpuDriverMismatch: root.gpuDriverMismatch
         gpuId: root.gpuId
         gpuUtil: root.gpuUtil
         vramUsedMB: root.vramUsedMB

@@ -10,11 +10,14 @@ import Quickshell.Hyprland
 
 Scope {
     id: notificationPopup
+    readonly property string focusedScreenName: HyprlandData.monitors.find(m => m.focused)?.name
+        ?? Hyprland.focusedMonitor?.name
+        ?? ""
 
     PanelWindow {
         id: root
         visible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked
-        screen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? null
+        screen: Quickshell.screens.find(s => s.name === notificationPopup.focusedScreenName) ?? null
 
         WlrLayershell.namespace: "quickshell:notificationPopup"
         WlrLayershell.layer: WlrLayer.Overlay

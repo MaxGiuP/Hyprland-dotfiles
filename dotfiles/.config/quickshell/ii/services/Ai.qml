@@ -344,16 +344,21 @@ Singleton {
     property list<string> recentGeminiArrivals: []
     property list<string> recentOllamaArrivals: []
     property string preferredFreeGeminiModelId: ""
+    property string ollamaPullRuntimeDir: "/tmp/quickshell/ai"
+    property string ollamaPullPidFilePath: `${root.ollamaPullRuntimeDir}/ollama-pull.pid`
     property list<string> ollamaInstallQueue: []
     property string ollamaInstallingModelId: ""
     property string ollamaInstallStatusText: ""
     property real ollamaInstallProgress: -1
+    property bool ollamaInstallPaused: false
+    property bool ollamaInstallCancelRequested: false
     property list<string> ollamaRemoveQueue: []
     property string ollamaRemovingModelId: ""
     property string ollamaRemoveStatusText: ""
     readonly property bool ollamaInstallBusy: ollamaPullProc.running || root.ollamaInstallQueue.length > 0
     readonly property bool ollamaRemoveBusy: ollamaRemoveProc.running || root.ollamaRemoveQueue.length > 0
     readonly property bool ollamaMutationBusy: root.ollamaInstallBusy || root.ollamaRemoveBusy
+    readonly property bool ollamaInstallActive: root.ollamaInstallingModelId.length > 0 && ollamaPullProc.running
     readonly property var storeOllamaRecommendations: root.discoveredOllamaRecommendations.filter(entry => String(entry?.install_id ?? "").trim().length > 0)
     readonly property var availableOllamaRecommendations: root.discoveredOllamaRecommendations.filter(entry => root.shouldSuggestOllamaRecommendation(entry))
     readonly property var successorStoreOllamaRecommendations: root.storeOllamaRecommendations.filter(entry => root.successorContextForRecommendation(entry).length > 0)
@@ -623,17 +628,68 @@ Singleton {
         root.queueOllamaInstall(root.availableOllamaRecommendations.map(entry => entry.install_id));
     }
 
+    function resetOllamaInstallControlState() {
+        root.ollamaInstallPaused = false;
+        root.ollamaInstallCancelRequested = false;
+    }
+
+    function signalOllamaPull(signalName) {
+        if (!root.ollamaInstallActive || !signalName || signalName.length === 0) return;
+        Quickshell.execDetached([
+            "bash",
+            "-lc",
+            `pid="$(cat '${CF.StringUtils.shellSingleQuoteEscape(root.ollamaPullPidFilePath)}' 2>/dev/null)"; ` +
+            `[ -n "$pid" ] && kill -${signalName} "$pid" >/dev/null 2>&1 || true`
+        ]);
+    }
+
+    function pauseOllamaInstall() {
+        if (!root.ollamaInstallActive || root.ollamaInstallPaused || root.ollamaInstallCancelRequested) return;
+        root.signalOllamaPull("STOP");
+        root.ollamaInstallPaused = true;
+        root.ollamaInstallStatusText = Translation.tr("Paused %1").arg(root.ollamaInstallingModelId);
+    }
+
+    function resumeOllamaInstall() {
+        if (!root.ollamaInstallActive || !root.ollamaInstallPaused || root.ollamaInstallCancelRequested) return;
+        root.signalOllamaPull("CONT");
+        root.ollamaInstallPaused = false;
+        root.ollamaInstallStatusText = Translation.tr("Resuming %1").arg(root.ollamaInstallingModelId);
+    }
+
+    function cancelOllamaInstall() {
+        if (!root.ollamaInstallActive || root.ollamaInstallCancelRequested) return;
+        root.ollamaInstallCancelRequested = true;
+        if (root.ollamaInstallPaused)
+            root.signalOllamaPull("CONT");
+        root.ollamaInstallPaused = false;
+        root.ollamaInstallStatusText = Translation.tr("Cancelling %1").arg(root.ollamaInstallingModelId);
+        root.signalOllamaPull("TERM");
+    }
+
     function startNextOllamaInstall() {
         if (ollamaPullProc.running || ollamaRemoveProc.running || root.ollamaInstallQueue.length === 0) return;
 
         root.ollamaInstallingModelId = root.ollamaInstallQueue[0];
         root.ollamaInstallQueue = root.ollamaInstallQueue.slice(1);
+        root.resetOllamaInstallControlState();
         const installSize = root.ollamaInstallSizeLabel(root.ollamaInstallingModelId);
         root.ollamaInstallStatusText = installSize.length > 0
             ? Translation.tr("Installing %1 (%2)").arg(root.ollamaInstallingModelId).arg(installSize)
             : Translation.tr("Installing %1").arg(root.ollamaInstallingModelId);
         root.ollamaInstallProgress = -1;
-        ollamaPullProc.command = ["ollama", "pull", root.ollamaInstallingModelId];
+        ollamaPullProc.command = [
+            "bash",
+            "-lc",
+            `mkdir -p '${CF.StringUtils.shellSingleQuoteEscape(root.ollamaPullRuntimeDir)}'; ` +
+            `ollama pull '${CF.StringUtils.shellSingleQuoteEscape(root.ollamaInstallingModelId)}' & ` +
+            `pid=$!; ` +
+            `printf '%s\n' "$pid" > '${CF.StringUtils.shellSingleQuoteEscape(root.ollamaPullPidFilePath)}'; ` +
+            `wait "$pid"; ` +
+            `status=$?; ` +
+            `rm -f '${CF.StringUtils.shellSingleQuoteEscape(root.ollamaPullPidFilePath)}'; ` +
+            `exit "$status"`
+        ];
         ollamaPullProc.running = true;
     }
 
@@ -647,8 +703,18 @@ Singleton {
         ollamaRemoveProc.running = true;
     }
 
+    function sanitizeOllamaConsoleText(data) {
+        let text = String(data ?? "");
+        text = text.replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, " ");
+        text = text.replace(/\u009b[0-9;?]*[ -/]*[@-~]/g, " ");
+        text = text.replace(/(^|\s)[\[\]][0-9;?]*[A-Za-z]/g, "$1");
+        text = text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, " ");
+        text = text.replace(/\s+/g, " ").trim();
+        return text;
+    }
+
     function handleOllamaPullOutput(data) {
-        const text = String(data ?? "").trim();
+        const text = root.sanitizeOllamaConsoleText(data);
         if (text.length === 0) return;
         root.ollamaInstallStatusText = text;
         const progressMatch = text.match(/(\d{1,3})%/);
@@ -656,13 +722,14 @@ Singleton {
     }
 
     function handleOllamaRemoveOutput(data) {
-        const text = String(data ?? "").trim();
+        const text = root.sanitizeOllamaConsoleText(data);
         if (text.length === 0) return;
         root.ollamaRemoveStatusText = text;
     }
 
     function ollamaInstallStateFor(modelId) {
         if (root.hasInstalledOllamaFamily(modelId)) return "installed";
+        if (root.ollamaInstallingModelId === modelId && root.ollamaInstallPaused) return "paused";
         if (root.ollamaInstallingModelId === modelId) return "installing";
         if (root.ollamaInstallQueue.indexOf(modelId) !== -1) return "queued";
         return "available";
@@ -809,6 +876,7 @@ Singleton {
         onExited: (exitCode, exitStatus) => {
             const installedModel = root.ollamaInstallingModelId;
             const success = exitCode === 0;
+            const cancelled = root.ollamaInstallCancelRequested;
 
             if (success) {
                 root.notifyDesktop(
@@ -817,6 +885,15 @@ Singleton {
                 );
                 root.addMessage(Translation.tr("Installed %1 successfully.").arg(installedModel), root.interfaceRole);
                 root.refreshOllamaStatus();
+            } else if (cancelled) {
+                root.notifyDesktop(
+                    Translation.tr("Ollama install cancelled"),
+                    Translation.tr("Cancelled installation of %1.").arg(installedModel)
+                );
+                root.addMessage(
+                    Translation.tr("Cancelled installation of %1.").arg(installedModel),
+                    root.interfaceRole
+                );
             } else {
                 root.notifyDesktop(
                     Translation.tr("Ollama install failed"),
@@ -832,6 +909,7 @@ Singleton {
 
             root.ollamaInstallingModelId = "";
             root.ollamaInstallProgress = -1;
+            root.resetOllamaInstallControlState();
             root.startNextOllamaInstall();
             root.startNextOllamaRemoval();
         }

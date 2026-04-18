@@ -12,16 +12,20 @@ LockScreen {
     id: root
     readonly property int lockpadRiseDurationMs: 650
     readonly property int lockBlurLeadInMs: 180
+    readonly property int unlockAnimationDurationMs: 1250
+    readonly property int unlockBlurTailDurationMs: 160
+    readonly property int unlockBlurOutStartDelayMs: Math.max(0, unlockAnimationDurationMs - unlockBlurTailDurationMs)
 
-    unlockReleaseDelayMs: 1250
+    unlockReleaseDelayMs: unlockAnimationDurationMs
     lockBlurInDelayMs: 0
     lockBlurInDurationMs: lockBlurLeadInMs
-    unlockBlurOutDelayMs: 700
-    unlockBlurOutDurationMs: 500
+    unlockBlurOutDelayMs: unlockBlurOutStartDelayMs
+    unlockBlurOutDurationMs: unlockBlurTailDurationMs
 
     lockSurface: LockSurface {
         context: root.context
         lockpadRiseDurationMs: root.lockpadRiseDurationMs
         introStartDelayMs: root.lockBlurInDelayMs + root.lockBlurInDurationMs
+        playUnlockAnimation: true
     }
 }

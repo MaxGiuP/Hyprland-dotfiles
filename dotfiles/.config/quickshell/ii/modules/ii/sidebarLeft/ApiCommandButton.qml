@@ -1,10 +1,15 @@
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 import QtQuick
+import QtQuick.Layouts
 
 GroupButton {
     id: button
     property string buttonText
+
+    Layout.fillWidth: false
+    Layout.fillHeight: false
 
     horizontalPadding: 8
     verticalPadding: 6
@@ -17,10 +22,11 @@ GroupButton {
     colBackground: Appearance.colors.colLayer2
     colBackgroundHover: Appearance.colors.colLayer2Hover
     colBackgroundActive: Appearance.colors.colLayer2Active
+    property color colText: toggled ? ColorUtils.bestTextColor(button.color) : Appearance.m3colors.m3onSurface
 
     contentItem: StyledText {
         horizontalAlignment: Text.AlignHCenter
         text: buttonText
-        color: Appearance.m3colors.m3onSurface
+        color: button.colText
     }
 }

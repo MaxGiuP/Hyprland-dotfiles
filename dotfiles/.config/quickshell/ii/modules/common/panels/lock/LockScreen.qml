@@ -109,6 +109,19 @@ Scope {
         root.scheduleBlurAnimation(0, root.unlockBlurOutDelayMs, root.unlockBlurOutDurationMs, Easing.InCubic);
     }
 
+    function releaseLock() {
+        GlobalStates.screenLocked = false;
+        lockContext.reset();
+        root.stopBlurAnimation();
+        GlobalStates.screenLockBlurProgress = 0;
+        GlobalStates.screenLockHideBar = false;
+        GlobalStates.lockUseWallpaperFallbackAfterResume = false;
+        if (lockContext.alsoInhibitIdle) {
+            lockContext.alsoInhibitIdle = false;
+            Idle.toggleInhibit(true);
+        }
+    }
+
     Timer {
         id: blurDelayTimer
         property real pendingTarget: 0
@@ -158,7 +171,10 @@ Scope {
                 root.unlockKeyring();
 
             root.startLockBlurOutro();
-            unlockReleaseTimer.start();
+            if (root.unlockReleaseDelayMs <= 0)
+                root.releaseLock();
+            else
+                unlockReleaseTimer.start();
         }
     }
 
@@ -166,17 +182,7 @@ Scope {
         id: unlockReleaseTimer
         interval: root.unlockReleaseDelayMs
         repeat: false
-        onTriggered: {
-            GlobalStates.screenLocked = false;
-            lockContext.reset();
-            root.stopBlurAnimation();
-            GlobalStates.screenLockBlurProgress = 0;
-            GlobalStates.screenLockHideBar = false;
-            if (lockContext.alsoInhibitIdle) {
-                lockContext.alsoInhibitIdle = false;
-                Idle.toggleInhibit(true);
-            }
-        }
+        onTriggered: root.releaseLock()
     }
 
     WlSessionLock {
@@ -196,6 +202,7 @@ Scope {
 
         GlobalStates.screenLockBlurProgress = 0;
         GlobalStates.screenLockHideBar = false;
+        GlobalStates.lockUseWallpaperFallbackAfterResume = false;
         GlobalStates.screenLocked = true;
     }
 
@@ -207,6 +214,9 @@ Scope {
         }
         function focus(): void {
             lockContext.shouldReFocus();
+        }
+        function resumedFromSleep(): void {
+            GlobalStates.lockUseWallpaperFallbackAfterResume = true;
         }
     }
 

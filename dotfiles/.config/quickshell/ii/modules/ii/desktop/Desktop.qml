@@ -951,7 +951,7 @@ Scope {
                         screenScope.trashSelected()
                     }
                     onOpenSettingsRequested: {
-                        Quickshell.execDetached(["qs", "-p", Quickshell.shellPath("settings.qml")])
+                        GlobalStates.openOverlayWidget("settingsMenu")
                     }
                     onCloseRequested: {
                         desktopWindow.menuVisible = false

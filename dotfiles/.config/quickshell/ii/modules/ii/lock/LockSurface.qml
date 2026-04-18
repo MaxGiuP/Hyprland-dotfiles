@@ -20,6 +20,23 @@ MouseArea {
     property int introStartDelayMs: 0
     property var captureScreen: null
     property bool introStarted: false
+    property bool playUnlockAnimation: true
+    readonly property string wallpaperPath: {
+        const configuredPath = `${Config.options.background.wallpaperPath ?? ""}`;
+        const lowerPath = configuredPath.toLowerCase();
+        const wallpaperIsVideo = lowerPath.endsWith(".mp4")
+            || lowerPath.endsWith(".webm")
+            || lowerPath.endsWith(".mkv")
+            || lowerPath.endsWith(".avi")
+            || lowerPath.endsWith(".mov");
+        return wallpaperIsVideo
+            ? `${Config.options.background.thumbnailPath ?? configuredPath}`
+            : configuredPath;
+    }
+    readonly property size safeSurfaceSize: Qt.size(
+        Math.max(1, Math.round(width)),
+        Math.max(1, Math.round(height))
+    )
 
     // ─── Focus management ────────────────────────────────────────────────────
     function forceFieldFocus() {
@@ -44,10 +61,14 @@ MouseArea {
     readonly property real lockBlurProgress: Config.options.lock.blur.enable
         ? Math.max(0, Math.min(1, GlobalStates.screenLockBlurProgress))
         : 0
+    readonly property bool useWallpaperFallback: GlobalStates.lockUseWallpaperFallbackAfterResume || !root.captureScreen
     property bool blurCapturePending: false
     property bool blurWasActive: false
 
     function refreshBlurCapture() {
+        if (root.useWallpaperFallback)
+            return;
+
         if (!root.captureScreen) {
             root.blurCapturePending = true;
             return;
@@ -142,14 +163,13 @@ MouseArea {
     onWidthChanged: startIntroAnimation()
     onHeightChanged: startIntroAnimation()
     onCaptureScreenChanged: {
-        if (root.blurCapturePending && root.captureScreen)
+        if (root.blurCapturePending && root.captureScreen && !root.useWallpaperFallback)
             Qt.callLater(root.refreshBlurCapture);
     }
     onLockBlurProgressChanged: {
         const blurIsActive = root.lockBlurProgress > 0.001;
-        if (blurIsActive && !root.blurWasActive) {
+        if (blurIsActive && !root.blurWasActive && !root.useWallpaperFallback)
             Qt.callLater(root.refreshBlurCapture);
-        }
 
         root.blurWasActive = blurIsActive;
     }
@@ -182,11 +202,11 @@ MouseArea {
         anchors.fill: parent
         clip: true
         visible: opacity > 0
-        opacity: screenshotView.hasContent ? 1 : 0
+        opacity: root.useWallpaperFallback
+            ? (wallpaperImage.status === Image.Ready ? 1 : 0)
+            : (screenshotView.hasContent ? 1 : 0)
         readonly property real blurScale: 1 + ((Config.options.lock.blur.extraZoom - 1) * root.lockBlurProgress)
         readonly property real blurRadius: Config.options.lock.blur.radius * root.lockBlurProgress
-        // Overscan the screencopy so the blur still covers the full screen
-        // when the lock transition zoom changes and the blur samples past edges.
         readonly property real blurOverscan: Math.ceil(
             blurRadius + (Math.max(root.width, root.height) * Math.max(0, blurScale - 1) / 2)
         )
@@ -198,17 +218,35 @@ MouseArea {
             }
         }
 
+        Rectangle {
+            anchors.fill: parent
+            color: Appearance.colors.colLayer0
+        }
+
+        Image {
+            id: wallpaperImage
+            anchors.fill: parent
+            source: root.wallpaperPath
+            fillMode: Image.PreserveAspectCrop
+            cache: false
+            asynchronous: true
+            sourceSize.width: root.safeSurfaceSize.width
+            sourceSize.height: root.safeSurfaceSize.height
+            visible: root.useWallpaperFallback
+        }
+
         ScreencopyView {
             id: screenshotView
             x: -screenshotLayer.blurOverscan
             y: -screenshotLayer.blurOverscan
-            width: root.width + screenshotLayer.blurOverscan * 2
-            height: root.height + screenshotLayer.blurOverscan * 2
+            width: root.safeSurfaceSize.width + screenshotLayer.blurOverscan * 2
+            height: root.safeSurfaceSize.height + screenshotLayer.blurOverscan * 2
             scale: screenshotLayer.blurScale
             transformOrigin: Item.Center
             captureSource: root.captureScreen
             live: false
             paintCursor: false
+            visible: !root.useWallpaperFallback
         }
 
         ShaderEffectSource {
@@ -228,11 +266,31 @@ MouseArea {
             y: screenshotView.y
             width: screenshotView.width
             height: screenshotView.height
-            visible: screenshotView.hasContent
+            visible: !root.useWallpaperFallback && screenshotView.hasContent
             source: screenshotTexture
             radius: screenshotLayer.blurRadius
             samples: Math.max(1, Math.ceil(radius) * 2 + 1)
             transparentBorder: false
+        }
+
+        ShaderEffectSource {
+            id: wallpaperTexture
+            anchors.fill: wallpaperImage
+            sourceItem: wallpaperImage
+            live: true
+            hideSource: true
+            visible: false
+        }
+
+        GaussianBlur {
+            anchors.fill: parent
+            visible: root.useWallpaperFallback && wallpaperImage.status === Image.Ready
+            source: wallpaperTexture
+            radius: screenshotLayer.blurRadius
+            samples: Math.max(1, Math.ceil(radius) * 2 + 1)
+            transparentBorder: true
+            scale: screenshotLayer.blurScale
+            transformOrigin: Item.Center
         }
 
         Rectangle {
@@ -246,8 +304,8 @@ MouseArea {
     // The lockpad is 120px at full size. Settled scale matches the 48px card badge.
     readonly property real lockpadSize: 120
     readonly property real lockpadSettledScale: 48.0 / lockpadSize   // 0.4 — matches badge
-    readonly property real lockpadCenterY: (root.height - lockpadSize) / 2
-    readonly property real lockpadCenterX: (root.width  - lockpadSize) / 2
+    readonly property real lockpadCenterY: (root.safeSurfaceSize.height - lockpadSize) / 2
+    readonly property real lockpadCenterX: (root.safeSurfaceSize.width  - lockpadSize) / 2
     // Badge centre in root coordinates, computed by tracing the layout chain:
     //   mainCard.x + cardLayout.leftMargin(28) + topRow.x(0) + timeCol.x(0) + lockBadge.x + lockBadge.width/2
     // lockBadge.x is set by the ColumnLayout engine due to Layout.alignment: AlignHCenter.
@@ -260,8 +318,8 @@ MouseArea {
         z: 2
         width: root.lockpadSize
         height: root.lockpadSize
-        x: (root.width - width) / 2
-        y: root.height      // starts off-screen at the bottom
+        x: (root.safeSurfaceSize.width - width) / 2
+        y: root.safeSurfaceSize.height      // starts off-screen at the bottom
         scale: 1.0
         opacity: 1.0
 
@@ -294,11 +352,11 @@ MouseArea {
         NumberAnimation {
             target: lockpadIcon
             property: "y"
-            from: root.height
-            to: root.lockpadCenterY
-            duration: root.lockpadRiseDurationMs
-            easing.type: Easing.OutCubic
-        }
+                from: root.safeSurfaceSize.height
+                to: root.lockpadCenterY
+                duration: root.lockpadRiseDurationMs
+                easing.type: Easing.OutCubic
+            }
 
         PauseAnimation { duration: 400 }
 
@@ -397,7 +455,7 @@ MouseArea {
         ParallelAnimation {
             NumberAnimation {
                 target: lockpadIcon; property: "y"
-                to: root.height
+                to: root.safeSurfaceSize.height
                 duration: 500; easing.type: Easing.InCubic
             }
             NumberAnimation {
@@ -411,7 +469,10 @@ MouseArea {
 
     Connections {
         target: root.context
-        function onUnlocked(targetAction) { unlockAnim.start(); }
+        function onUnlocked(targetAction) {
+            if (root.playUnlockAnimation)
+                unlockAnim.start();
+        }
     }
 
     // ─── Card halo glow ───────────────────────────────────────────────────────
@@ -437,7 +498,7 @@ MouseArea {
     Rectangle {
         id: mainCard
         anchors.centerIn: parent
-        width: Math.min(840, root.width - 80)
+        width: Math.max(1, Math.min(840, root.safeSurfaceSize.width - 80))
         implicitHeight: cardLayout.implicitHeight + 32
         radius: 22
         color: Qt.rgba(Appearance.m3colors.m3surfaceContainerLowest.r, Appearance.m3colors.m3surfaceContainerLowest.g, Appearance.m3colors.m3surfaceContainerLowest.b, 1.0)

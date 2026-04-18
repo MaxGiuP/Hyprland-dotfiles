@@ -243,6 +243,13 @@ ContentPage {
             }
         }
 
+        ConfigSwitch {
+            buttonIcon: "fullscreen"
+            text: Translation.tr("Hide in fullscreen")
+            checked: Config.options.bar.hideWhenFullscreen
+            onCheckedChanged: Config.options.bar.hideWhenFullscreen = checked
+        }
+
         ConfigRow {
             uniform: true
             ConfigSwitch {

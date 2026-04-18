@@ -389,7 +389,7 @@ Singleton {
             }
 
             property JsonObject bar: JsonObject {
-                property bool hideWhenFullscreen: true
+                property bool hideWhenFullscreen: false
                 property JsonObject autoHide: JsonObject {
                     property bool enable: false
                     property int hoverRegionWidth: 2
@@ -418,6 +418,7 @@ Singleton {
                 property list<string> screenList: [] // List of names, like "eDP-1", find out with 'hyprctl monitors' command
                 property JsonObject utilButtons: JsonObject {
                     property bool showScreenSnip: true
+                    property bool showLiveCaptions: true
                     property bool showColorPicker: false
                     property bool showMicToggle: false
                     property bool showKeyboardToggle: true
@@ -494,6 +495,7 @@ Singleton {
 
             property JsonObject dock: JsonObject {
                 property bool enable: false
+                property bool hideWhenFullscreen: false
                 property string mode: "fixed"
                 property bool rounded: true
                 property bool monochromeIcons: true
@@ -528,7 +530,7 @@ Singleton {
             }
 
             property JsonObject launcher: JsonObject {
-                property list<string> pinnedApps: [ "org.kde.dolphin", "kitty", "cmake-gui"]
+                property list<string> pinnedApps: [ "org.kde.dolphin", "org.gnome.Nautilus", "kitty", "cmake-gui"]
                 // These were previously `property var` but Quickshell 0.2.1 has a bug in
                 // JsonAdapter::deserializeRec that crashes when deserializing `property var`
                 // in nested JsonObjects (uses `this` instead of `obj` at line 164). Using

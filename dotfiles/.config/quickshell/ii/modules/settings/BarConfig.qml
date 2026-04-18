@@ -211,6 +211,17 @@ ContentPage {
                 }
             }
             ConfigSwitch {
+                buttonIcon: "subtitles"
+                text: Translation.tr("Live captions")
+                checked: Config.options.bar.utilButtons.showLiveCaptions
+                onCheckedChanged: {
+                    Config.options.bar.utilButtons.showLiveCaptions = checked;
+                }
+            }
+        }
+        ConfigRow {
+            uniform: true
+            ConfigSwitch {
                 buttonIcon: "colorize"
                 text: Translation.tr("Color picker")
                 checked: Config.options.bar.utilButtons.showColorPicker

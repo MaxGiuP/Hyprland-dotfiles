@@ -345,7 +345,7 @@ Item {
                 buttonIcon: "settings"
                 onClicked: {
                     GlobalStates.sidebarRightOpen = false;
-                    Quickshell.execDetached(["qs", "-p", root.settingsQmlPath]);
+                    GlobalStates.openOverlayWidget("settingsMenu");
                 }
                 StyledToolTip {
                     text: Translation.tr("Settings")

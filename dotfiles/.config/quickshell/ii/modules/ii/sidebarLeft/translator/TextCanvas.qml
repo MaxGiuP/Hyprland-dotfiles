@@ -19,6 +19,7 @@ Rectangle {
     implicitHeight: Math.max(150, inputColumn.implicitHeight)
     color: Appearance.colors.colLayer2
     radius: Appearance.rounding.normal
+    clip: true
 
     signal inputTextChanged(); // Signal emitted when text changes
 

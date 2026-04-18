@@ -170,4 +170,18 @@ Item {
             }
         }
     }
+
+    MaterialSymbol {
+        visible: root.scopeRoot?.pin ?? false
+        anchors {
+            left: parent.left
+            top: parent.top
+            leftMargin: root.sidebarPadding + 4
+            topMargin: root.sidebarPadding + 4
+        }
+        z: 10
+        text: "keep"
+        iconSize: Appearance.font.pixelSize.large
+        color: Appearance.colors.colPrimary
+    }
 }

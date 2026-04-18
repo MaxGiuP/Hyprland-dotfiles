@@ -73,7 +73,8 @@ Scope { // Scope
             screen: screenScope.modelData
             property HyprlandMonitor monitor: Hyprland.monitorFor(screenScope.modelData)
             readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
-            visible: !GlobalStates.screenLocked && !fullscreenOnMonitor
+            readonly property bool hideWhenFullscreen: Config.options?.dock.hideWhenFullscreen ?? false
+            visible: !GlobalStates.screenLocked && (!hideWhenFullscreen || !fullscreenOnMonitor)
             readonly property int activeWorkspaceId: monitor?.activeWorkspace?.id ?? -1
             readonly property bool activeWorkspaceEmpty: activeWorkspaceId === -1
                 || HyprlandData.hyprlandClientsForWorkspace(activeWorkspaceId).length === 0

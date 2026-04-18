@@ -199,7 +199,7 @@ Variants {
 
             Loader {
                 id: blurLoader
-                // The lock surface already renders a full-screen blurred screencopy.
+                // The lock surface already renders a full-screen blurred wallpaper.
                 // Avoid stacking a second wallpaper blur underneath the lock screen.
                 active: false
                 anchors.fill: wallpaper

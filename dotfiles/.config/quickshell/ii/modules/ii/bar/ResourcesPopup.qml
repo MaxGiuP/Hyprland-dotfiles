@@ -9,6 +9,7 @@ StyledPopup {
 
     // GPU values passed in from Resources.qml
     property bool gpuAvailable: false
+    property bool gpuDriverMismatch: false
     property string gpuId: ""
     property int gpuUtil: 0
     property int vramUsedMB: 0
@@ -105,12 +106,21 @@ StyledPopup {
                 spacing: 4
 
                 StyledPopupValueRow {
+                    visible: root.gpuDriverMismatch
+                    icon: "warning"
+                    label: Services.Translation.tr("Driver mismatch")
+                    value: Services.Translation.tr("Reboot required")
+                }
+
+                StyledPopupValueRow {
+                    visible: !root.gpuDriverMismatch
                     icon: "bolt"
                     label: Services.Translation.tr("Util:")
                     value: root.gpuAvailable ? `${root.gpuUtil}%` : Services.Translation.tr("N/A")
                 }
 
                 StyledPopupValueRow {
+                    visible: !root.gpuDriverMismatch
                     icon: "memory"
                     label: Services.Translation.tr("VRAM:")
                     value: root.gpuAvailable
@@ -119,13 +129,14 @@ StyledPopup {
                 }
 
                 StyledPopupValueRow {
+                    visible: !root.gpuDriverMismatch
                     icon: "pie_chart"
                     label: Services.Translation.tr("VRAM %:")
                     value: root.gpuAvailable ? `${root.vramPercent}%` : Services.Translation.tr("N/A")
                 }
 
                 StyledPopupValueRow {
-                    visible: root.gpuAvailable && (root.gpuId || "") !== ""
+                    visible: !root.gpuDriverMismatch && root.gpuAvailable && (root.gpuId || "") !== ""
                     icon: "tag"
                     label: Services.Translation.tr("GPU ID:")
                     value: `${root.gpuId}`

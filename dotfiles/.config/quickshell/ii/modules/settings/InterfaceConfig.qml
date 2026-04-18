@@ -144,6 +144,14 @@ ContentPage {
                 }
             }
         }
+        ConfigSwitch {
+            buttonIcon: "fullscreen"
+            text: Translation.tr("Hide in fullscreen")
+            checked: Config.options.dock.hideWhenFullscreen ?? false
+            onCheckedChanged: {
+                Config.options.dock.hideWhenFullscreen = checked;
+            }
+        }
         ContentSubsection {
             title: Translation.tr("Dock position")
 

@@ -28,16 +28,19 @@ AbstractOverlayWidget {
 
     // Defaults n stuff
     required property var modelData
-    readonly property string identifier: modelData.identifier
-    readonly property string materialSymbol: modelData.materialSymbol ?? "widgets"
-    property string title: identifier.replace(/([A-Z])/g, " $1").replace(/^./, function(str){ return str.toUpperCase(); })
-    property var persistentStateEntry: Persistent.states.overlay[identifier]
+    readonly property string identifier: (modelData && modelData.identifier) ? modelData.identifier : ""
+    readonly property string materialSymbol: (modelData && modelData.materialSymbol) ? modelData.materialSymbol : "widgets"
+    property string title: identifier.length > 0 ? identifier.replace(/([A-Z])/g, " $1").replace(/^./, function(str){ return str.toUpperCase(); }) : ""
+    property var persistentStateEntry: (Persistent.ready && identifier.length > 0 && Persistent.states.overlay[identifier]) ? Persistent.states.overlay[identifier] : fallbackPersistentStateEntry
     property real radius: Appearance.rounding.windowRounding
     property real minimumWidth: contentItem.implicitWidth
     property real minimumHeight: contentItem.implicitHeight
     property real resizeMargin: 8
     property real padding: 6
     property real contentRadius: radius - padding
+    readonly property bool showTitleBar: GlobalStates.overlayOpen
+    readonly property real effectiveTitleBarHeight: showTitleBar ? (titleBarRow.implicitHeight + root.padding * 2) : 0
+    property real lastEffectiveTitleBarHeight: 0
 
     // Resizing
     function getXResizeDirection(x) {
@@ -51,13 +54,15 @@ AbstractOverlayWidget {
     property bool resizing: false
     property int resizeXDirection: getXResizeDirection(mouseX)
     property int resizeYDirection: getYResizeDirection(mouseY)
-    draggable: GlobalStates.overlayOpen
+    property bool draggableWhenPinned: persistentStateEntry.draggableWhenPinned ?? false
+    readonly property bool bodyDragEnabledWhenPinned: draggableWhenPinned && actuallyPinned && !GlobalStates.overlayOpen
+    draggable: GlobalStates.overlayOpen || bodyDragEnabledWhenPinned
     drag.target: undefined
-    animateXPos: !dragHandler.active
-    animateYPos: !dragHandler.active
-    z: dragHandler.active ? 2 : 1
+    animateXPos: !(dragHandler.active || titleBarDragHandler.active || bodyDragHandler.active)
+    animateYPos: !(dragHandler.active || titleBarDragHandler.active || bodyDragHandler.active)
+    z: (dragHandler.active || titleBarDragHandler.active || bodyDragHandler.active) ? 2 : 1
     cursorShape: {
-        if (dragHandler.active) return root.resizing ? cursorShape : Qt.ArrowCursor;
+        if (dragHandler.active || titleBarDragHandler.active || bodyDragHandler.active) return root.resizing ? cursorShape : Qt.ArrowCursor;
         if (resizeMargin < mouseX && mouseX < width - resizeMargin &&
             resizeMargin < mouseY && mouseY < height - resizeMargin) {
             return Qt.ArrowCursor;
@@ -73,36 +78,67 @@ AbstractOverlayWidget {
         }
     }
 
+    // Positions are stored as screen-relative fractions (0.0–1.0).
+    // Values >= 2 are the legacy absolute-pixel format written by older code;
+    // they are used as-is so nothing jumps on first load after an update.
+    // On the next savePosition call they are converted to fractions.
+    function resolvePos(stored, screenDim) {
+        return stored >= 2 ? stored : stored * screenDim
+    }
+
     // Positioning & sizing
-    x: Math.round(persistentStateEntry.x) // Round or it'll be blurry
-    y: Math.round(persistentStateEntry.y) // Round or it'll be blurry
+    x: Math.round(resolvePos(persistentStateEntry.x, root.parent?.width ?? 1920))
+    y: 0
     pinned: persistentStateEntry.pinned
     clickthrough: persistentStateEntry.clickthrough
     drag {
         minimumX: 0
-        minimumY: 0
+        minimumY: -root.effectiveTitleBarHeight
         maximumX: root.parent?.width - root.width
         maximumY: root.parent?.height - root.height
     }
     opacity: (GlobalStates.overlayOpen || !clickthrough) ? 1.0 : Config.options.overlay.clickthroughOpacity
 
     // Guarded states & registration funcs
-    property bool open: Persistent.states.overlay.open
-    property bool actuallyPinned: pinned && open
-    property bool actuallyClickable: !clickthrough && actuallyPinned && open
+    readonly property bool isWidgetOpen: (Persistent.states.overlay.open ?? []).includes(identifier)
+    property bool actuallyPinned: pinned && isWidgetOpen
+    property bool actuallyClickable: actuallyPinned && (!clickthrough || bodyDragEnabledWhenPinned)
+    property bool actuallyDragHandleClickable: false
     onActuallyPinnedChanged: reportPinnedState();
     onActuallyClickableChanged: reportClickableState();
+    onActuallyDragHandleClickableChanged: reportClickableState();
     function reportPinnedState() {
-        OverlayContext.pin(identifier, actuallyPinned);
+        if (identifier.length > 0)
+            OverlayContext.pin(identifier, actuallyPinned);
     }
     function reportClickableState() {
-        OverlayContext.registerClickableWidget(contentItem, actuallyClickable);
+        if (contentItem)
+            OverlayContext.registerClickableWidget(contentItem, actuallyClickable);
+        if (titleBar)
+            OverlayContext.registerClickableWidget(titleBar, actuallyDragHandleClickable);
     }
 
     // Self-registeration with OverlayContext
     Component.onCompleted: {
+        const sh = root.parent?.height ?? 1080
+        root.y = Math.round(resolvePos(root.persistentStateEntry.y, sh) - root.effectiveTitleBarHeight);
+        root.lastEffectiveTitleBarHeight = root.effectiveTitleBarHeight;
         reportPinnedState();
         reportClickableState();
+    }
+    onEffectiveTitleBarHeightChanged: {
+        const delta = root.effectiveTitleBarHeight - root.lastEffectiveTitleBarHeight;
+        if (Math.abs(delta) > 0.01)
+            root.y = Math.round(root.y - delta);
+        root.lastEffectiveTitleBarHeight = root.effectiveTitleBarHeight;
+    }
+    Component.onDestruction: {
+        if (contentItem)
+            OverlayContext.registerClickableWidget(contentItem, false);
+        if (titleBar)
+            OverlayContext.registerClickableWidget(titleBar, false);
+        if (identifier.length > 0)
+            OverlayContext.pin(identifier, false);
     }
 
     // Hooks
@@ -130,17 +166,19 @@ AbstractOverlayWidget {
         contentContainer.implicitHeight = Math.max(root.persistentStateEntry.height + dragHandler.yAxis.activeValue * root.resizeYDirection, root.minimumHeight);
         const negativeXDrag = root.resizeXDirection === -1;
         const negativeYDrag = root.resizeYDirection === -1;
-        const wantedX = root.persistentStateEntry.x + (negativeXDrag ? dragHandler.xAxis.activeValue : 0)
-        const wantedY = root.persistentStateEntry.y + (negativeYDrag ? dragHandler.yAxis.activeValue : 0)
-        const negativeXDragLimit = root.persistentStateEntry.x + root.persistentStateEntry.width - contentContainer.implicitWidth;
-        const negativeYDragLimit = root.persistentStateEntry.y + root.persistentStateEntry.height - contentContainer.implicitHeight;
+        const baseX = resolvePos(root.persistentStateEntry.x, root.parent?.width ?? 1920)
+        const baseY = resolvePos(root.persistentStateEntry.y, root.parent?.height ?? 1080)
+        const wantedX = baseX + (negativeXDrag ? dragHandler.xAxis.activeValue : 0)
+        const wantedY = baseY + (negativeYDrag ? dragHandler.yAxis.activeValue : 0)
+        const negativeXDragLimit = baseX + root.persistentStateEntry.width - contentContainer.implicitWidth;
+        const negativeYDragLimit = baseY + root.persistentStateEntry.height - contentContainer.implicitHeight;
         root.x = negativeXDrag ? Math.min(wantedX, negativeXDragLimit) : wantedX;
         root.y = negativeYDrag ? Math.min(wantedY, negativeYDragLimit) : wantedY;
     }
     DragHandler {
         id: dragHandler
         acceptedButtons: Qt.LeftButton | Qt.RightButton
-        target: (root.draggable && !root.resizing) ? root : null
+        target: null
         onActiveChanged: { // Handle drag release
             if (!active) {
                 root.resizing = false;
@@ -149,12 +187,12 @@ AbstractOverlayWidget {
         }
         xAxis.minimum: 0
         xAxis.maximum: root.parent?.width - root.width
-        yAxis.minimum: 0
+        yAxis.minimum: -root.effectiveTitleBarHeight
         yAxis.maximum: root.parent?.height - root.height
     }
 
     function close() {
-        Persistent.states.overlay.open = Persistent.states.overlay.open.filter(type => type !== root.identifier);
+        Persistent.states.overlay.open = (Persistent.states.overlay.open ?? []).filter(type => type !== root.identifier);
     }
 
     function togglePinned() {
@@ -165,16 +203,22 @@ AbstractOverlayWidget {
         persistentStateEntry.clickthrough = !persistentStateEntry.clickthrough;
     }
 
+    function toggleDraggableWhenPinned() {
+        persistentStateEntry.draggableWhenPinned = !persistentStateEntry.draggableWhenPinned;
+    }
+
     function savePosition(xPos = root.x, yPos = root.y, width = contentContainer.implicitWidth, height = contentContainer.implicitHeight) {
-        persistentStateEntry.x = Math.round(xPos);
-        persistentStateEntry.y = Math.round(yPos);
+        const sw = root.parent?.width ?? 1920
+        const sh = root.parent?.height ?? 1080
+        persistentStateEntry.x = xPos / sw
+        persistentStateEntry.y = (yPos + root.effectiveTitleBarHeight) / sh
         persistentStateEntry.width = Math.round(width);
         persistentStateEntry.height = Math.round(height);
     }
 
     function center() {
         const targetX = (root.parent.width - contentColumn.width) / 2 - root.resizeMargin
-        const targetY = (root.parent.height - contentContainer.height) / 2 - titleBar.implicitHeight + border.border.width - root.resizeMargin
+        const targetY = (root.parent.height - contentContainer.height) / 2 + border.border.width - root.resizeMargin - root.effectiveTitleBarHeight
         root.x = targetX
         root.y = targetY
         root.savePosition(targetX, targetY)
@@ -183,6 +227,17 @@ AbstractOverlayWidget {
     visible: GlobalStates.overlayOpen || actuallyPinned
     implicitWidth: contentColumn.implicitWidth + resizeMargin * 2
     implicitHeight: contentColumn.implicitHeight + resizeMargin * 2
+
+    QtObject {
+        id: fallbackPersistentStateEntry
+        property bool pinned: false
+        property bool clickthrough: false
+        property bool draggableWhenPinned: false
+        property real x: 0
+        property real y: 0
+        property real width: 0
+        property real height: 0
+    }
 
     Rectangle {
         id: border
@@ -213,14 +268,29 @@ AbstractOverlayWidget {
             // Title bar
             Rectangle {
                 id: titleBar
-                opacity: GlobalStates.overlayOpen ? 1 : 0
+                visible: root.showTitleBar
+                opacity: root.showTitleBar ? 1 : 0
                 Layout.fillWidth: true
                 implicitWidth: titleBarRow.implicitWidth + root.padding * 2
-                implicitHeight: titleBarRow.implicitHeight + root.padding * 2
+                implicitHeight: root.showTitleBar ? titleBarRow.implicitHeight + root.padding * 2 : 0
                 color: root.fancyBorders ? "transparent" : Appearance.colors.colLayer1Base
                 // border.color: Appearance.colors.colOutlineVariant
                 // border.width: 1
                 
+                DragHandler {
+                    id: titleBarDragHandler
+                    acceptedButtons: Qt.LeftButton
+                    target: (root.draggable && !root.resizing) ? root : null
+                    xAxis.minimum: 0
+                    xAxis.maximum: root.parent?.width - root.width
+                    yAxis.minimum: -root.effectiveTitleBarHeight
+                    yAxis.maximum: root.parent?.height - root.height
+                    onActiveChanged: {
+                        if (!active)
+                            root.savePosition()
+                    }
+                }
+
                 RowLayout {
                     id: titleBarRow
                     anchors {
@@ -253,6 +323,16 @@ AbstractOverlayWidget {
                     }
 
                     TitlebarButton {
+                        visible: root.pinned
+                        materialSymbol: "drag_pan"
+                        toggled: root.draggableWhenPinned
+                        onClicked: root.toggleDraggableWhenPinned()
+                        StyledToolTip {
+                            text: "Draggable when pinned"
+                        }
+                    }
+
+                    TitlebarButton {
                         visible: (root.pinned && root.showClickabilityButton)
                         materialSymbol: "mouse"
                         toggled: !root.clickthrough
@@ -275,7 +355,7 @@ AbstractOverlayWidget {
                         materialSymbol: "close"
                         onClicked: root.close()
                         StyledToolTip {
-                            text: Translation.tr("Close")
+                            text: "Close"
                         }
                     }
                 }
@@ -292,6 +372,20 @@ AbstractOverlayWidget {
                 implicitWidth: Math.max(root.persistentStateEntry.width, root.minimumWidth)
                 implicitHeight: Math.max(root.persistentStateEntry.height, root.minimumHeight)
                 children: [root.contentItem]
+
+                DragHandler {
+                    id: bodyDragHandler
+                    acceptedButtons: Qt.LeftButton
+                    target: (root.bodyDragEnabledWhenPinned && !root.resizing) ? root : null
+                    xAxis.minimum: 0
+                    xAxis.maximum: root.parent?.width - root.width
+                    yAxis.minimum: 0
+                    yAxis.maximum: root.parent?.height - root.height
+                    onActiveChanged: {
+                        if (!active)
+                            root.savePosition()
+                    }
+                }
             }
         }
     }

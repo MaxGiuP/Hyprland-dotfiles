@@ -118,6 +118,98 @@ Item {
         return lines.length > 0 ? lines[0] : "";
     }
 
+    function translationLanguageSupportsGender(lang) {
+        const code = String(lang ?? "").trim().toLowerCase().split(/[-_]/)[0];
+        return [
+            "ar", "be", "bg", "bs", "ca", "cs", "de", "el", "es", "fr",
+            "he", "hi", "hr", "it", "mk", "nl", "pl", "pt", "ro", "ru",
+            "sk", "sl", "sr", "uk"
+        ].indexOf(code) !== -1;
+    }
+
+    function normalizeTranslationMatchText(text) {
+        let normalized = String(text ?? "").trim().toLowerCase();
+        normalized = normalized.replace(/\[[^\]]*\]/g, " ");
+        normalized = normalized.replace(/\([^)]*\)/g, " ");
+        normalized = normalized.replace(/\b(?:masculine|feminine|neuter|common gender|common|masc\.?|fem\.?|neut\.?)\b/g, " ");
+        normalized = normalized.replace(/\bn[fmnc]\b/g, " ");
+        normalized = normalized.replace(/[.,;:!?]/g, " ");
+        normalized = normalized.replace(/\s+/g, " ").trim();
+        return normalized;
+    }
+
+    function genderLabelFromLine(line) {
+        const lowered = String(line ?? "").toLowerCase();
+        if (/\bcommon gender\b|\[(?:c|common)\]/.test(lowered)) return Translation.tr("common");
+        if (/\bmasculine\b|\bmasc\.?\b|\bnm\b|\[m(?:asc)?\]/.test(lowered)) return Translation.tr("masculine");
+        if (/\bfeminine\b|\bfem\.?\b|\bnf\b|\[f(?:em)?\]/.test(lowered)) return Translation.tr("feminine");
+        if (/\bneuter\b|\bneut\.?\b|\bnn\b|\[n(?:eut)?\]/.test(lowered)) return Translation.tr("neuter");
+        return "";
+    }
+
+    function detectPrimaryTranslationGender(formattedText, primaryTranslation) {
+        if (!root.translationLanguageSupportsGender(root.targetLanguage) || !formattedText || !primaryTranslation)
+            return "";
+
+        const primaryKey = root.normalizeTranslationMatchText(primaryTranslation);
+        if (primaryKey.length === 0) return "";
+
+        const lines = formattedText
+            .split("\n")
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+
+        let fallbackGender = "";
+        let inNounSection = false;
+
+        for (let i = 0; i < lines.length; ++i) {
+            const line = lines[i];
+            if (/^dictionary\b/i.test(line)) continue;
+            if (/^noun\b/i.test(line)) {
+                inNounSection = true;
+                continue;
+            }
+            if (/^(alternatives?|synonyms?)\b/i.test(line)) {
+                inNounSection = false;
+                continue;
+            }
+
+            const genderLabel = root.genderLabelFromLine(line);
+            if (!genderLabel) continue;
+
+            const normalizedLine = root.normalizeTranslationMatchText(line);
+            if (normalizedLine.indexOf(primaryKey) !== -1)
+                return genderLabel;
+
+            if (inNounSection && fallbackGender.length === 0)
+                fallbackGender = genderLabel;
+        }
+
+        return fallbackGender;
+    }
+
+    function annotatePrimaryTranslationGender(formattedText, primaryTranslation, genderLabel) {
+        if (!formattedText || !primaryTranslation || !genderLabel) return formattedText;
+        if (/\[(?:masculine|feminine|neuter|common)\]/i.test(primaryTranslation)) return formattedText;
+
+        const rawPrimary = primaryTranslation.trim();
+        const annotatedPrimary = `${rawPrimary} [${genderLabel}]`;
+        const lines = formattedText.split("\n");
+
+        for (let i = 0; i < lines.length; ++i) {
+            if (lines[i].trim() !== rawPrimary) continue;
+            lines[i] = lines[i].replace(rawPrimary, annotatedPrimary);
+            return lines.join("\n");
+        }
+
+        return `${annotatedPrimary}\n\n${formattedText}`;
+    }
+
+    function enrichTranslationWithGender(formattedText, primaryTranslation) {
+        const genderLabel = root.detectPrimaryTranslationGender(formattedText, primaryTranslation);
+        return root.annotatePrimaryTranslationGender(formattedText, primaryTranslation, genderLabel);
+    }
+
     onFocusChanged: (focus) => {
         if (focus) {
             root.inputField.forceActiveFocus()
@@ -177,8 +269,9 @@ Item {
             const preferred = translateProc.buffer.trim().length > 0 ? translateProc.buffer : translateProc.errBuffer;
             const formatted = root.normalizeTranslationText(preferred);
             if (formatted.length > 0) {
-                root.translatedText = formatted;
-                root.primaryTranslation = root.extractPrimaryTranslation(formatted);
+                const primaryTranslation = root.extractPrimaryTranslation(formatted);
+                root.translatedText = root.enrichTranslationWithGender(formatted, primaryTranslation);
+                root.primaryTranslation = primaryTranslation;
             } else {
                 root.translatedText = Translation.tr("No translation output.");
                 root.primaryTranslation = "";
@@ -281,6 +374,7 @@ Item {
 
                 TextCanvas { // Content translation
                     id: outputCanvas
+                    z: 1
                     isInput: false
                     placeholderText: Translation.tr("Translation goes here...")
                     property bool hasTranslation: (root.translatedText.trim().length > 0)
@@ -383,7 +477,7 @@ Item {
 
         TextCanvas { // Content input
             id: inputCanvas
-            z: 3
+            z: 2
             isInput: true
             placeholderText: Translation.tr("Enter text to translate...")
             onInputTextChanged: {

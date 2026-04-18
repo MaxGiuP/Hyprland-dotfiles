@@ -36,6 +36,21 @@ Singleton {
     property string notificationsPath: FileUtils.trimFileProtocol(`${Directories.cache}/notifications/notifications.json`)
     property string generatedMaterialThemePath: FileUtils.trimFileProtocol(`${Directories.state}/user/generated/colors.json`)
     property string generatedWallpaperCategoryPath: FileUtils.trimFileProtocol(`${Directories.state}/user/generated/wallpaper/category.txt`)
+    property string liveCaptionsDir: FileUtils.trimFileProtocol(`${Directories.state}/user/live-captions`)
+    property string liveCaptionsStatePath: `${Directories.liveCaptionsDir}/state.json`
+    property string liveCaptionsVenvPath: `${Directories.liveCaptionsDir}/venv`
+    property string liveCaptionsPythonPath: `${Directories.liveCaptionsVenvPath}/bin/python`
+    property string liveCaptionsModelCachePath: `${Directories.liveCaptionsDir}/models`
+    property string liveCaptionsPidPath: `${Directories.liveCaptionsDir}/backend.pid`
+    property string liveCaptionsLogPath: `${Directories.liveCaptionsDir}/backend.log`
+    property string liveCaptionsInstallScriptPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/live_captions/install_backend.sh`)
+    property string liveCaptionsBackendScriptPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/live_captions/live_captions.py`)
+    property string liveScreenTranslationDir: FileUtils.trimFileProtocol(`${Directories.state}/user/live-screen-translation`)
+    property string liveScreenTranslationStatePath: `${Directories.liveScreenTranslationDir}/state.json`
+    property string liveScreenTranslationPidPath: `${Directories.liveScreenTranslationDir}/backend.pid`
+    property string liveScreenTranslationLogPath: `${Directories.liveScreenTranslationDir}/backend.log`
+    property string liveScreenTranslationSelectionPath: `${Directories.liveScreenTranslationDir}/selection.txt`
+    property string liveScreenTranslationBackendScriptPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/live_screen_translation/live_screen_translation.py`)
     property string cliphistDecode: FileUtils.trimFileProtocol(`/tmp/quickshell/media/cliphist`)
     property string screenshotTemp: "/tmp/quickshell/media/screenshot"
     property string wallpaperSwitchScriptPath: FileUtils.trimFileProtocol(`${Directories.scriptPath}/colors/switchwall.sh`)
@@ -56,6 +71,9 @@ Singleton {
         Quickshell.execDetached(["bash", "-c", `rm -rf '${latexOutput}'; mkdir -p '${latexOutput}'`])
         Quickshell.execDetached(["bash", "-c", `rm -rf '${cliphistDecode}'; mkdir -p '${cliphistDecode}'`])
         Quickshell.execDetached(["mkdir", "-p", `${aiChats}`])
+        Quickshell.execDetached(["mkdir", "-p", `${liveCaptionsDir}`])
+        Quickshell.execDetached(["mkdir", "-p", `${liveCaptionsModelCachePath}`])
+        Quickshell.execDetached(["mkdir", "-p", `${liveScreenTranslationDir}`])
         Quickshell.execDetached(["mkdir", "-p", `${userActions}`])
         Quickshell.execDetached(["rm", "-rf", `${tempImages}`])
     }
