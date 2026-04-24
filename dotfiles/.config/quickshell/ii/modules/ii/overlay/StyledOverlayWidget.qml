@@ -25,6 +25,7 @@ AbstractOverlayWidget {
     property bool fancyBorders: true
     property bool showCenterButton: false
     property bool showClickabilityButton: true
+    property bool useOpacityMaskLayer: true
 
     // Defaults n stuff
     required property var modelData
@@ -40,7 +41,15 @@ AbstractOverlayWidget {
     property real contentRadius: radius - padding
     readonly property bool showTitleBar: GlobalStates.overlayOpen
     readonly property real effectiveTitleBarHeight: showTitleBar ? (titleBarRow.implicitHeight + root.padding * 2) : 0
-    property real lastEffectiveTitleBarHeight: 0
+    readonly property string screenName: root.QsWindow.window?.screen?.name ?? "Unknown-1"
+    readonly property real screenWidth: (root.parent?.width ?? 0) > 0 ? root.parent.width : 1920
+    readonly property real screenHeight: (root.parent?.height ?? 0) > 0 ? root.parent.height : 1080
+    readonly property real minimumSpawnY: Math.max(
+        (GlobalStates.barTopClearanceByScreen[screenName] ?? 0)
+            + Appearance.sizes.hyprlandGapsOut
+            + 12,
+        72
+    )
 
     // Resizing
     function getXResizeDirection(x) {
@@ -78,17 +87,32 @@ AbstractOverlayWidget {
         }
     }
 
-    // Positions are stored as screen-relative fractions (0.0–1.0).
-    // Values >= 2 are the legacy absolute-pixel format written by older code;
-    // they are used as-is so nothing jumps on first load after an update.
-    // On the next savePosition call they are converted to fractions.
-    function resolvePos(stored, screenDim) {
+    // Geometry is stored as fractions of the current screen size so the same
+    // widget position scales across monitors of different sizes. Legacy
+    // absolute-pixel values written by older code are >= 2 and are used as-is
+    // until savePosition rewrites them as fractions.
+    function resolveMetric(stored, screenDim) {
         return stored >= 2 ? stored : stored * screenDim
     }
 
+    function storedMetric(field) {
+        return persistentStateEntry[field];
+    }
+
+    function resolveStoredMetric(field, screenDim) {
+        return resolveMetric(storedMetric(field), screenDim);
+    }
+
+    function resolvedY() {
+        const restoredY = Math.round(resolveStoredMetric("y", root.screenHeight) - root.effectiveTitleBarHeight);
+        if (storedMetric("y") > 0)
+            return restoredY;
+        return Math.max(restoredY, root.minimumSpawnY);
+    }
+
     // Positioning & sizing
-    x: Math.round(resolvePos(persistentStateEntry.x, root.parent?.width ?? 1920))
-    y: 0
+    x: Math.round(resolveStoredMetric("x", root.screenWidth))
+    y: root.resolvedY()
     pinned: persistentStateEntry.pinned
     clickthrough: persistentStateEntry.clickthrough
     drag {
@@ -120,17 +144,8 @@ AbstractOverlayWidget {
 
     // Self-registeration with OverlayContext
     Component.onCompleted: {
-        const sh = root.parent?.height ?? 1080
-        root.y = Math.round(resolvePos(root.persistentStateEntry.y, sh) - root.effectiveTitleBarHeight);
-        root.lastEffectiveTitleBarHeight = root.effectiveTitleBarHeight;
         reportPinnedState();
         reportClickableState();
-    }
-    onEffectiveTitleBarHeightChanged: {
-        const delta = root.effectiveTitleBarHeight - root.lastEffectiveTitleBarHeight;
-        if (Math.abs(delta) > 0.01)
-            root.y = Math.round(root.y - delta);
-        root.lastEffectiveTitleBarHeight = root.effectiveTitleBarHeight;
     }
     Component.onDestruction: {
         if (contentItem)
@@ -145,9 +160,13 @@ AbstractOverlayWidget {
     onPressed: (event) => {
         // We're only interested in handling resize here
         // Early returns
-        if (!root.resizable) return;
+        if (!root.resizable) {
+            event.accepted = false;
+            return;
+        }
         if (root.resizeMargin < event.x && event.x < root.width - root.resizeMargin &&
             root.resizeMargin < event.y && event.y < root.height - root.resizeMargin) {
+            event.accepted = false;
             return;
         }
         // Resizing setup
@@ -162,16 +181,16 @@ AbstractOverlayWidget {
     }
     onPositionChanged: (event) => {
         if (!resizing) return;
-        contentContainer.implicitWidth = Math.max(root.persistentStateEntry.width + dragHandler.xAxis.activeValue * root.resizeXDirection, root.minimumWidth);
-        contentContainer.implicitHeight = Math.max(root.persistentStateEntry.height + dragHandler.yAxis.activeValue * root.resizeYDirection, root.minimumHeight);
+        contentContainer.implicitWidth = Math.max(root.resolveStoredMetric("width", root.screenWidth) + dragHandler.xAxis.activeValue * root.resizeXDirection, root.minimumWidth);
+        contentContainer.implicitHeight = Math.max(root.resolveStoredMetric("height", root.screenHeight) + dragHandler.yAxis.activeValue * root.resizeYDirection, root.minimumHeight);
         const negativeXDrag = root.resizeXDirection === -1;
         const negativeYDrag = root.resizeYDirection === -1;
-        const baseX = resolvePos(root.persistentStateEntry.x, root.parent?.width ?? 1920)
-        const baseY = resolvePos(root.persistentStateEntry.y, root.parent?.height ?? 1080)
+        const baseX = root.resolveStoredMetric("x", root.screenWidth)
+        const baseY = root.resolveStoredMetric("y", root.screenHeight)
         const wantedX = baseX + (negativeXDrag ? dragHandler.xAxis.activeValue : 0)
         const wantedY = baseY + (negativeYDrag ? dragHandler.yAxis.activeValue : 0)
-        const negativeXDragLimit = baseX + root.persistentStateEntry.width - contentContainer.implicitWidth;
-        const negativeYDragLimit = baseY + root.persistentStateEntry.height - contentContainer.implicitHeight;
+        const negativeXDragLimit = baseX + root.resolveStoredMetric("width", root.screenWidth) - contentContainer.implicitWidth;
+        const negativeYDragLimit = baseY + root.resolveStoredMetric("height", root.screenHeight) - contentContainer.implicitHeight;
         root.x = negativeXDrag ? Math.min(wantedX, negativeXDragLimit) : wantedX;
         root.y = negativeYDrag ? Math.min(wantedY, negativeYDragLimit) : wantedY;
     }
@@ -208,12 +227,12 @@ AbstractOverlayWidget {
     }
 
     function savePosition(xPos = root.x, yPos = root.y, width = contentContainer.implicitWidth, height = contentContainer.implicitHeight) {
-        const sw = root.parent?.width ?? 1920
-        const sh = root.parent?.height ?? 1080
+        const sw = root.screenWidth
+        const sh = root.screenHeight
         persistentStateEntry.x = xPos / sw
         persistentStateEntry.y = (yPos + root.effectiveTitleBarHeight) / sh
-        persistentStateEntry.width = Math.round(width);
-        persistentStateEntry.height = Math.round(height);
+        persistentStateEntry.width = width / sw
+        persistentStateEntry.height = height / sh
     }
 
     function center() {
@@ -250,7 +269,7 @@ AbstractOverlayWidget {
         border.color: ColorUtils.transparentize(Appearance.colors.colOutlineVariant, GlobalStates.overlayOpen ? 0 : 1)
         border.width: 1
 
-        layer.enabled: GlobalStates.overlayOpen
+        layer.enabled: GlobalStates.overlayOpen && root.useOpacityMaskLayer
         layer.effect: OpacityMask {
             maskSource: Rectangle {
                 width: border.width
@@ -369,8 +388,8 @@ AbstractOverlayWidget {
                 Layout.margins: root.fancyBorders ? root.padding : 0
                 Layout.topMargin: -border.border.width // Border of a rectangle is drawn inside its bounds, so we do this to make the gap not too big
                 Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-                implicitWidth: Math.max(root.persistentStateEntry.width, root.minimumWidth)
-                implicitHeight: Math.max(root.persistentStateEntry.height, root.minimumHeight)
+                implicitWidth: Math.max(root.resolveStoredMetric("width", root.screenWidth), root.minimumWidth)
+                implicitHeight: Math.max(root.resolveStoredMetric("height", root.screenHeight), root.minimumHeight)
                 children: [root.contentItem]
 
                 DragHandler {

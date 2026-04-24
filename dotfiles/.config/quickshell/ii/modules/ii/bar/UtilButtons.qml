@@ -17,17 +17,10 @@ Item {
     implicitWidth: rowLayout.implicitWidth + rowLayout.spacing * 2
     implicitHeight: rowLayout.implicitHeight
 
-    property string updateTitle: "QSUpdate"
-    property string updateScriptPath: "/home/linmax/.config/hypr/hyprland/scripts/update.sh"
-
     property bool barAutoHideEnabled: Config.options.bar.autoHide.enable
 
     function launchUpdateScript() {
-        const lang = Services.Translation.languageCode
-        Hyprland.dispatch(`exec [float;size 1000 750;center] /usr/bin/kitty -T ${root.updateTitle} ${root.updateScriptPath} ${lang}`)
-        updateWatcher.title = root.updateTitle
-        updateWatcher.seenOnce = false
-        updatePoll.running = true
+        Services.Updates.launchUpdateScript()
     }
 
     function toggleBarAutoHideInFile() {
@@ -298,45 +291,6 @@ Item {
                     iconSize: Appearance.font.pixelSize.large
                     color: Appearance.colors.colOnLayer2
                 }
-            }
-        }
-    }
-
-    Item {
-        id: updateWatcher
-        property string title: "QSUpdate"
-        property bool seenOnce: false
-    }
-
-    Timer {
-        id: updatePoll
-        interval: 750
-        repeat: true
-        running: false
-        onTriggered: {
-            if (!hyprClients.running) {
-                hyprClients.buf = ""
-                hyprClients.running = true
-            }
-        }
-    }
-
-    Process {
-        id: hyprClients
-        command: ["hyprctl", "-j", "clients"]
-        property string buf: ""
-        stdout: SplitParser {
-            onRead: data => hyprClients.buf += data
-        }
-        onExited: {
-            const txt = hyprClients.buf
-            hyprClients.buf = ""
-            const found = txt.indexOf(`"title": "${updateWatcher.title}"`) !== -1
-            if (!updateWatcher.seenOnce) {
-                if (found) updateWatcher.seenOnce = true
-            } else if (!found) {
-                updatePoll.running = false
-                Services.Updates.refresh()
             }
         }
     }

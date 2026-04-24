@@ -586,7 +586,7 @@ Singleton {
                 : Translation.tr("New Ollama recommendations");
             root.notifyDesktop(ollamaSummary, root.shortJoinedList(newOllamaIds));
             root.addMessage(
-                Translation.tr("New relevant Ollama models detected:\n- %1\n\nOpen the model updates card in the AI tab to install them.")
+                Translation.tr("New relevant Ollama models detected:\n- %1\n\nOpen the model manager from the top of the AI tab to install them.")
                     .arg(newOllamaIds.join("\n- ")),
                 root.interfaceRole
             );

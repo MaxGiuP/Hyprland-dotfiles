@@ -21,6 +21,7 @@ Scope {
     property int lockBlurInDurationMs: 0
     property int unlockBlurOutDelayMs: 0
     property int unlockBlurOutDurationMs: 0
+    property int postResumeUnlockReleaseDelayMs: 900
 
     property Component sessionLockSurface: WlSessionLockSurface {
         id: sessionLockSurface
@@ -109,7 +110,21 @@ Scope {
         root.scheduleBlurAnimation(0, root.unlockBlurOutDelayMs, root.unlockBlurOutDurationMs, Easing.InCubic);
     }
 
-    function releaseLock() {
+    function screensHaveUsableGeometry() {
+        const screens = Quickshell.screens;
+        if (!screens || screens.length === 0)
+            return false;
+
+        for (let i = 0; i < screens.length; i++) {
+            const screen = screens[i];
+            if (Number(screen?.width ?? 0) <= 0 || Number(screen?.height ?? 0) <= 0)
+                return false;
+        }
+
+        return true;
+    }
+
+    function completeReleaseLock() {
         GlobalStates.screenLocked = false;
         lockContext.reset();
         root.stopBlurAnimation();
@@ -119,6 +134,37 @@ Scope {
         if (lockContext.alsoInhibitIdle) {
             lockContext.alsoInhibitIdle = false;
             Idle.toggleInhibit(true);
+        }
+    }
+
+    function releaseLock() {
+        if (GlobalStates.lockUseWallpaperFallbackAfterResume) {
+            if (!postResumeReleaseTimer.running) {
+                postResumeReleaseTimer.retryCount = 0;
+                postResumeReleaseTimer.interval = root.postResumeUnlockReleaseDelayMs;
+                postResumeReleaseTimer.restart();
+            }
+            return;
+        }
+
+        root.completeReleaseLock();
+    }
+
+    Timer {
+        id: postResumeReleaseTimer
+        property int retryCount: 0
+        interval: root.postResumeUnlockReleaseDelayMs
+        repeat: false
+        onTriggered: {
+            if (!root.screensHaveUsableGeometry() && retryCount < 20) {
+                retryCount += 1;
+                interval = 250;
+                restart();
+                return;
+            }
+
+            retryCount = 0;
+            root.completeReleaseLock();
         }
     }
 
@@ -146,6 +192,7 @@ Scope {
             target: GlobalStates
             function onScreenLockedChanged() {
                 if (GlobalStates.screenLocked) {
+                    postResumeReleaseTimer.stop();
                     GlobalStates.screenLockHideBar = false;
                     lockContext.reset();
                     lockContext.tryFingerUnlock();

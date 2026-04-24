@@ -17,10 +17,6 @@ Scope {
         Region {}
     }
 
-    function openOverlay() {
-        GlobalStates.overlayOpen = true
-    }
-
     // One overlay window per screen, following the same pattern as Bar.qml.
     Variants {
         model: Quickshell.screens
@@ -28,10 +24,13 @@ Scope {
         Scope {
             id: screenScope
             required property ShellScreen modelData
+            readonly property string screenName: modelData?.name ?? ""
+            readonly property string targetOverlayScreen: GlobalStates.resolvedOverlayScreen()
+            readonly property bool activeOnThisScreen: screenName === targetOverlayScreen
 
             Loader {
                 id: overlayLoader
-                active: GlobalStates.overlayOpen || OverlayContext.hasPinnedWidgets
+                active: screenScope.activeOnThisScreen && (GlobalStates.overlayOpen || OverlayContext.hasPinnedWidgets)
 
                 sourceComponent: PanelWindow {
                     id: overlayWindow
@@ -74,10 +73,7 @@ Scope {
         target: "overlay"
 
         function toggle(): void {
-            if (!GlobalStates.overlayOpen)
-                root.openOverlay()
-            else
-                GlobalStates.overlayOpen = false
+            GlobalStates.toggleOverlay()
         }
     }
 
@@ -86,10 +82,7 @@ Scope {
         description: "Toggles overlay on press"
 
         onPressed: {
-            if (!GlobalStates.overlayOpen)
-                root.openOverlay()
-            else
-                GlobalStates.overlayOpen = false
+            GlobalStates.toggleOverlay()
         }
     }
 }

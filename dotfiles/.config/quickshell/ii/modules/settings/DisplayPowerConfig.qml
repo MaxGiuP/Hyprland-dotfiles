@@ -513,7 +513,7 @@ ContentPage {
                 Layout.fillWidth: true
                 materialIcon: "system_update"
                 mainText: Translation.tr("System update")
-                onClicked: Quickshell.execDetached(["bash", "-c", `${Config.options.apps.update}`])
+                onClicked: Updates.launchUpdateScript()
             }
             RippleButtonWithIcon {
                 Layout.fillWidth: true

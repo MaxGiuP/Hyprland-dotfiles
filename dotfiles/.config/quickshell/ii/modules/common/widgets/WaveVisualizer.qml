@@ -19,13 +19,23 @@ Canvas { // Visualizer
 
     anchors.fill: parent
     onPaint: {
+        const paintWidth = Number(width);
+        const paintHeight = Number(height);
+        if (!Number.isFinite(paintWidth) || !Number.isFinite(paintHeight) || paintWidth <= 0 || paintHeight <= 0)
+            return;
+
         var ctx = getContext("2d");
-        ctx.clearRect(0, 0, width, height);
+        if (!ctx)
+            return;
+
+        ctx.clearRect(0, 0, paintWidth, paintHeight);
 
         var points = root.points;
         var maxVal = root.maxVisualizerValue || 1;
-        var h = height;
-        var w = width;
+        var h = paintHeight;
+        var w = paintWidth;
+        if (!points)
+            return;
         var n = points.length;
         if (n < 2) return;
 

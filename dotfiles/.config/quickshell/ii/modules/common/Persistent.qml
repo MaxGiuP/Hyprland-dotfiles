@@ -113,12 +113,13 @@ Singleton {
                 }
             }
 
-            // Widget x/y are stored as fractions of the screen size (0.0–1.0)
-            // so positions scale correctly across monitors of different resolutions.
-            // Legacy saves with integer values >= 2 are handled transparently by
-            // StyledOverlayWidget and converted to fractions on next save.
+            // Overlay widget geometry is stored as fractions of the active screen
+            // size so the same widget placement scales across monitors of
+            // different resolutions. Legacy absolute-pixel values are still read
+            // and are converted on the next save.
             property JsonObject overlay: JsonObject {
                 property list<string> open: ["crosshair", "recorder", "volumeMixer", "resources"]
+                property string geometryByScreenJson: "{}"
                 property JsonObject crosshair: JsonObject {
                     property bool pinned: false
                     property bool clickthrough: true

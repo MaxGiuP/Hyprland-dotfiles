@@ -74,10 +74,6 @@ Singleton {
         return state === 2 || state === 3;
     }
 
-    function normalizedRestoreState(state) {
-        return (state === 1 || state === 3) ? 1 : 0;
-    }
-
     function restoreBrowserWindowState(address, restoreState) {
         const normalizedState = restoreState === 1 ? 1 : 0;
         Quickshell.execDetached([
@@ -106,7 +102,11 @@ Singleton {
             const isFullscreen = root.isVideoFullscreenState(nextState);
 
             if (!wasFullscreen && isFullscreen) {
-                pendingStates[address] = root.normalizedRestoreState(previousState);
+                // Browser video/fullscreen transitions can briefly report
+                // Hyprland state 1 (maximized), the same state Super+D uses.
+                // Restoring that on exit leaves the window maximized instead
+                // of returning to the pre-fullscreen tiled view.
+                pendingStates[address] = 0;
                 continue;
             }
 

@@ -389,7 +389,7 @@ Singleton {
             }
 
             property JsonObject bar: JsonObject {
-                property bool hideWhenFullscreen: false
+                property bool hideWhenFullscreen: true
                 property JsonObject autoHide: JsonObject {
                     property bool enable: false
                     property int hoverRegionWidth: 2

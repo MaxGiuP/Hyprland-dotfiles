@@ -865,9 +865,17 @@ MouseArea {
                                 id: netCanvas
                                 anchors.fill: parent
                                 onPaint: {
+                                    const paintWidth = Number(width)
+                                    const paintHeight = Number(height)
+                                    if (!Number.isFinite(paintWidth) || !Number.isFinite(paintHeight) || paintWidth <= 0 || paintHeight <= 0)
+                                        return
+
                                     var ctx = getContext("2d")
-                                    var w = width
-                                    var h = height
+                                    if (!ctx)
+                                        return
+
+                                    var w = paintWidth
+                                    var h = paintHeight
                                     ctx.resetTransform()
                                     ctx.clearRect(0, 0, w, h)
 
@@ -887,9 +895,11 @@ MouseArea {
                                         ctx.lineWidth = 2
                                         ctx.beginPath()
                                         for (var i = 0; i < values.length; i++) {
-                                            var v = Math.max(0, values[i])
+                                            var v = Math.max(0, Number(values[i]) || 0)
                                             var x = Math.round(i * step)
                                             var y = Math.round(h - (v / parent.graphMax) * h)
+                                            if (!Number.isFinite(x) || !Number.isFinite(y))
+                                                continue
                                             if (i === 0) ctx.moveTo(x, y)
                                             else ctx.lineTo(x, y)
                                         }

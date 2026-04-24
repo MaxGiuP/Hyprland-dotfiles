@@ -37,9 +37,10 @@ Singleton {
         id: idleInhibitor
         window: PanelWindow {
             // Inhibitor requires a "visible" surface
-            // Actually not lol
-            implicitWidth: 0
-            implicitHeight: 0
+            // Keep a real 1x1 layer-shell surface. Zero-sized surfaces can
+            // trip Wayland protocol validation during monitor resume.
+            implicitWidth: 1
+            implicitHeight: 1
             color: "transparent"
             // Just in case...
             anchors {

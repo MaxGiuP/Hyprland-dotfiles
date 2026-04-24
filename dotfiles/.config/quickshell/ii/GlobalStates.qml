@@ -99,7 +99,7 @@ Singleton {
         if (pin && Persistent.states.overlay[identifier])
             Persistent.states.overlay[identifier].pinned = true
 
-        root.overlayOpen = true
+        root.openOverlay()
     }
 
     function closeOverlayWidget(identifier) {
@@ -120,6 +120,35 @@ Singleton {
         }
 
         root.openOverlayWidget(identifier, pin)
+    }
+
+    function resolvedOverlayScreen(preferredScreen = "") {
+        return preferredScreen
+            || HyprlandData.monitors.find(m => m.focused)?.name
+            || Hyprland.focusedMonitor?.name
+            || root.overlayScreen
+            || Quickshell.screens[0]?.name
+            || ""
+    }
+
+    function openOverlay(preferredScreen = "") {
+        root.overlayScreen = root.resolvedOverlayScreen(preferredScreen)
+        root.overlayOpen = true
+    }
+
+    function closeOverlay() {
+        root.overlayOpen = false
+    }
+
+    function toggleOverlay(preferredScreen = "") {
+        const targetScreen = root.resolvedOverlayScreen(preferredScreen)
+        if (root.overlayOpen && root.overlayScreen === targetScreen) {
+            root.closeOverlay()
+            return
+        }
+
+        root.overlayScreen = targetScreen
+        root.overlayOpen = true
     }
 
     function beginDesktopDrag(screenName, urls, hotspotX, hotspotY, visual) {

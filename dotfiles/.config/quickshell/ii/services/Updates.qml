@@ -1,7 +1,8 @@
 pragma Singleton
 
+import qs
 import qs.modules.common
-import qs.modules.common.functions
+import qs.modules.common.functions as CF
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -16,7 +17,11 @@ Singleton {
     property bool available: true
     property alias checking: checkUpdatesProc.running
     property int count: 0
+    property string updateTitle: "QSUpdate"
     property string updateScriptPath: "/home/linmax/.config/hypr/hyprland/scripts/update.sh"
+    property string pendingOverlayCommand: ""
+    property string pendingOverlayCommandLabel: ""
+    property int pendingOverlayCommandNonce: 0
     readonly property int watchIntervalMs: 10 * 1000
     
     readonly property bool updateAdvised: available && count > Config.options.updates.adviseUpdateThreshold
@@ -28,6 +33,27 @@ Singleton {
         if (checkUpdatesProc.running) return;
         print("[Updates] Checking for system updates")
         checkUpdatesProc.running = true;
+    }
+    function queueOverlayCommand(command, label = "") {
+        const trimmed = (command ?? "").trim()
+        if (!trimmed)
+            return
+
+        root.pendingOverlayCommand = trimmed
+        root.pendingOverlayCommandLabel = label
+        root.pendingOverlayCommandNonce += 1
+        GlobalStates.openOverlayWidget("terminal")
+    }
+
+    function updateScriptCommand() {
+        const scriptPath = CF.StringUtils.shellSingleQuoteEscape(root.updateScriptPath)
+        return `'${scriptPath}'`
+    }
+
+    function launchUpdateScript() {
+        if (!root.available)
+            return;
+        root.queueOverlayCommand(root.updateScriptCommand(), Translation.tr("System update"))
     }
 
     Timer {

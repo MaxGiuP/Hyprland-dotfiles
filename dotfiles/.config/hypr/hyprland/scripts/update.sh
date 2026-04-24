@@ -114,6 +114,20 @@ find_vmware_build_dir() {
     return 1
 }
 
+find_vmware_workstation_dkms_version() {
+    local dir latest
+
+    latest=""
+    for dir in /usr/src/vmware-workstation-*; do
+        [ -d "$dir" ] || continue
+        [ -f "$dir/dkms.conf" ] || continue
+        latest="${dir##*/vmware-workstation-}"
+    done
+
+    [ -n "$latest" ] || return 1
+    printf '%s\n' "$latest"
+}
+
 find_vmware_source_repo() {
     local candidate found
     local -a candidates=(
@@ -667,9 +681,10 @@ rebuild_quickshell
 repair_vmware() {
     section "VMware — host modules"
 
-    local workstation_after host_pkg_after host_after kernel_after headers_after
+    local workstation_after host_pkg_after host_after kernel_after headers_after kernel_release_after
     local repair_needed repair_reason build_dir helper vmware_branch vmware_repo branch_ref
-    local tarball_tmp
+    local workstation_dkms_version dkms_state legacy_module legacy_line legacy_version
+    local build_tmp module_dir
 
     workstation_after=$(package_version vmware-workstation || true)
     if [ -z "$workstation_after" ]; then
@@ -685,8 +700,13 @@ repair_vmware() {
 
     kernel_after=$(package_version linux || true)
     headers_after=$(package_version linux-headers || true)
+    kernel_release_after=$(uname -r)
+    workstation_dkms_version=$(find_vmware_workstation_dkms_version 2>/dev/null || true)
 
     echo -e "  ${DIM}Detected: vmware-workstation ${workstation_after}${R}"
+    if [ -n "$workstation_dkms_version" ]; then
+        echo -e "  ${DIM}Workstation DKMS: vmware-workstation/${workstation_dkms_version}${R}"
+    fi
     if [ -n "$host_pkg_after" ]; then
         echo -e "  ${DIM}Host modules: ${host_pkg_after} ${host_after}${R}"
     fi
@@ -717,6 +737,27 @@ repair_vmware() {
         fi
     fi
 
+    if [ -n "$host_pkg_after" ] && [ -n "$workstation_dkms_version" ]; then
+        repair_needed=1
+        if [ -n "$repair_reason" ]; then
+            repair_reason="${repair_reason}; legacy host modules package installed"
+        else
+            repair_reason="legacy host modules package installed"
+        fi
+    fi
+
+    if [ -n "$workstation_dkms_version" ] && command -v dkms >/dev/null 2>&1; then
+        dkms_state=$(dkms status -m vmware-workstation -v "$workstation_dkms_version" 2>/dev/null || true)
+        if ! grep -q "${kernel_release_after}.*installed" <<<"$dkms_state" || grep -qiE 'Differences|broken|bad|added' <<<"$dkms_state"; then
+            repair_needed=1
+            if [ -n "$repair_reason" ]; then
+                repair_reason="${repair_reason}; Workstation DKMS needs reinstall"
+            else
+                repair_reason="Workstation DKMS needs reinstall"
+            fi
+        fi
+    fi
+
     if [ "$repair_needed" -eq 0 ]; then
         echo -e "  ${PASS}  ${GREEN}VMware modules look unchanged — no repair needed${R}"
         return 0
@@ -724,76 +765,105 @@ repair_vmware() {
 
     echo -e "  ${WARN}  ${YELLOW}Repairing VMware modules: ${repair_reason}${R}"
 
-    vmware_branch=$(detect_vmware_workstation_branch || true)
-    vmware_repo=$(find_vmware_source_repo 2>/dev/null || true)
-    branch_ref=""
-
-    if [ -n "$vmware_repo" ] && [ -n "$vmware_branch" ]; then
-        git -C "$vmware_repo" fetch origin --quiet 2>/dev/null || true
-        if git -C "$vmware_repo" rev-parse --verify "${vmware_branch}^{commit}" >/dev/null 2>&1; then
-            branch_ref="$vmware_branch"
-        elif git -C "$vmware_repo" rev-parse --verify "origin/${vmware_branch}^{commit}" >/dev/null 2>&1; then
-            branch_ref="origin/${vmware_branch}"
-        fi
-    fi
-
-    if [ -n "$branch_ref" ] && [ -n "$vmware_repo" ]; then
-        echo -e "  ${DIM}Using VMware source branch: ${vmware_branch}${R}"
-        build_tmp=$(mktemp -d /tmp/vmware-host-modules.XXXXXX)
-        module_dir="/lib/modules/${kernel_after}/updates/dkms"
-
-        if git -C "$vmware_repo" archive "$branch_ref" | tar -x -C "$build_tmp" \
-            && git -C "$vmware_repo" archive -o "$build_tmp/vmmon.tar" "$branch_ref" vmmon-only \
-            && git -C "$vmware_repo" archive -o "$build_tmp/vmnet.tar" "$branch_ref" vmnet-only \
-            && make VM_UNAME="$kernel_after" -C "$build_tmp" \
-            && zstd -f "$build_tmp/vmmon-only/vmmon.ko" -o "$build_tmp/vmmon.ko.zst" \
-            && zstd -f "$build_tmp/vmnet-only/vmnet.ko" -o "$build_tmp/vmnet.ko.zst" \
-            && priv install -d "$module_dir" /usr/lib/vmware/modules/source \
-            && priv install -m 0644 "$build_tmp/vmmon.ko.zst" "$module_dir/vmmon.ko.zst" \
-            && priv install -m 0644 "$build_tmp/vmnet.ko.zst" "$module_dir/vmnet.ko.zst" \
-            && priv install -m 0644 "$build_tmp/vmmon.tar" /usr/lib/vmware/modules/source/vmmon.tar \
-            && priv install -m 0644 "$build_tmp/vmnet.tar" /usr/lib/vmware/modules/source/vmnet.tar \
-            && priv depmod -a "$kernel_after"; then
-            rm -rf "$build_tmp"
-        else
-            rm -rf "$build_tmp"
-            fail "vmware"
-            return 1
-        fi
-    elif [ -n "$host_pkg_after" ]; then
-        build_dir=$(find_vmware_build_dir "$host_pkg_after" 2>/dev/null || true)
-        if [ -n "$build_dir" ]; then
-            echo -e "  ${DIM}PKGBUILD: ${build_dir}${R}"
-            if (cd "$build_dir" && makepkg -sif --noconfirm); then
-                :
-            else
-                fail "vmware"
-                return 1
-            fi
-        else
-            helper=$(preferred_aur_helper 2>/dev/null || true)
-            if [ -z "$helper" ]; then
-                fail "vmware"
-                return 1
-            fi
-            echo -e "  ${DIM}No local PKGBUILD found — using ${helper}${R}"
-            if "$helper" -S "$host_pkg_after" --rebuild --noconfirm; then
-                :
-            else
+    if [ -n "$workstation_dkms_version" ]; then
+        if [ -n "$host_pkg_after" ]; then
+            echo -e "  ${WARN}  ${YELLOW}Removing obsolete ${host_pkg_after}; vmware-workstation now provides matching DKMS modules.${R}"
+            if ! priv pacman -Rns --noconfirm "$host_pkg_after"; then
                 fail "vmware"
                 return 1
             fi
         fi
-    elif command -v vmware-modconfig >/dev/null 2>&1; then
-        if priv env DISPLAY= WAYLAND_DISPLAY= VMWARE_SKIP_SERVICES=1 vmware-modconfig --console --install-all; then
+
+        for legacy_module in vmmon vmnet; do
+            while IFS= read -r legacy_line; do
+                legacy_version=${legacy_line#${legacy_module}/}
+                legacy_version=${legacy_version%%,*}
+                [ -n "$legacy_version" ] || continue
+                echo -e "  ${DIM}Removing legacy DKMS entry: ${legacy_module}/${legacy_version}${R}"
+                priv dkms remove -m "$legacy_module" -v "$legacy_version" --all >/dev/null 2>&1 || true
+            done < <(dkms status -m "$legacy_module" 2>/dev/null || true)
+        done
+
+        echo -e "  ${DIM}Installing vmware-workstation DKMS for ${kernel_release_after}${R}"
+        if priv dkms install -m vmware-workstation -v "$workstation_dkms_version" -k "$kernel_release_after" --force \
+            && priv depmod -a "$kernel_release_after"; then
             :
         else
             fail "vmware"
             return 1
         fi
     else
-        fail "vmware"
-        return 1
+        vmware_branch=$(detect_vmware_workstation_branch || true)
+        vmware_repo=$(find_vmware_source_repo 2>/dev/null || true)
+        branch_ref=""
+
+        if [ -n "$vmware_repo" ] && [ -n "$vmware_branch" ]; then
+            git -C "$vmware_repo" fetch origin --quiet 2>/dev/null || true
+            if git -C "$vmware_repo" rev-parse --verify "${vmware_branch}^{commit}" >/dev/null 2>&1; then
+                branch_ref="$vmware_branch"
+            elif git -C "$vmware_repo" rev-parse --verify "origin/${vmware_branch}^{commit}" >/dev/null 2>&1; then
+                branch_ref="origin/${vmware_branch}"
+            fi
+        fi
+
+        if [ -n "$branch_ref" ] && [ -n "$vmware_repo" ]; then
+            echo -e "  ${DIM}Using VMware source branch: ${vmware_branch}${R}"
+            build_tmp=$(mktemp -d /tmp/vmware-host-modules.XXXXXX)
+            module_dir="/lib/modules/${kernel_release_after}/updates/dkms"
+
+            if git -C "$vmware_repo" archive "$branch_ref" | tar -x -C "$build_tmp" \
+                && git -C "$vmware_repo" archive -o "$build_tmp/vmmon.tar" "$branch_ref" vmmon-only \
+                && git -C "$vmware_repo" archive -o "$build_tmp/vmnet.tar" "$branch_ref" vmnet-only \
+                && make VM_UNAME="$kernel_release_after" -C "$build_tmp" \
+                && zstd -f "$build_tmp/vmmon-only/vmmon.ko" -o "$build_tmp/vmmon.ko.zst" \
+                && zstd -f "$build_tmp/vmnet-only/vmnet.ko" -o "$build_tmp/vmnet.ko.zst" \
+                && priv install -d "$module_dir" /usr/lib/vmware/modules/source \
+                && priv install -m 0644 "$build_tmp/vmmon.ko.zst" "$module_dir/vmmon.ko.zst" \
+                && priv install -m 0644 "$build_tmp/vmnet.ko.zst" "$module_dir/vmnet.ko.zst" \
+                && priv install -m 0644 "$build_tmp/vmmon.tar" /usr/lib/vmware/modules/source/vmmon.tar \
+                && priv install -m 0644 "$build_tmp/vmnet.tar" /usr/lib/vmware/modules/source/vmnet.tar \
+                && priv depmod -a "$kernel_release_after"; then
+                rm -rf "$build_tmp"
+            else
+                rm -rf "$build_tmp"
+                fail "vmware"
+                return 1
+            fi
+        elif [ -n "$host_pkg_after" ]; then
+            build_dir=$(find_vmware_build_dir "$host_pkg_after" 2>/dev/null || true)
+            if [ -n "$build_dir" ]; then
+                echo -e "  ${DIM}PKGBUILD: ${build_dir}${R}"
+                if (cd "$build_dir" && makepkg -sif --noconfirm); then
+                    :
+                else
+                    fail "vmware"
+                    return 1
+                fi
+            else
+                helper=$(preferred_aur_helper 2>/dev/null || true)
+                if [ -z "$helper" ]; then
+                    fail "vmware"
+                    return 1
+                fi
+                echo -e "  ${DIM}No local PKGBUILD found — using ${helper}${R}"
+                if "$helper" -S "$host_pkg_after" --rebuild --noconfirm; then
+                    :
+                else
+                    fail "vmware"
+                    return 1
+                fi
+            fi
+        elif command -v vmware-modconfig >/dev/null 2>&1; then
+            if priv env DISPLAY= WAYLAND_DISPLAY= VMWARE_SKIP_SERVICES=1 vmware-modconfig --console --install-all; then
+                :
+            else
+                fail "vmware"
+                return 1
+            fi
+        else
+            fail "vmware"
+            return 1
+        fi
     fi
 
     if pgrep -fa 'vmware-vmx|vmplayer|vmware$|vmware ' >/dev/null 2>&1; then
