@@ -2,10 +2,19 @@
 set -euo pipefail
 
 # Usage: lock-weather-emoji.sh [City name]
-LOC="${1:-}"  # empty = auto by IP; or pass "London", "Southampton", etc.
+LOC="${1:-}"  # empty = auto by IP; or pass "London", "Abingdon, Oxfordshire", etc.
+LOC_URL="${LOC// /+}"
+
+fetch_weather() {
+  curl -fsSL --retry 2 --retry-delay 1 --retry-all-errors --connect-timeout 5 --max-time 10 \
+    "https://wttr.in/${1}?format=%t|%C" 2>/dev/null || true
+}
 
 # Fetch "temp|Condition" (eg: "+12°C|Partly cloudy")
-raw="$(curl -fsSL "https://wttr.in/${LOC}?format=%t|%C" 2>/dev/null || true)"
+raw="$(fetch_weather "$LOC_URL")"
+if [[ -z "$raw" && "$LOC_URL" == *,* ]]; then
+  raw="$(fetch_weather "${LOC_URL//,/}")"
+fi
 IFS='|' read -r temp cond <<<"${raw:-|}"
 
 # Clean up temp

@@ -32,6 +32,7 @@ Scope { // Scope
     readonly property real drawerIconHorizontalOffset: root.pinIconHorizontalOffset
     readonly property real dockContentHorizontalOffset: 0
     readonly property real dockBlurRadius: 56
+    readonly property real pinnedWindowGapReduction: Math.min(4, Appearance.sizes.hyprlandGapsOut)
     readonly property real dockBlurTintAlpha: {
         if (root.dockBackgroundColor.a <= 0)
             return 0;
@@ -71,11 +72,14 @@ Scope { // Scope
             PanelWindow {
             id: dockRoot
             screen: screenScope.modelData
-            property HyprlandMonitor monitor: Hyprland.monitorFor(screenScope.modelData)
-            readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
+            readonly property string screenName: screenScope.modelData?.name ?? ""
+            readonly property bool tvOutput: screenName === "HDMI-A-2"
+            readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === screenName) ?? null
+            readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(screenName)
+            readonly property bool tvSpecialVisible: tvOutput && HyprlandData.monitorShowsTvSpecialWorkspace(screenName)
             readonly property bool hideWhenFullscreen: Config.options?.dock.hideWhenFullscreen ?? false
-            visible: !GlobalStates.screenLocked && (!hideWhenFullscreen || !fullscreenOnMonitor)
-            readonly property int activeWorkspaceId: monitor?.activeWorkspace?.id ?? -1
+            visible: !tvSpecialVisible && !GlobalStates.screenLocked && (!hideWhenFullscreen || !fullscreenOnMonitor)
+            readonly property int activeWorkspaceId: monitorData?.activeWorkspace?.id ?? -1
             readonly property bool activeWorkspaceEmpty: activeWorkspaceId === -1
                 || HyprlandData.hyprlandClientsForWorkspace(activeWorkspaceId).length === 0
             readonly property real revealRegionHeight: Config.options?.dock.hoverToReveal
@@ -106,7 +110,10 @@ Scope { // Scope
             readonly property bool launchpadOnThisScreen: GlobalStates.overviewDrawerMode
                 || (GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen)
             exclusiveZone: (dockRoot.visible && root.pinned && !launchpadOnThisScreen)
-                ? implicitHeight - Appearance.sizes.hyprlandGapsOut - (Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
+                ? Math.max(0, implicitHeight
+                    - Appearance.sizes.hyprlandGapsOut
+                    - (Appearance.sizes.elevationMargin - Appearance.sizes.hyprlandGapsOut)
+                    - root.pinnedWindowGapReduction)
                 : 0
 
             implicitWidth: dockBackground.implicitWidth
@@ -215,8 +222,8 @@ Scope { // Scope
                                 asynchronous: true
                                 smooth: true
                                 antialiasing: true
-                                sourceSize.width: Math.max(1, Math.round(width * (dockRoot.monitor?.scale ?? 1)))
-                                sourceSize.height: Math.max(1, Math.round(height * (dockRoot.monitor?.scale ?? 1)))
+                                sourceSize.width: Math.max(1, Math.round(width * (dockRoot.monitorData?.scale ?? 1)))
+                                sourceSize.height: Math.max(1, Math.round(height * (dockRoot.monitorData?.scale ?? 1)))
                             }
 
                             ShaderEffectSource {

@@ -731,9 +731,13 @@ switch:checked slider {
 
 entry,
 .entry,
+entry.search,
+searchbar entry,
+searchbar searchentry,
 scrolledwindow > entry,
 viewport > entry {
   background-color: #221a14 !important;
+  background-image: none !important;
   color: #efe0d5;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
@@ -743,11 +747,16 @@ viewport > entry {
 }
 entry:focus-within,
 .entry:focus-within,
+entry.search:focus,
+entry.search:focus-within,
+searchbar entry:focus-within,
+searchbar searchentry:focus-within,
 scrolledwindow > entry:focus-within,
 viewport > entry:focus-within {
   border-color: #ffb878;
   box-shadow: 0 0 0 2px alpha(#ffb878, 0.22);
   background-color: #221a14 !important;
+  background-image: none !important;
 }
 entry:disabled,
 .entry:disabled {
@@ -757,6 +766,33 @@ entry:disabled,
 entry > image { color: #d6c3b6; }
 entry > image:hover { color: #efe0d5; }
 
+entry > text,
+entry text,
+.entry > text,
+.entry text,
+entry.search > text,
+entry.search text,
+spinbutton > text,
+spinbutton text {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #efe0d5;
+}
+entry:focus-within > text,
+entry:focus-within text,
+.entry:focus-within > text,
+.entry:focus-within text,
+entry.search:focus-within > text,
+entry.search:focus-within text,
+searchbar entry:focus-within > text,
+searchbar entry:focus-within text,
+searchbar searchentry:focus-within > text,
+searchbar searchentry:focus-within text {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #efe0d5;
+}
+
 /* Placeholder */
 entry > text > placeholder {
   color: #d6c3b6;
@@ -765,19 +801,65 @@ entry > text > placeholder {
 }
 
 /* Search entry */
+entry.search,
+headerbar entry.search,
+.titlebar entry.search,
+toolbarview > .top-bar entry.search,
+searchbar entry,
+searchbar entry.search,
+searchbar searchentry,
 searchentry {
-  background-color: #261e18;
+  background-color: #312822 !important;
+  background-image: none !important;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
 }
+entry.search:focus,
+entry.search:focus-within,
+headerbar entry.search:focus,
+headerbar entry.search:focus-within,
+.titlebar entry.search:focus,
+.titlebar entry.search:focus-within,
+toolbarview > .top-bar entry.search:focus,
+toolbarview > .top-bar entry.search:focus-within,
+searchbar entry:focus,
+searchbar entry:focus-within,
+searchbar entry.search:focus,
+searchbar entry.search:focus-within,
+searchbar searchentry:focus,
+searchbar searchentry:focus-within,
 searchentry:focus-within {
   border-color: #ffb878;
   box-shadow: 0 0 0 2px alpha(#ffb878, 0.22);
-  background-color: #261e18;
+  background-color: #312822 !important;
+  background-image: none !important;
 }
+entry.search,
+entry.search:focus,
+entry.search:focus-within,
+searchbar entry,
+searchbar searchentry,
+searchbar entry.search,
+searchbar entry:focus-within,
+searchbar entry.search:focus-within,
+searchbar searchentry:focus-within {
+  background-color: #312822 !important;
+  background-image: none !important;
+}
+entry.search > text,
+entry.search text,
+entry.search:focus-within > text,
+entry.search:focus-within text,
 searchentry > text,
 searchentry text {
-  background-color: transparent;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: #efe0d5;
+}
+searchentry:focus-within > text,
+searchentry:focus-within text {
+  background-color: transparent !important;
+  background-image: none !important;
   color: #efe0d5;
 }
 

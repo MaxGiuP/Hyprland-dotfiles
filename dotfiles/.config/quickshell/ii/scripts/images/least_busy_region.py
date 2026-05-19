@@ -18,7 +18,7 @@ def center_crop(img, target_w, target_h):
     y2 = y1 + target_h
     return img[y1:y2, x1:x2]
 
-def find_least_busy_region(image_path, region_width=300, region_height=200, screen_width=None, screen_height=None, verbose=False, stride=2, screen_mode="fill", horizontal_padding=50, vertical_padding=50, busiest=False):
+def find_least_busy_region(image_path, region_width=300, region_height=200, screen_width=None, screen_height=None, verbose=False, stride=2, screen_mode="fill", horizontal_padding=50, vertical_padding=50, busiest=False, left_padding=None, right_padding=None, top_padding=None, bottom_padding=None):
     img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
     if img is None:
         raise FileNotFoundError(f"Image not found: {image_path}")
@@ -76,15 +76,23 @@ def find_least_busy_region(image_path, region_width=300, region_height=200, scre
         if x1 > 0 and y1 > 0:
             total += ii[y1-1, x1-1]
         return total
+    pad_left = left_padding if left_padding is not None else horizontal_padding
+    pad_right = right_padding if right_padding is not None else horizontal_padding
+    pad_top = top_padding if top_padding is not None else vertical_padding
+    pad_bottom = bottom_padding if bottom_padding is not None else vertical_padding
+    pad_left = max(0, min(pad_left, (w - 1) // 2))
+    pad_right = max(0, min(pad_right, (w - 1) // 2))
+    pad_top = max(0, min(pad_top, (h - 1) // 2))
+    pad_bottom = max(0, min(pad_bottom, (h - 1) // 2))
     min_var = None
     max_var = None
-    min_coords = (horizontal_padding, vertical_padding)
-    max_coords = (horizontal_padding, vertical_padding)
+    min_coords = (pad_left, pad_top)
+    max_coords = (pad_left, pad_top)
     area = region_width * region_height
-    x_start = horizontal_padding
-    y_start = vertical_padding
-    x_end = w - region_width - horizontal_padding + 1
-    y_end = h - region_height - vertical_padding + 1
+    x_start = pad_left
+    y_start = pad_top
+    x_end = w - region_width - pad_right + 1
+    y_end = h - region_height - pad_bottom + 1
     if x_end < x_start:
         x_end = x_start
     if y_end < y_start:
@@ -319,8 +327,12 @@ def main():
     parser.add_argument("-l", "--largest-region", action="store_true", help="Find the largest region under the variance threshold and output its center")
     parser.add_argument("-t", "--variance-threshold", type=float, default=1000.0, help="Variance threshold for largest region mode")
     parser.add_argument("--aspect-ratio", type=float, default=1.78, help="Aspect ratio (width/height) for largest region mode")
-    parser.add_argument("--horizontal-padding", "-hp", type=int, default=50, help="Minimum horizontal distance from region to image edge")
-    parser.add_argument("--vertical-padding", "-vp", type=int, default=50, help="Minimum vertical distance from region to image edge")
+    parser.add_argument("--horizontal-padding", "-hp", type=int, default=50, help="Minimum horizontal distance from region to image edge (both sides)")
+    parser.add_argument("--vertical-padding", "-vp", type=int, default=50, help="Minimum vertical distance from region to image edge (both sides)")
+    parser.add_argument("--left-padding", type=int, default=None, help="Override left edge padding (falls back to --horizontal-padding)")
+    parser.add_argument("--right-padding", type=int, default=None, help="Override right edge padding (falls back to --horizontal-padding)")
+    parser.add_argument("--top-padding", type=int, default=None, help="Override top edge padding (falls back to --vertical-padding)")
+    parser.add_argument("--bottom-padding", type=int, default=None, help="Override bottom edge padding (falls back to --vertical-padding)")
     parser.add_argument("--busiest", action="store_true", help="Find the busiest region instead of the least busy")
     args = parser.parse_args()
 
@@ -373,7 +385,11 @@ def main():
         screen_mode=args.screen_mode,
         horizontal_padding=args.horizontal_padding,
         vertical_padding=args.vertical_padding,
-        busiest=args.busiest
+        busiest=args.busiest,
+        left_padding=args.left_padding,
+        right_padding=args.right_padding,
+        top_padding=args.top_padding,
+        bottom_padding=args.bottom_padding,
     )
     if args.visual_output:
         draw_region(args.image_path, coords, region_width=args.width, region_height=args.height, screen_width=args.screen_width, screen_height=args.screen_height, screen_mode=args.screen_mode)

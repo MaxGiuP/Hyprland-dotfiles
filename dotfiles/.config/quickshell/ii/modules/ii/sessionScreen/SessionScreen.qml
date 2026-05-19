@@ -36,9 +36,45 @@ Scope {
             id: sessionRoot
             visible: sessionLoader.active
             property string subtitle
+            property var pendingSessionAction: null
+            onVisibleChanged: {
+                if (!visible)
+                    resetSessionActionView();
+            }
 
             function hide() {
+                resetSessionActionView();
                 GlobalStates.sessionOpen = false;
+            }
+
+            function resetSessionActionView() {
+                sessionActionAnim.stop();
+                pendingSessionAction = null;
+                sessionActionIcon.opacity = 0;
+                sessionActionIcon.scale = 1;
+                contentColumn.opacity = 1;
+                contentColumn.enabled = true;
+                sessionMouseArea.enabled = true;
+            }
+
+            function runSessionAction(iconName, action, sourceItem) {
+                if (sessionActionAnim.running)
+                    return;
+
+                pendingSessionAction = action;
+                sessionActionIconSymbol.text = iconName;
+
+                const point = sourceItem
+                    ? sourceItem.mapToItem(sessionRoot.contentItem, sourceItem.width / 2, sourceItem.height / 2)
+                    : Qt.point(sessionRoot.width / 2, sessionRoot.height + sessionActionIcon.width / 2);
+
+                sessionActionIcon.x = point.x - sessionActionIcon.width / 2;
+                sessionActionIcon.y = point.y - sessionActionIcon.height / 2;
+                sessionActionIcon.scale = 0.55;
+                sessionActionIcon.opacity = 1;
+                contentColumn.enabled = false;
+                sessionMouseArea.enabled = false;
+                sessionActionAnim.restart();
             }
 
             exclusionMode: ExclusionMode.Ignore
@@ -110,8 +146,10 @@ Scope {
                         buttonIcon: "lock"
                         buttonText: Translation.tr("Lock")
                         onClicked: {
-                            Session.lock();
-                            sessionRoot.hide();
+                            sessionRoot.runSessionAction(buttonIcon, () => {
+                                Session.lock();
+                                sessionRoot.hide();
+                            }, sessionLock);
                         }
                         onFocusChanged: {
                             if (focus)
@@ -125,8 +163,10 @@ Scope {
                         buttonIcon: "dark_mode"
                         buttonText: Translation.tr("Sleep")
                         onClicked: {
-                            Session.suspend();
-                            sessionRoot.hide();
+                            sessionRoot.runSessionAction(buttonIcon, () => {
+                                Session.suspend();
+                                sessionRoot.hide();
+                            }, sessionSleep);
                         }
                         onFocusChanged: {
                             if (focus)
@@ -141,8 +181,10 @@ Scope {
                         buttonIcon: "logout"
                         buttonText: Translation.tr("Logout")
                         onClicked: {
-                            Session.logout();
-                            sessionRoot.hide();
+                            sessionRoot.runSessionAction(buttonIcon, () => {
+                                Session.logout();
+                                sessionRoot.hide();
+                            }, sessionLogout);
                         }
                         onFocusChanged: {
                             if (focus)
@@ -157,8 +199,10 @@ Scope {
                         buttonIcon: "browse_activity"
                         buttonText: Translation.tr("Task Manager")
                         onClicked: {
-                            Session.launchTaskManager();
-                            sessionRoot.hide();
+                            sessionRoot.runSessionAction(buttonIcon, () => {
+                                Session.launchTaskManager();
+                                sessionRoot.hide();
+                            }, sessionTaskManager);
                         }
                         onFocusChanged: {
                             if (focus)
@@ -173,8 +217,10 @@ Scope {
                         buttonIcon: "downloading"
                         buttonText: Translation.tr("Hibernate")
                         onClicked: {
-                            Session.hibernate();
-                            sessionRoot.hide();
+                            sessionRoot.runSessionAction(buttonIcon, () => {
+                                Session.hibernate();
+                                sessionRoot.hide();
+                            }, sessionHibernate);
                         }
                         onFocusChanged: {
                             if (focus)
@@ -188,8 +234,10 @@ Scope {
                         buttonIcon: "power_settings_new"
                         buttonText: Translation.tr("Shutdown")
                         onClicked: {
-                            Session.poweroff();
-                            sessionRoot.hide();
+                            sessionRoot.runSessionAction(buttonIcon, () => {
+                                Session.poweroff();
+                                sessionRoot.hide();
+                            }, sessionShutdown);
                         }
                         onFocusChanged: {
                             if (focus)
@@ -204,8 +252,10 @@ Scope {
                         buttonIcon: "restart_alt"
                         buttonText: Translation.tr("Reboot")
                         onClicked: {
-                            Session.reboot();
-                            sessionRoot.hide();
+                            sessionRoot.runSessionAction(buttonIcon, () => {
+                                Session.reboot();
+                                sessionRoot.hide();
+                            }, sessionReboot);
                         }
                         onFocusChanged: {
                             if (focus)
@@ -220,8 +270,10 @@ Scope {
                         buttonIcon: "settings_applications"
                         buttonText: Translation.tr("Reboot to firmware settings")
                         onClicked: {
-                            Session.rebootToFirmware();
-                            sessionRoot.hide();
+                            sessionRoot.runSessionAction(buttonIcon, () => {
+                                Session.rebootToFirmware();
+                                sessionRoot.hide();
+                            }, sessionFirmwareReboot);
                         }
                         onFocusChanged: {
                             if (focus)
@@ -262,6 +314,65 @@ Scope {
                         text: Translation.tr("There might be a download in progress")
                         textColor: Appearance.m3colors.m3onErrorContainer
                         color: Appearance.m3colors.m3errorContainer
+                    }
+                }
+            }
+
+            Item {
+                id: sessionActionIcon
+                z: 100
+                width: 120
+                height: 120
+                opacity: 0
+                visible: opacity > 0
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: width / 2
+                    color: Appearance.colors.colPrimary
+                }
+
+                MaterialSymbol {
+                    id: sessionActionIconSymbol
+                    anchors.centerIn: parent
+                    iconSize: 60
+                    fill: 1
+                    color: Appearance.colors.colOnPrimary
+                }
+            }
+
+            SequentialAnimation {
+                id: sessionActionAnim
+
+                ParallelAnimation {
+                    NumberAnimation {
+                        target: contentColumn; property: "opacity"
+                        to: 0; duration: 180; easing.type: Easing.OutCubic
+                    }
+                    NumberAnimation {
+                        target: sessionActionIcon; property: "x"
+                        to: (sessionRoot.width - sessionActionIcon.width) / 2
+                        duration: 650; easing.type: Easing.OutCubic
+                    }
+                    NumberAnimation {
+                        target: sessionActionIcon; property: "y"
+                        to: (sessionRoot.height - sessionActionIcon.height) / 2
+                        duration: 650; easing.type: Easing.OutCubic
+                    }
+                    NumberAnimation {
+                        target: sessionActionIcon; property: "scale"
+                        to: 1.0; duration: 650; easing.type: Easing.OutCubic
+                    }
+                }
+
+                PauseAnimation { duration: 140 }
+
+                ScriptAction {
+                    script: {
+                        const action = sessionRoot.pendingSessionAction;
+                        sessionRoot.pendingSessionAction = null;
+                        if (action)
+                            action();
                     }
                 }
             }

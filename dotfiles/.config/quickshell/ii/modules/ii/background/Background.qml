@@ -32,8 +32,14 @@ Variants {
         // Hide when fullscreen
         // Workspaces
         property HyprlandMonitor monitor: Hyprland.monitorFor(screenScope.modelData)
+        readonly property var monitorData: HyprlandData.monitors.find(m => m.name === monitor?.name)
+        readonly property string visibleSpecialWorkspace: `${monitorData?.specialWorkspace?.name ?? ""}`
+        readonly property string activeWorkspaceName: `${monitorData?.activeWorkspace?.name ?? ""}`
+        readonly property bool showingTvWorkspace: visibleSpecialWorkspace === "special:tv" || (monitor?.name === "HDMI-A-2" && activeWorkspaceName === "21")
+        readonly property bool showingTvAppWorkspace: visibleSpecialWorkspace === "special:tv-app"
+        readonly property bool showingTvModeWorkspace: showingTvWorkspace || showingTvAppWorkspace
         readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
-        visible: GlobalStates.screenLocked || !fullscreenOnMonitor || !Config?.options.background.hideWhenFullscreen
+        visible: GlobalStates.screenLocked || showingTvModeWorkspace || !fullscreenOnMonitor || !Config?.options.background.hideWhenFullscreen
         property list<var> relevantWindows: HyprlandData.windowList.filter(win => win.monitor == monitor?.id && win.workspace.id >= 0).sort((a, b) => a.workspace.id - b.workspace.id)
         property int firstWorkspaceId: relevantWindows[0]?.workspace.id || 1
         property int lastWorkspaceId: relevantWindows[relevantWindows.length - 1]?.workspace.id || 10
@@ -195,6 +201,47 @@ Variants {
                 }
                 width: bgRoot.wallpaperWidth / bgRoot.wallpaperToScreenRatio * bgRoot.effectiveWallpaperScale
                 height: bgRoot.wallpaperHeight / bgRoot.wallpaperToScreenRatio * bgRoot.effectiveWallpaperScale
+            }
+
+            Rectangle {
+                id: tvWorkspaceBackground
+                anchors.fill: parent
+                visible: bgRoot.showingTvModeWorkspace
+                opacity: visible ? 1 : 0
+                color: bgRoot.showingTvAppWorkspace ? "#081F2D" : "#10131F"
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 180
+                        easing.type: Easing.OutCubic
+                    }
+                }
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width, parent.height) * 0.46
+                    height: width
+                    radius: width / 2
+                    color: bgRoot.showingTvAppWorkspace ? "#80D8FF" : "#D0BCFF"
+                    opacity: 0.18
+                }
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.min(parent.width, parent.height) * 0.26
+                    height: width
+                    radius: width / 2
+                    color: bgRoot.showingTvAppWorkspace ? "#003547" : "#332D41"
+                    opacity: 0.88
+                }
+
+                MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "tv"
+                    iconSize: Math.min(parent.width, parent.height) * 0.18
+                    fill: 1
+                    color: bgRoot.showingTvAppWorkspace ? "#C2E8FF" : "#EADDFF"
+                }
             }
 
             Loader {

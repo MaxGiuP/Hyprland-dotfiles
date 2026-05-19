@@ -22,6 +22,9 @@ Item {
     readonly property string monitorName: root.effectiveScreen?.name ?? monitor?.name ?? ""
     readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === monitorName) ?? null
     readonly property Toplevel activeWindow: ToplevelManager.activeToplevel
+    readonly property string specialWorkspaceRawName: `${monitorData?.specialWorkspace?.name ?? ""}`
+    readonly property bool specialWorkspaceVisible: specialWorkspaceRawName.length > 0
+    readonly property string specialWorkspaceLabel: specialWorkspaceRawName.replace(/^special:/, "")
     
     readonly property int workspacesShown: Math.max(Config.options.bar.workspaces.shown, 1)
     readonly property int activeWorkspaceId: Math.max(monitorData?.activeWorkspace?.id ?? 1, 1)
@@ -215,7 +218,9 @@ Item {
                     property var mainAppIconSource: Quickshell.iconPath(AppSearch.guessIcon(biggestWindow?.class), "image-missing")
 
                     StyledText { // Workspace number text
-                        opacity: root.showNumbers
+                        readonly property bool showSpecialLabel: root.specialWorkspaceVisible && root.activeWorkspaceId == button.workspaceValue
+                        opacity: showSpecialLabel
+                            || root.showNumbers
                             || ((Config.options?.bar.workspaces.alwaysShowNumbers && (!Config.options?.bar.workspaces.showAppIcons || !workspaceButtonBackground.biggestWindow || root.showNumbers))
                             || (root.showNumbers && !Config.options?.bar.workspaces.showAppIcons)
                             )  ? 1 : 0
@@ -228,7 +233,7 @@ Item {
                             pixelSize: Appearance.font.pixelSize.small - ((text.length - 1) * (text !== "10") * 2)
                             family: Config.options?.bar.workspaces.useNerdFont ? Appearance.font.family.iconNerd : defaultFont
                         }
-                        text: Config.options?.bar.workspaces.numberMap[button.workspaceValue - 1] || button.workspaceValue
+                        text: showSpecialLabel ? root.specialWorkspaceLabel : (Config.options?.bar.workspaces.numberMap[button.workspaceValue - 1] || button.workspaceValue)
                         elide: Text.ElideRight
                         color: (root.activeWorkspaceId == button.workspaceValue) ? 
                             Appearance.m3colors.m3onPrimary : 
@@ -241,7 +246,9 @@ Item {
                     }
                     Rectangle { // Dot instead of ws number
                         id: wsDot
-                        opacity: (Config.options?.bar.workspaces.alwaysShowNumbers
+                        opacity: (root.specialWorkspaceVisible && root.activeWorkspaceId == button.workspaceValue)
+                            ? 0
+                            : (Config.options?.bar.workspaces.alwaysShowNumbers
                             || root.showNumbers
                             || (Config.options?.bar.workspaces.showAppIcons && workspaceButtonBackground.biggestWindow)
                             ) ? 0 : 1
@@ -263,7 +270,8 @@ Item {
                         anchors.centerIn: parent
                         width: workspaceButtonWidth
                         height: workspaceButtonWidth
-                        opacity: !Config.options?.bar.workspaces.showAppIcons ? 0 :
+                        opacity: (root.specialWorkspaceVisible && root.activeWorkspaceId == button.workspaceValue) ? 0 :
+                            !Config.options?.bar.workspaces.showAppIcons ? 0 :
                             (workspaceButtonBackground.biggestWindow && !root.showNumbers && Config.options?.bar.workspaces.showAppIcons) ? 
                             1 : workspaceButtonBackground.biggestWindow ? workspaceIconOpacityShrinked : 0
                             visible: opacity > 0

@@ -230,8 +230,18 @@ DockButton {
                     spacing: 4
 
                     DockMaterialMenuButton {
+                        visible: root.desktopEntry !== null && root.desktopEntry !== undefined
+                        label: Translation.tr("New window")
+                        symbol: "add_box"
+                        onTriggered: {
+                            AppLaunch.launchDesktopEntry(root.desktopEntry)
+                            dockContextMenu.close()
+                        }
+                    }
+
+                    DockMaterialMenuButton {
                         visible: appToplevel.toplevels.length > 0
-                        label: "Force quit"
+                        label: Translation.tr("Force quit")
                         symbol: "close"
                         onTriggered: {
                             root.forceQuitApp()
@@ -240,7 +250,7 @@ DockButton {
                     }
 
                     DockMaterialMenuButton {
-                        label: root.isPinnedApp ? "Unpin from bar" : "Pin to bar"
+                        label: root.isPinnedApp ? Translation.tr("Unpin from bar") : Translation.tr("Pin to bar")
                         symbol: root.isPinnedApp ? "keep_off" : "keep"
                         onTriggered: {
                             TaskbarApps.togglePin(root.desktopEntry?.id ?? appToplevel.appId)

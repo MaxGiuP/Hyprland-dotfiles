@@ -139,35 +139,42 @@ Item { // Bar content region
 
 
 
-    Row { // Middle section
+    Item { // Middle section
         id: middleSection
+        readonly property real groupPadding: 5
+        readonly property real contentSpacing: 4
         anchors {
             top: parent.top
             bottom: parent.bottom
-            horizontalCenter: parent.horizontalCenter
         }
-        //spacing: 1
+        width: centerSectionRow.implicitWidth + groupPadding * 2
+        x: (parent?.width ?? 0) / 2 - (centerSectionRow.x + workspacesWidget.x + workspacesWidget.width / 2)
 
-        BarGroup {
-            id: leftCenterGroup
-            anchors.verticalCenter: parent.verticalCenter
-            //anchors.horizontalCenter: parent.horizontalCenter
-            implicitWidth: root.centerSideModuleWidth
+        Rectangle {
+            anchors {
+                fill: parent
+                topMargin: 4
+                bottomMargin: 4
+            }
+            color: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colLayer1
+            radius: Appearance.rounding.small
+        }
+
+        RowLayout {
+            id: centerSectionRow
+            anchors {
+                verticalCenter: parent.verticalCenter
+                left: parent.left
+                right: parent.right
+                margins: middleSection.groupPadding
+            }
+            spacing: middleSection.contentSpacing
 
             Resources {
                 alwaysShowAllResources: root.useShortenedForm === 2
-                Layout.fillWidth: root.useShortenedForm === 0
+                Layout.alignment: Qt.AlignVCenter
+                Layout.rightMargin: 6
             }
-        }
-
-        VerticalBarSeparator {
-            visible: Config.options?.bar.borderless
-        }
-
-        BarGroup {
-            id: middleCenterGroup
-            anchors.verticalCenter: parent.verticalCenter
-            //padding: workspacesWidget.widgetPadding
 
             Workspaces {
                 id: workspacesWidget
@@ -186,35 +193,14 @@ Item { // Bar content region
                 }
             }
 
-        }
-
-        VerticalBarSeparator {
-            visible: Config.options?.bar.borderless
-        }
-
-        MouseArea {
-            id: rightCenterGroup
-            anchors.verticalCenter: parent.verticalCenter
-            implicitWidth: root.centerSideModuleWidth
-            implicitHeight: rightCenterGroupContent.implicitHeight
-
-            onPressed: {
-                GlobalStates.toggleSidebarRight(root.screen?.name ?? "");
+            UtilButtons {
+                visible: (Config.options.bar.verbose && root.useShortenedForm === 0)
+                Layout.alignment: Qt.AlignVCenter
             }
 
-            BarGroup {
-                id: rightCenterGroupContent
-                anchors.fill: parent
-
-                UtilButtons {
-                    visible: (Config.options.bar.verbose && root.useShortenedForm === 0)
-                    Layout.alignment: Qt.AlignVCenter
-                }
-
-                BatteryIndicator {
-                    visible: (root.useShortenedForm < 2 && Battery.available)
-                    Layout.alignment: Qt.AlignVCenter
-                }
+            BatteryIndicator {
+                visible: (root.useShortenedForm < 2 && Battery.available)
+                Layout.alignment: Qt.AlignVCenter
             }
         }
     }
@@ -328,7 +314,7 @@ Item { // Bar content region
                     }
 
                     Revealer {
-                        reveal: Notifications.silent || Notifications.unread > 0
+                        reveal: !root.hideLeftHeavy && (Notifications.silent || Notifications.unread > 0)
                         Layout.fillHeight: true
                         Layout.rightMargin: reveal ? indicatorsRowLayout.realSpacing : 0
                         implicitHeight: reveal ? notificationUnreadCount.implicitHeight : 0
@@ -347,7 +333,7 @@ Item { // Bar content region
                         sourceComponent: BarGroup {
                             WeatherBar {}
                             ClockWidget {
-                                showDate: (Config.options.bar.verbose && root.useShortenedForm < 2)
+                                showDate: (Config.options.bar.verbose && root.useShortenedForm < 2 && !root.hideLeftHeavy)
                                 Layout.alignment: Qt.AlignVCenter
                                 Layout.fillWidth: true
                             }
@@ -370,7 +356,7 @@ Item { // Bar content region
             }
 
             SysTray {
-                visible: root.useShortenedForm === 0
+                visible: root.useShortenedForm === 0 && !root.hideLeftHeavy
                 Layout.fillWidth: false
                 Layout.fillHeight: true
                 invertSide: Config?.options.bar.bottom

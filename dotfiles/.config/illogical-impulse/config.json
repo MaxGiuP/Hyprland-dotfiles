@@ -182,7 +182,7 @@
         "verbose": true,
         "vertical": false,
         "weather": {
-            "city": "fleet",
+            "city": "Abingdon, Oxfordshire",
             "enable": true,
             "enableGPS": false,
             "fetchInterval": 5,
@@ -245,7 +245,7 @@
             "vmplayer",
             "steam"
         ],
-        "pinnedOnStartup": false,
+        "pinnedOnStartup": true,
         "rounded": true
     },
     "hacks": {
@@ -265,8 +265,8 @@
     "language": {
         "translator": {
             "engine": "auto",
-            "sourceLanguage": "English",
-            "targetLanguage": "Deutsch"
+            "sourceLanguage": "Deutsch",
+            "targetLanguage": "English"
         },
         "ui": "de_DE"
     },
@@ -325,7 +325,7 @@
         "timeout": 1500
     },
     "osk": {
-        "layout": "Italian",
+        "layout": "error",
         "pinnedOnStartup": false
     },
     "overlay": {

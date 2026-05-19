@@ -2,7 +2,6 @@ import QtQuick
 import QtQuick.Controls
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Hyprland
 import qs
 import qs.services
 import qs.modules.common
@@ -12,57 +11,60 @@ import qs.modules.waffle.notificationCenter
 
 Scope {
     id: notificationPopup
-    readonly property string focusedScreenName: HyprlandData.monitors.find(m => m.focused)?.name
-        ?? Hyprland.focusedMonitor?.name
-        ?? ""
 
-    PanelWindow {
-        id: root
-        visible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked
-        screen: Quickshell.screens.find(s => s.name === notificationPopup.focusedScreenName) ?? null
+    Variants {
+        model: Quickshell.screens
 
-        WlrLayershell.namespace: "quickshell:notificationPopup"
-        WlrLayershell.layer: WlrLayer.Overlay
-        exclusiveZone: 0
+        PanelWindow {
+            id: root
+            required property var modelData
 
-        anchors {
-            top: true
-            right: true
-            bottom: true
-        }
+            visible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked
+            screen: modelData
 
-        mask: Region {
-            item: listview.contentItem
-        }
+            WlrLayershell.namespace: "quickshell:notificationPopup"
+            WlrLayershell.layer: WlrLayer.Overlay
+            exclusiveZone: 0
 
-        color: "transparent"
-        implicitWidth: listview.implicitWidth
-
-        WListView {
-            id: listview
             anchors {
-                bottom: parent.bottom
-                right: parent.right
-                left: parent.left
+                top: true
+                right: true
+                bottom: true
             }
-            leftMargin: 16
-            rightMargin: 16
-            topMargin: 16
-            bottomMargin: 16
 
-            height: Math.min(contentItem.height + topMargin + bottomMargin, parent.height)
-            width: parent.width - Appearance.sizes.elevationMargin * 2
-            
-            implicitWidth: 396
-            spacing:12
-
-            model: ScriptModel {
-                values: Notifications.popupList
+            mask: Region {
+                item: listview.contentItem
             }
-            delegate: WSingleNotification {
-                required property var modelData
-                notification: modelData
-                width: ListView.view.width - ListView.view.leftMargin - ListView.view.rightMargin
+
+            color: "transparent"
+            implicitWidth: listview.implicitWidth
+
+            WListView {
+                id: listview
+                anchors {
+                    bottom: parent.bottom
+                    right: parent.right
+                    left: parent.left
+                }
+                leftMargin: 16
+                rightMargin: 16
+                topMargin: 16
+                bottomMargin: 16
+
+                height: Math.min(contentItem.height + topMargin + bottomMargin, parent.height)
+                width: parent.width - Appearance.sizes.elevationMargin * 2
+
+                implicitWidth: 396
+                spacing:12
+
+                model: ScriptModel {
+                    values: Notifications.popupList
+                }
+                delegate: WSingleNotification {
+                    required property var modelData
+                    notification: modelData
+                    width: ListView.view.width - ListView.view.leftMargin - ListView.view.rightMargin
+                }
             }
         }
     }

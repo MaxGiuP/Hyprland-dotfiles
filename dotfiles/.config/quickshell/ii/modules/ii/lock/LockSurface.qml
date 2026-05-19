@@ -19,8 +19,10 @@ MouseArea {
     property int lockpadRiseDurationMs: 650
     property int introStartDelayMs: 0
     property var captureScreen: null
+    property bool screenCaptureSuspended: false
     property bool introStarted: false
     property bool playUnlockAnimation: true
+    property var pendingSessionAction: null
     readonly property string wallpaperPath: {
         const configuredPath = `${Config.options.background.wallpaperPath ?? ""}`;
         const lowerPath = configuredPath.toLowerCase();
@@ -61,7 +63,10 @@ MouseArea {
     readonly property real lockBlurProgress: Config.options.lock.blur.enable
         ? Math.max(0, Math.min(1, GlobalStates.screenLockBlurProgress))
         : 0
-    readonly property bool useWallpaperFallback: GlobalStates.lockUseWallpaperFallbackAfterResume || !root.captureScreen
+    readonly property bool useWallpaperFallback: root.screenCaptureSuspended || !root.captureScreen
+    readonly property bool suppressWallpaperFallback: root.screenCaptureSuspended
+        && root.context.unlockInProgress
+    readonly property bool showWallpaperFallback: root.useWallpaperFallback && !root.suppressWallpaperFallback
     property bool blurCapturePending: false
     property bool blurWasActive: false
 
@@ -76,6 +81,24 @@ MouseArea {
 
         root.blurCapturePending = false;
         screenshotView.captureFrame();
+    }
+
+    function suspendScreenCapture() {
+        root.screenCaptureSuspended = true;
+        root.blurCapturePending = false;
+    }
+
+    function resumeScreenCapture() {
+        root.resetToLockedState();
+        root.screenCaptureSuspended = false;
+        root.blurCapturePending = false;
+        if (root.captureScreen && root.lockBlurProgress > 0.001)
+            resumeCaptureTimer.restart();
+    }
+
+    function prepareForRelease() {
+        root.suspendScreenCapture();
+        root.captureScreen = null;
     }
 
     // ─── GPU (nvidia-smi) ────────────────────────────────────────────────────
@@ -174,6 +197,16 @@ MouseArea {
         root.blurWasActive = blurIsActive;
     }
 
+    Timer {
+        id: resumeCaptureTimer
+        interval: 900
+        repeat: false
+        onTriggered: {
+            if (root.captureScreen && !root.useWallpaperFallback)
+                root.refreshBlurCapture();
+        }
+    }
+
     function startIntroAnimation() {
         if (root.introStarted || root.width <= 0 || root.height <= 0)
             return;
@@ -196,6 +229,48 @@ MouseArea {
         lockRiseAnim.restart();
     }
 
+    function resetToLockedState() {
+        lockRiseAnim.stop();
+        unlockAnim.stop();
+        sessionActionAnim.stop();
+        root.pendingSessionAction = null;
+        root.introStarted = true;
+        root.introComplete = true;
+
+        lockpadSymbol.text = "lock";
+        lockpadIcon.x = root.lockpadSettledX;
+        lockpadIcon.y = root.lockpadSettledY;
+        lockpadIcon.scale = root.lockpadSettledScale;
+        lockpadIcon.opacity = 1;
+
+        mainCard.opacity = 1;
+        mainCard.scale = 1;
+        cardGlow.opacity = 1;
+        powerButtons.opacity = 1;
+        powerButtons.anchors.bottomMargin = 24;
+        root.forceFieldFocus();
+    }
+
+    function runSessionAction(iconName, action, sourceItem) {
+        if (sessionActionAnim.running)
+            return;
+
+        root.pendingSessionAction = action;
+        unlockAnim.stop();
+        lockRiseAnim.stop();
+        lockpadSymbol.text = iconName;
+
+        const point = sourceItem
+            ? sourceItem.mapToItem(root, sourceItem.width / 2, sourceItem.height / 2)
+            : Qt.point(root.safeSurfaceSize.width / 2, root.safeSurfaceSize.height + root.lockpadSize / 2);
+
+        lockpadIcon.x = point.x - root.lockpadSize / 2;
+        lockpadIcon.y = point.y - root.lockpadSize / 2;
+        lockpadIcon.scale = root.lockpadSettledScale;
+        lockpadIcon.opacity = 1;
+        sessionActionAnim.restart();
+    }
+
     Item {
         id: screenshotLayer
         z: -20
@@ -203,7 +278,7 @@ MouseArea {
         clip: true
         visible: opacity > 0
         opacity: root.useWallpaperFallback
-            ? (wallpaperImage.status === Image.Ready ? 1 : 0)
+            ? (root.suppressWallpaperFallback ? 0 : (wallpaperImage.status === Image.Ready ? 1 : 0))
             : (screenshotView.hasContent ? 1 : 0)
         readonly property real blurScale: 1 + ((Config.options.lock.blur.extraZoom - 1) * root.lockBlurProgress)
         readonly property real blurRadius: Config.options.lock.blur.radius * root.lockBlurProgress
@@ -232,7 +307,7 @@ MouseArea {
             asynchronous: true
             sourceSize.width: root.safeSurfaceSize.width
             sourceSize.height: root.safeSurfaceSize.height
-            visible: root.useWallpaperFallback
+            visible: root.showWallpaperFallback
         }
 
         ScreencopyView {
@@ -243,10 +318,10 @@ MouseArea {
             height: root.safeSurfaceSize.height + screenshotLayer.blurOverscan * 2
             scale: screenshotLayer.blurScale
             transformOrigin: Item.Center
-            captureSource: root.captureScreen
+            captureSource: root.useWallpaperFallback ? null : root.captureScreen
             live: false
             paintCursor: false
-            visible: !root.useWallpaperFallback
+            visible: !root.useWallpaperFallback && root.captureScreen
         }
 
         ShaderEffectSource {
@@ -256,7 +331,7 @@ MouseArea {
             width: screenshotView.width
             height: screenshotView.height
             sourceItem: screenshotView
-            live: true
+            live: !root.useWallpaperFallback
             hideSource: true
             visible: false
         }
@@ -266,7 +341,7 @@ MouseArea {
             y: screenshotView.y
             width: screenshotView.width
             height: screenshotView.height
-            visible: !root.useWallpaperFallback && screenshotView.hasContent
+            visible: !root.useWallpaperFallback && root.captureScreen && screenshotView.hasContent
             source: screenshotTexture
             radius: screenshotLayer.blurRadius
             samples: Math.max(1, Math.ceil(radius) * 2 + 1)
@@ -284,7 +359,7 @@ MouseArea {
 
         GaussianBlur {
             anchors.fill: parent
-            visible: root.useWallpaperFallback && wallpaperImage.status === Image.Ready
+            visible: root.showWallpaperFallback && wallpaperImage.status === Image.Ready
             source: wallpaperTexture
             radius: screenshotLayer.blurRadius
             samples: Math.max(1, Math.ceil(radius) * 2 + 1)
@@ -465,6 +540,48 @@ MouseArea {
         }
 
         PauseAnimation { duration: 50 }
+    }
+
+    SequentialAnimation {
+        id: sessionActionAnim
+
+        ParallelAnimation {
+            NumberAnimation {
+                target: mainCard; property: "opacity"
+                to: 0; duration: 180; easing.type: Easing.OutCubic
+            }
+            NumberAnimation {
+                target: cardGlow; property: "opacity"
+                to: 0; duration: 180; easing.type: Easing.OutCubic
+            }
+            NumberAnimation {
+                target: powerButtons; property: "opacity"
+                to: 0; duration: 180; easing.type: Easing.OutCubic
+            }
+            NumberAnimation {
+                target: lockpadIcon; property: "x"
+                to: root.lockpadCenterX; duration: root.lockpadRiseDurationMs; easing.type: Easing.OutCubic
+            }
+            NumberAnimation {
+                target: lockpadIcon; property: "y"
+                to: root.lockpadCenterY; duration: root.lockpadRiseDurationMs; easing.type: Easing.OutCubic
+            }
+            NumberAnimation {
+                target: lockpadIcon; property: "scale"
+                to: 1.0; duration: root.lockpadRiseDurationMs; easing.type: Easing.OutCubic
+            }
+        }
+
+        PauseAnimation { duration: 140 }
+
+        ScriptAction {
+            script: {
+                const action = root.pendingSessionAction;
+                root.pendingSessionAction = null;
+                if (action)
+                    action();
+            }
+        }
     }
 
     Connections {
@@ -1052,8 +1169,9 @@ MouseArea {
 
         // Sleep
         RippleButton {
+            id: sleepButton
             implicitWidth: 48; implicitHeight: 48
-            onClicked: Session.suspend()
+            onClicked: root.runSessionAction("dark_mode", () => Session.suspend(), sleepButton)
             contentItem: MaterialSymbol {
                 anchors.centerIn: parent
                 text: "dark_mode"; iconSize: 24
@@ -1064,8 +1182,9 @@ MouseArea {
         }
         // Power off
         RippleButton {
+            id: poweroffButton
             implicitWidth: 48; implicitHeight: 48
-            onClicked: Session.poweroff()
+            onClicked: root.runSessionAction("power_settings_new", () => Session.poweroff(), poweroffButton)
             contentItem: MaterialSymbol {
                 anchors.centerIn: parent
                 text: "power_settings_new"; iconSize: 24
@@ -1076,8 +1195,9 @@ MouseArea {
         }
         // Restart
         RippleButton {
+            id: rebootButton
             implicitWidth: 48; implicitHeight: 48
-            onClicked: Session.reboot()
+            onClicked: root.runSessionAction("restart_alt", () => Session.reboot(), rebootButton)
             contentItem: MaterialSymbol {
                 anchors.centerIn: parent
                 text: "restart_alt"; iconSize: 24
@@ -1088,8 +1208,9 @@ MouseArea {
         }
         // Logout
         RippleButton {
+            id: logoutButton
             implicitWidth: 48; implicitHeight: 48
-            onClicked: Session.logout()
+            onClicked: root.runSessionAction("logout", () => Session.logout(), logoutButton)
             contentItem: MaterialSymbol {
                 anchors.centerIn: parent
                 text: "logout"; iconSize: 24

@@ -1,6 +1,7 @@
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.modules.common.functions
+import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Controls
 
@@ -136,6 +137,14 @@ Button {
         radius: root.buttonEffectiveRadius
         implicitHeight: 30
         clip: true
+        layer.enabled: buttonBackground.radius > 0
+        layer.effect: OpacityMask {
+            maskSource: Rectangle {
+                width: buttonBackground.width
+                height: buttonBackground.height
+                radius: buttonBackground.radius
+            }
+        }
 
         color: root.buttonColor
         Behavior on color {

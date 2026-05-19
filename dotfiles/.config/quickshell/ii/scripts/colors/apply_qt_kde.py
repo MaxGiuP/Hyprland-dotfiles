@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 XDG_CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")))
+XDG_DATA_HOME = Path(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")))
 XDG_STATE_HOME = Path(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")))
 
 COLORS_JSON = XDG_STATE_HOME / "quickshell" / "user" / "generated" / "colors.json"
@@ -22,6 +23,8 @@ QT_CONF_PATHS = [
 DOLPHINRC = XDG_CONFIG_HOME / "dolphinrc"
 KVANTUM_CONFIG = XDG_CONFIG_HOME / "Kvantum" / "MaterialAdw" / "MaterialAdw.kvconfig"
 SCHEME_NAME = "MaterialYouDynamic"
+COLOR_SCHEME_FILE = XDG_DATA_HOME / "color-schemes" / f"{SCHEME_NAME}.colors"
+DEFAULT_ICON_THEME = "Papirus-Dark"
 
 
 def load_colors() -> dict[str, str]:
@@ -64,6 +67,31 @@ def write_ini(path: Path, cfg: configparser.RawConfigParser) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as f:
         cfg.write(f, space_around_delimiters=False)
+
+
+def theme_exists(name: str) -> bool:
+    return any(
+        (base / name / "index.theme").exists()
+        for base in (XDG_DATA_HOME / "icons", Path("/usr/share/icons"))
+    )
+
+
+def dark_icon_theme() -> str:
+    settings = XDG_CONFIG_HOME / "gtk-3.0" / "settings.ini"
+    if settings.exists():
+        for line in settings.read_text(errors="ignore").splitlines():
+            if line.startswith("gtk-icon-theme-name="):
+                name = line.split("=", 1)[1].strip().strip('"')
+                if name:
+                    if name == "Papirus" and theme_exists("Papirus-Dark"):
+                        return "Papirus-Dark"
+                    if name == "WhiteSur" and theme_exists("WhiteSur-dark"):
+                        return "WhiteSur-dark"
+                    if name == "Tela" and theme_exists("Tela-dark"):
+                        return "Tela-dark"
+                    if theme_exists(name):
+                        return name
+    return DEFAULT_ICON_THEME if theme_exists(DEFAULT_ICON_THEME) else "breeze-dark"
 
 
 def update_kdeglobals(colors: dict[str, str]) -> None:
@@ -195,6 +223,9 @@ def update_kdeglobals(colors: dict[str, str]) -> None:
         if cfg.has_section("KDE") and cfg.has_option("KDE", "widgetStyle"):
             cfg.remove_option("KDE", "widgetStyle")
 
+        ensure_section(cfg, "Icons")
+        cfg.set("Icons", "Theme", dark_icon_theme())
+
         ensure_section(cfg, "WM")
         cfg.set("WM", "activeBackground", rgb_triplet(high))
         cfg.set("WM", "activeForeground", rgb_triplet(text))
@@ -204,13 +235,48 @@ def update_kdeglobals(colors: dict[str, str]) -> None:
         write_ini(path, cfg)
 
 
+def update_color_scheme_file() -> None:
+    kdeglobals = read_ini(KDEGLOBALS_PATHS[0])
+    scheme = configparser.RawConfigParser(interpolation=None, strict=False)
+    scheme.optionxform = str
+
+    for section in (
+        "ColorEffects:Disabled",
+        "ColorEffects:Inactive",
+        "Colors:Button",
+        "Colors:Complementary",
+        "Colors:Header",
+        "Colors:Header][Inactive",
+        "Colors:Selection",
+        "Colors:Tooltip",
+        "Colors:View",
+        "Colors:Window",
+        "KDE",
+        "WM",
+    ):
+        if not kdeglobals.has_section(section):
+            continue
+        ensure_section(scheme, section)
+        for key, value in kdeglobals.items(section):
+            scheme.set(section, key, value)
+
+    ensure_section(scheme, "General")
+    scheme.set("General", "Name", "Material You Dynamic")
+    scheme.set("General", "ColorScheme", SCHEME_NAME)
+    scheme.set("General", "shadeSortColumn", "true")
+
+    write_ini(COLOR_SCHEME_FILE, scheme)
+
+
 def update_qtct_configs() -> None:
+    icon_theme = dark_icon_theme()
     for path in QT_CONF_PATHS:
         cfg = read_ini(path)
         ensure_section(cfg, "Appearance")
         color_path = str(path.parent / "colors" / "material-you.conf")
         cfg.set("Appearance", "color_scheme_path", color_path)
         cfg.set("Appearance", "custom_palette", "true")
+        cfg.set("Appearance", "icon_theme", icon_theme)
         cfg.set("Appearance", "style", "kvantum")
         write_ini(path, cfg)
 
@@ -364,6 +430,7 @@ def main() -> None:
 
     colors = load_colors()
     update_kdeglobals(colors)
+    update_color_scheme_file()
     update_qtct_configs()
     update_dolphinrc()
     update_kvantum_config(colors)

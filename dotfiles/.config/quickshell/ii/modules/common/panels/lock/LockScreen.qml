@@ -14,6 +14,9 @@ Scope {
 
     required property Component lockSurface
     property alias context: lockContext
+    property var loadedLockSurface: null
+    property bool lockContentActive: false
+    property bool sessionLockActive: false
 
     // Keep lock surface visible until lockpad unlock animation finishes.
     property int unlockReleaseDelayMs: 1500
@@ -21,14 +24,15 @@ Scope {
     property int lockBlurInDurationMs: 0
     property int unlockBlurOutDelayMs: 0
     property int unlockBlurOutDurationMs: 0
-    property int postResumeUnlockReleaseDelayMs: 900
+    property int unlockSurfaceDetachDelayMs: 250
+    property int unlockUiRestoreDelayMs: 250
 
     property Component sessionLockSurface: WlSessionLockSurface {
         id: sessionLockSurface
         color: "transparent"
         Loader {
             id: lockSurfaceLoader
-            active: GlobalStates.screenLocked
+            active: root.lockContentActive
             anchors.fill: parent
             sourceComponent: root.lockSurface
 
@@ -39,7 +43,29 @@ Scope {
                 item.captureScreen = sessionLockSurface.screen;
             }
 
-            onLoaded: syncCaptureScreen()
+            function prepareForRelease() {
+                if (item && ("prepareForRelease" in item))
+                    item.prepareForRelease();
+            }
+
+            function suspendScreenCapture() {
+                if (item && ("suspendScreenCapture" in item))
+                    item.suspendScreenCapture();
+            }
+
+            function resumeScreenCapture() {
+                if (item && ("resumeScreenCapture" in item))
+                    item.resumeScreenCapture();
+            }
+
+            onLoaded: {
+                root.loadedLockSurface = item;
+                syncCaptureScreen();
+            }
+            onActiveChanged: {
+                if (!active)
+                    root.loadedLockSurface = null;
+            }
 
             Connections {
                 target: sessionLockSurface
@@ -110,62 +136,74 @@ Scope {
         root.scheduleBlurAnimation(0, root.unlockBlurOutDelayMs, root.unlockBlurOutDurationMs, Easing.InCubic);
     }
 
-    function screensHaveUsableGeometry() {
-        const screens = Quickshell.screens;
-        if (!screens || screens.length === 0)
-            return false;
-
-        for (let i = 0; i < screens.length; i++) {
-            const screen = screens[i];
-            if (Number(screen?.width ?? 0) <= 0 || Number(screen?.height ?? 0) <= 0)
-                return false;
-        }
-
-        return true;
+    function prepareLockSurfaceForRelease() {
+        if (root.loadedLockSurface && ("prepareForRelease" in root.loadedLockSurface))
+            root.loadedLockSurface.prepareForRelease();
     }
 
-    function completeReleaseLock() {
+    function logLockRelease(stage) {
+        console.info(`[LockScreen] ${stage} screenLocked=${GlobalStates.screenLocked} sessionActive=${root.sessionLockActive} contentActive=${root.lockContentActive}`);
+    }
+
+    function finishReleaseLock() {
+        root.logLockRelease("unlock-state-finish");
+        unlockReleaseTimer.stop();
+        unlockSurfaceDetachTimer.stop();
+        unlockUiRestoreTimer.stop();
+        root.lockContentActive = false;
+        root.sessionLockActive = false;
         GlobalStates.screenLocked = false;
         lockContext.reset();
         root.stopBlurAnimation();
         GlobalStates.screenLockBlurProgress = 0;
         GlobalStates.screenLockHideBar = false;
-        GlobalStates.lockUseWallpaperFallbackAfterResume = false;
         if (lockContext.alsoInhibitIdle) {
             lockContext.alsoInhibitIdle = false;
             Idle.toggleInhibit(true);
         }
     }
 
-    function releaseLock() {
-        if (GlobalStates.lockUseWallpaperFallbackAfterResume) {
-            if (!postResumeReleaseTimer.running) {
-                postResumeReleaseTimer.retryCount = 0;
-                postResumeReleaseTimer.interval = root.postResumeUnlockReleaseDelayMs;
-                postResumeReleaseTimer.restart();
-            }
-            return;
-        }
+    function detachLockContentForRelease() {
+        root.logLockRelease("content-detach");
+        root.prepareLockSurfaceForRelease();
+        root.lockContentActive = false;
+    }
 
+    function releaseSessionLock() {
+        root.logLockRelease("session-release");
+        root.sessionLockActive = false;
+        if (root.unlockUiRestoreDelayMs <= 0)
+            Qt.callLater(root.finishReleaseLock);
+        else
+            unlockUiRestoreTimer.restart();
+    }
+
+    function completeReleaseLock() {
+        root.logLockRelease("complete-release");
+        root.detachLockContentForRelease();
+        if (root.unlockSurfaceDetachDelayMs <= 0)
+            Qt.callLater(root.releaseSessionLock);
+        else
+            unlockSurfaceDetachTimer.restart();
+    }
+
+    function releaseLock() {
+        root.logLockRelease("release-request");
         root.completeReleaseLock();
     }
 
     Timer {
-        id: postResumeReleaseTimer
-        property int retryCount: 0
-        interval: root.postResumeUnlockReleaseDelayMs
+        id: unlockSurfaceDetachTimer
+        interval: root.unlockSurfaceDetachDelayMs
         repeat: false
-        onTriggered: {
-            if (!root.screensHaveUsableGeometry() && retryCount < 20) {
-                retryCount += 1;
-                interval = 250;
-                restart();
-                return;
-            }
+        onTriggered: root.releaseSessionLock()
+    }
 
-            retryCount = 0;
-            root.completeReleaseLock();
-        }
+    Timer {
+        id: unlockUiRestoreTimer
+        interval: root.unlockUiRestoreDelayMs
+        repeat: false
+        onTriggered: root.finishReleaseLock()
     }
 
     Timer {
@@ -192,12 +230,18 @@ Scope {
             target: GlobalStates
             function onScreenLockedChanged() {
                 if (GlobalStates.screenLocked) {
-                    postResumeReleaseTimer.stop();
+                    root.lockContentActive = true;
+                    root.sessionLockActive = true;
+                    unlockSurfaceDetachTimer.stop();
+                    unlockUiRestoreTimer.stop();
+                    unlockReleaseTimer.stop();
                     GlobalStates.screenLockHideBar = false;
                     lockContext.reset();
                     lockContext.tryFingerUnlock();
                     root.startLockBlurIntro();
                 } else {
+                    root.lockContentActive = false;
+                    root.sessionLockActive = false;
                     root.stopBlurAnimation();
                     GlobalStates.screenLockBlurProgress = 0;
                     GlobalStates.screenLockHideBar = false;
@@ -234,8 +278,15 @@ Scope {
 
     WlSessionLock {
         id: sessionLock
-        locked: GlobalStates.screenLocked
+        locked: root.sessionLockActive
         surface: root.sessionLockSurface
+    }
+
+    Component.onCompleted: {
+        if (GlobalStates.screenLocked) {
+            root.lockContentActive = true;
+            root.sessionLockActive = true;
+        }
     }
 
     function lock() {
@@ -249,7 +300,11 @@ Scope {
 
         GlobalStates.screenLockBlurProgress = 0;
         GlobalStates.screenLockHideBar = false;
-        GlobalStates.lockUseWallpaperFallbackAfterResume = false;
+        unlockSurfaceDetachTimer.stop();
+        unlockUiRestoreTimer.stop();
+        unlockReleaseTimer.stop();
+        root.lockContentActive = true;
+        root.sessionLockActive = true;
         GlobalStates.screenLocked = true;
     }
 
@@ -261,9 +316,6 @@ Scope {
         }
         function focus(): void {
             lockContext.shouldReFocus();
-        }
-        function resumedFromSleep(): void {
-            GlobalStates.lockUseWallpaperFallbackAfterResume = true;
         }
     }
 

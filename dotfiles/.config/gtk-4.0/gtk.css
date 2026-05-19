@@ -735,9 +735,13 @@ switch:checked slider {
 
 entry,
 .entry,
+entry.search,
+searchbar entry,
+searchbar searchentry,
 scrolledwindow > entry,
 viewport > entry {
   background-color: #221a14;
+  background-image: none;
   color: #efe0d5;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
@@ -747,11 +751,16 @@ viewport > entry {
 }
 entry:focus-within,
 .entry:focus-within,
+entry.search:focus,
+entry.search:focus-within,
+searchbar entry:focus-within,
+searchbar searchentry:focus-within,
 scrolledwindow > entry:focus-within,
 viewport > entry:focus-within {
   border-color: #ffb878;
   box-shadow: 0 0 0 2px alpha(#ffb878, 0.22);
   background-color: #221a14;
+  background-image: none;
 }
 entry:disabled,
 .entry:disabled {
@@ -761,6 +770,33 @@ entry:disabled,
 entry > image { color: #d6c3b6; }
 entry > image:hover { color: #efe0d5; }
 
+entry > text,
+entry text,
+.entry > text,
+.entry text,
+entry.search > text,
+entry.search text,
+spinbutton > text,
+spinbutton text {
+  background-color: transparent;
+  background-image: none;
+  color: #efe0d5;
+}
+entry:focus-within > text,
+entry:focus-within text,
+.entry:focus-within > text,
+.entry:focus-within text,
+entry.search:focus-within > text,
+entry.search:focus-within text,
+searchbar entry:focus-within > text,
+searchbar entry:focus-within text,
+searchbar searchentry:focus-within > text,
+searchbar searchentry:focus-within text {
+  background-color: transparent;
+  background-image: none;
+  color: #efe0d5;
+}
+
 /* Placeholder */
 entry > text > placeholder {
   color: #d6c3b6;
@@ -769,19 +805,65 @@ entry > text > placeholder {
 }
 
 /* Search entry */
+entry.search,
+headerbar entry.search,
+.titlebar entry.search,
+toolbarview > .top-bar entry.search,
+searchbar entry,
+searchbar entry.search,
+searchbar searchentry,
 searchentry {
-  background-color: #261e18;
+  background-color: #312822;
+  background-image: none;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
 }
+entry.search:focus,
+entry.search:focus-within,
+headerbar entry.search:focus,
+headerbar entry.search:focus-within,
+.titlebar entry.search:focus,
+.titlebar entry.search:focus-within,
+toolbarview > .top-bar entry.search:focus,
+toolbarview > .top-bar entry.search:focus-within,
+searchbar entry:focus,
+searchbar entry:focus-within,
+searchbar entry.search:focus,
+searchbar entry.search:focus-within,
+searchbar searchentry:focus,
+searchbar searchentry:focus-within,
 searchentry:focus-within {
   border-color: #ffb878;
   box-shadow: 0 0 0 2px alpha(#ffb878, 0.22);
-  background-color: #261e18;
+  background-color: #312822;
+  background-image: none;
 }
+entry.search,
+entry.search:focus,
+entry.search:focus-within,
+searchbar entry,
+searchbar searchentry,
+searchbar entry.search,
+searchbar entry:focus-within,
+searchbar entry.search:focus-within,
+searchbar searchentry:focus-within {
+  background-color: #312822;
+  background-image: none;
+}
+entry.search > text,
+entry.search text,
+entry.search:focus-within > text,
+entry.search:focus-within text,
 searchentry > text,
 searchentry text {
   background-color: transparent;
+  background-image: none;
+  color: #efe0d5;
+}
+searchentry:focus-within > text,
+searchentry:focus-within text {
+  background-color: transparent;
+  background-image: none;
   color: #efe0d5;
 }
 
@@ -2326,10 +2408,11 @@ scrolledwindow > undershoot.right {
  */
 
 :root {
-  --qs-pad-1: 4px;
-  --qs-pad-2: 6px;
-  --qs-pad-3: 8px;
-  --qs-pad-4: 10px;
+  --qs-pad-1: 2px;
+  --qs-pad-2: 4px;
+  --qs-pad-3: 6px;
+  --qs-pad-4: 8px;
+  --qs-control-gap: 2px;
   --qs-radius-control: 6px;
   --qs-radius-list: 8px;
   --qs-radius-window: 12px;
@@ -2346,8 +2429,8 @@ messagedialog.background {
 
 headerbar,
 .titlebar {
-  min-height: 44px;
-  padding: var(--qs-pad-1) var(--qs-pad-3);
+  min-height: 40px;
+  padding: var(--qs-pad-1) var(--qs-pad-2);
 }
 
 button,
@@ -2358,8 +2441,9 @@ entry,
 spinbutton,
 combobox,
 dropdown {
-  min-height: 30px;
-  padding: var(--qs-pad-2) var(--qs-pad-4);
+  min-height: 26px;
+  padding: var(--qs-pad-1) var(--qs-pad-3);
+  margin: var(--qs-control-gap);
   border-radius: var(--qs-radius-control);
 }
 
@@ -2379,8 +2463,9 @@ menu,
 }
 
 menuitem {
-  min-height: 30px;
-  padding: var(--qs-pad-2) var(--qs-pad-3);
+  min-height: 26px;
+  padding: var(--qs-pad-1) var(--qs-pad-3);
+  margin: 1px 2px;
   border-radius: var(--qs-radius-control);
 }
 
@@ -2427,9 +2512,9 @@ button#button {
   box-shadow: none;
 }
 
-/* Chromium/Brave also create standalone named sample widgets when resolving GTK
- * colors. These do not sit under the browser window node, so the scoped rules
- * below do not affect what Chromium samples. Override the named widgets
+/* Chromium and Brave also create standalone named sample widgets when reading
+ * GTK colors. These can sit outside the browser window node, so browser scoped
+ * selectors do not affect what Chromium samples. Override the named widgets
  * directly so sampled separator colors stay transparent. */
 toolbar#toolbar {
   border: none;
@@ -2452,39 +2537,6 @@ headerbar.titlebar#headerbar,
 }
 
 separator#separator {
-  background: transparent;
-  background-color: transparent;
-  color: transparent;
-  border: none;
-  border-color: transparent;
-  box-shadow: none;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* Chromium 146 also renders a named toolbar/separator pair above the bookmarks
- * bar. If their border/background is left to the theme, a 1px copper seam
- * appears between the toolbar and bookmark bar. Zero both out in browser
- * windows so the bars render flush. */
-window.background.google-chrome toolbar#toolbar,
-window.background.brave-browser toolbar#toolbar,
-window.background.chromium toolbar#toolbar,
-.background.google-chrome toolbar#toolbar,
-.background.brave-browser toolbar#toolbar,
-.background.chromium toolbar#toolbar {
-  border: none;
-  border-bottom: 0 solid transparent;
-  border-color: transparent;
-  background-image: none;
-  box-shadow: none;
-}
-
-window.background.google-chrome separator#separator,
-window.background.brave-browser separator#separator,
-window.background.chromium separator#separator,
-.background.google-chrome separator#separator,
-.background.brave-browser separator#separator,
-.background.chromium separator#separator {
   background: transparent;
   background-color: transparent;
   color: transparent;

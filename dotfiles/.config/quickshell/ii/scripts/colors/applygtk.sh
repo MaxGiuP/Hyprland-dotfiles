@@ -842,9 +842,13 @@ switch:checked slider {
 
 entry,
 .entry,
+entry.search,
+searchbar entry,
+searchbar searchentry,
 scrolledwindow > entry,
 viewport > entry {
   background-color: ${container_low} !important;
+  background-image: none !important;
   color: ${on_surface};
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
@@ -854,11 +858,16 @@ viewport > entry {
 }
 entry:focus-within,
 .entry:focus-within,
+entry.search:focus,
+entry.search:focus-within,
+searchbar entry:focus-within,
+searchbar searchentry:focus-within,
 scrolledwindow > entry:focus-within,
 viewport > entry:focus-within {
   border-color: ${primary};
   box-shadow: 0 0 0 2px alpha(${primary}, 0.22);
   background-color: ${container_low} !important;
+  background-image: none !important;
 }
 entry:disabled,
 .entry:disabled {
@@ -868,6 +877,33 @@ entry:disabled,
 entry > image { color: ${on_surface_variant}; }
 entry > image:hover { color: ${on_surface}; }
 
+entry > text,
+entry text,
+.entry > text,
+.entry text,
+entry.search > text,
+entry.search text,
+spinbutton > text,
+spinbutton text {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: ${on_surface};
+}
+entry:focus-within > text,
+entry:focus-within text,
+.entry:focus-within > text,
+.entry:focus-within text,
+entry.search:focus-within > text,
+entry.search:focus-within text,
+searchbar entry:focus-within > text,
+searchbar entry:focus-within text,
+searchbar searchentry:focus-within > text,
+searchbar searchentry:focus-within text {
+  background-color: transparent !important;
+  background-image: none !important;
+  color: ${on_surface};
+}
+
 /* Placeholder */
 entry > text > placeholder {
   color: ${on_surface_variant};
@@ -876,19 +912,65 @@ entry > text > placeholder {
 }
 
 /* Search entry */
+entry.search,
+headerbar entry.search,
+.titlebar entry.search,
+toolbarview > .top-bar entry.search,
+searchbar entry,
+searchbar entry.search,
+searchbar searchentry,
 searchentry {
-  background-color: ${container};
+  background-color: ${container_high} !important;
+  background-image: none !important;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
 }
+entry.search:focus,
+entry.search:focus-within,
+headerbar entry.search:focus,
+headerbar entry.search:focus-within,
+.titlebar entry.search:focus,
+.titlebar entry.search:focus-within,
+toolbarview > .top-bar entry.search:focus,
+toolbarview > .top-bar entry.search:focus-within,
+searchbar entry:focus,
+searchbar entry:focus-within,
+searchbar entry.search:focus,
+searchbar entry.search:focus-within,
+searchbar searchentry:focus,
+searchbar searchentry:focus-within,
 searchentry:focus-within {
   border-color: ${primary};
   box-shadow: 0 0 0 2px alpha(${primary}, 0.22);
-  background-color: ${container};
+  background-color: ${container_high} !important;
+  background-image: none !important;
 }
+entry.search,
+entry.search:focus,
+entry.search:focus-within,
+searchbar entry,
+searchbar searchentry,
+searchbar entry.search,
+searchbar entry:focus-within,
+searchbar entry.search:focus-within,
+searchbar searchentry:focus-within {
+  background-color: ${container_high} !important;
+  background-image: none !important;
+}
+entry.search > text,
+entry.search text,
+entry.search:focus-within > text,
+entry.search:focus-within text,
 searchentry > text,
 searchentry text {
-  background-color: transparent;
+  background-color: transparent !important;
+  background-image: none !important;
+  color: ${on_surface};
+}
+searchentry:focus-within > text,
+searchentry:focus-within text {
+  background-color: transparent !important;
+  background-image: none !important;
   color: ${on_surface};
 }
 
@@ -2431,17 +2513,18 @@ scrolledwindow > undershoot.right {
 CSS
 )
 
-# ── Geometry CSS (unchanged — spacing/radius are already good) ────────────────
+# ── Geometry CSS ─────────────────────────────────────────────────────────────
 geometry_css=$(cat <<'CSS'
 /*
  * Quickshell GTK geometry tuning
  */
 
 :root {
-  --qs-pad-1: 4px;
-  --qs-pad-2: 6px;
-  --qs-pad-3: 8px;
-  --qs-pad-4: 10px;
+  --qs-pad-1: 2px;
+  --qs-pad-2: 4px;
+  --qs-pad-3: 6px;
+  --qs-pad-4: 8px;
+  --qs-control-gap: 2px;
   --qs-radius-control: 6px;
   --qs-radius-list: 8px;
   --qs-radius-window: 12px;
@@ -2458,8 +2541,8 @@ messagedialog.background {
 
 headerbar,
 .titlebar {
-  min-height: 44px;
-  padding: var(--qs-pad-1) var(--qs-pad-3);
+  min-height: 40px;
+  padding: var(--qs-pad-1) var(--qs-pad-2);
 }
 
 button,
@@ -2470,8 +2553,9 @@ entry,
 spinbutton,
 combobox,
 dropdown {
-  min-height: 30px;
-  padding: var(--qs-pad-2) var(--qs-pad-4);
+  min-height: 26px;
+  padding: var(--qs-pad-1) var(--qs-pad-3);
+  margin: var(--qs-control-gap);
   border-radius: var(--qs-radius-control);
 }
 
@@ -2491,8 +2575,9 @@ menu,
 }
 
 menuitem {
-  min-height: 30px;
-  padding: var(--qs-pad-2) var(--qs-pad-3);
+  min-height: 26px;
+  padding: var(--qs-pad-1) var(--qs-pad-3);
+  margin: 1px 2px;
   border-radius: var(--qs-radius-control);
 }
 
@@ -3061,8 +3146,29 @@ spinbutton {
   background-image: none;
 }
 entry:focus,
+entry:focus-within,
 spinbutton:focus {
   border-color: ${primary};
+  background-color: ${container};
+  background-image: none;
+}
+entry.search,
+searchentry,
+searchbar entry,
+searchbar entry.search,
+searchbar searchentry,
+entry.search:focus,
+entry.search:focus-within,
+searchentry:focus,
+searchentry:focus-within,
+searchbar entry:focus,
+searchbar entry:focus-within,
+searchbar entry.search:focus,
+searchbar entry.search:focus-within,
+searchbar searchentry:focus,
+searchbar searchentry:focus-within {
+  background-color: ${container_high};
+  background-image: none;
 }
 entry:disabled {
   background-color: ${container_low};
@@ -3308,8 +3414,8 @@ GTK3CSS
  */\nbutton#button {\n  border-color: transparent;\n  box-shadow: none;\n}\nbox.frame {\n  background-color: @surface_container_high;\n  border-color: @surface_container_high;\n}\nframe > border {\n  background-color: @surface_container_high;\n  border-color: @surface_container_high;\n}\nwindow.background.google-chrome headerbar,\nwindow.background.google-chrome headerbar:backdrop,\nwindow.background.google-chrome .titlebar,\nwindow.background.brave-browser headerbar,\nwindow.background.brave-browser headerbar:backdrop,\nwindow.background.brave-browser .titlebar,\nwindow.background.chromium headerbar,\nwindow.background.chromium headerbar:backdrop,\nwindow.background.chromium .titlebar {\n  border-bottom: none;\n}\n'
 } > "$gtk3_dir/quickshell/colors.css"
 printf '%s\n' "$colors_css"      > "$gtk4_dir/quickshell/colors.css"
-printf '%s\n' "/* geometry — GTK4 only */" > "$gtk3_dir/quickshell/geometry.css"
-printf '%s\n' "$geometry_css"             > "$gtk4_dir/quickshell/geometry.css"
+printf '%s\n' "$geometry_css" > "$gtk3_dir/quickshell/geometry.css"
+printf '%s\n' "$geometry_css" > "$gtk4_dir/quickshell/geometry.css"
 
 # ── GTK3 entry point ──────────────────────────────────────────────────────────
 entry_css='/* Generated by Quickshell GTK bridge. */\n@import url("quickshell/colors.css");\n@import url("quickshell/geometry.css");'
@@ -3545,7 +3651,7 @@ apply_qtct() {
   local a_brt=$(argb  "#ffffff")              # BrightText (high-contrast white)
   local a_btt=$(argb  "$on_surface_variant")  # ButtonText
   local a_bas=$(argb  "$surface")             # Base (view bg)
-  local a_win=$(argb  "$bg")                  # Window bg
+  local a_win=$(argb  "$container")           # Window bg
   local a_shd=$(argb  "$container_lowest")    # Shadow
   local a_hl=$(argb   "$primary")             # Highlight (selection bg)
   local a_hlt=$(argb  "$on_primary")          # HighlightedText
@@ -3608,7 +3714,7 @@ apply_kvantum() {
     # Try to match the existing hex values and replace them
     sed -i \
       -e "s|\.ColorScheme-Highlight[[:space:]]*{[^}]*}|.ColorScheme-Highlight { color:${primary}; stop-color:${primary}; }|" \
-      -e "s|\.ColorScheme-Background[[:space:]]*{[^}]*}|.ColorScheme-Background { color:${bg}; stop-color:${bg}; }|" \
+      -e "s|\.ColorScheme-Background[[:space:]]*{[^}]*}|.ColorScheme-Background { color:${container}; stop-color:${container}; }|" \
       -e "s|\.ColorScheme-ButtonBackground[[:space:]]*{[^}]*}|.ColorScheme-ButtonBackground { color:${container_high}; stop-color:${container_high}; }|" \
       -e "s|\.ColorScheme-Text[[:space:]]*{[^}]*}|.ColorScheme-Text { color:${on_surface}; stop-color:${on_surface}; }|" \
       -e "s|\.ColorScheme-NormalText[[:space:]]*{[^}]*}|.ColorScheme-NormalText { color:${on_surface}; stop-color:${on_surface}; }|" \
@@ -3620,11 +3726,11 @@ apply_kvantum() {
 
     # Also do a broad hex replacement of known hardcoded originals
     sed -i \
-      -e "s|#0F1416|${bg}|gI" \
+      -e "s|#0F1416|${container}|gI" \
       -e "s|#84D2E7|${primary}|gI" \
       -e "s|#B2CBD2|${on_surface_variant}|gI" \
       -e "s|#CEE7EF|${secondary_container}|gI" \
-      -e "s|#eff0f1|${bg}|gI" \
+      -e "s|#eff0f1|${container}|gI" \
       -e "s|#fcfcfc|${surface_bright}|gI" \
       -e "s|#DEE3E5|${on_surface}|gI" \
       -e "s|#dee3e5|${on_surface}|gI" \
@@ -3633,7 +3739,7 @@ apply_kvantum() {
 
   # Patch GeneralColors section
   sed -i \
-    -e "s|^window\.color=.*|window.color=${bg}|" \
+    -e "s|^window\.color=.*|window.color=${container}|" \
     -e "s|^base\.color=.*|base.color=${surface}|" \
     -e "s|^alt\.base\.color=.*|alt.base.color=${container_low}|" \
     -e "s|^button\.color=.*|button.color=${container_high}|" \

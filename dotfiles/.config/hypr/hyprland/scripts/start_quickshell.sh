@@ -5,6 +5,10 @@ set -eu
 QS_BIN="${QS_BIN:-}"
 QS_CONFIG="${1:-${QS_CONFIG:-ii}}"
 WAIT_FOR_HYPR_TENTHS="${WAIT_FOR_HYPR_TENTHS:-100}"
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+EVENT_LOG="$SCRIPT_DIR/quickshell_event_log.sh"
+
+"$EVENT_LOG" start-invoked "config=$QS_CONFIG" "argv=$*" || true
 
 if [ -z "$QS_BIN" ]; then
   for candidate in "$HOME/.local/bin/qs" "$HOME/.local/bin/quickshell" qs quickshell /usr/bin/qs /usr/bin/quickshell; do
@@ -16,9 +20,12 @@ if [ -z "$QS_BIN" ]; then
 fi
 
 if [ -z "$QS_BIN" ]; then
+  "$EVENT_LOG" start-error-no-bin "config=$QS_CONFIG" || true
   echo "Errore: quickshell/qs non trovato nel PATH." >&2
   exit 1
 fi
+
+"$EVENT_LOG" start-bin-resolved "config=$QS_CONFIG" "bin=$QS_BIN" || true
 
 wait_for_hypr() {
   i=0
@@ -51,4 +58,5 @@ wait_for_wireplumber() {
 }
 wait_for_wireplumber
 
+"$EVENT_LOG" start-exec "config=$QS_CONFIG" "bin=$QS_BIN" || true
 exec "$QS_BIN" --no-duplicate -c "$QS_CONFIG"

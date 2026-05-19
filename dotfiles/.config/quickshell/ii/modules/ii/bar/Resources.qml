@@ -15,10 +15,8 @@ MouseArea {
     hoverEnabled: !Config.options.bar.tooltips.clickToShow
     acceptedButtons: Qt.NoButton
 
-    function openBtop(button) {
-        const cmd = (button === Qt.RightButton)
-            ? "[float;size 1200 800;center] /usr/bin/kitty -T QSBtop sudo -E btop"
-            : "[float;size 1200 800;center] /usr/bin/kitty -T QSBtop btop"
+    function openMissionCenter() {
+        const cmd = "[float;size 1200 800;center] /var/lib/flatpak/exports/bin/io.missioncenter.MissionCenter"
         Quickshell.execDetached(["hyprctl", "dispatch", "exec", cmd])
     }
 
@@ -198,7 +196,7 @@ MouseArea {
         id: rowLayout
         spacing: 0
         anchors.fill: parent
-        anchors.leftMargin: 60
+        anchors.leftMargin: 0
         anchors.rightMargin: 0
 
         // 1) CPU total
@@ -336,9 +334,9 @@ MouseArea {
             }
         }
 
-        // 6) btop button
+        // 6) Mission Center button
         Item {
-            id: btopBtn
+            id: missionCenterBtn
             Layout.leftMargin: 6
             Layout.alignment: Qt.AlignVCenter
             width: 22
@@ -347,7 +345,7 @@ MouseArea {
             Rectangle {
                 anchors.fill: parent
                 radius: 6
-                color: btopMA.containsMouse ? Appearance.colors.colLayer3 : Appearance.colors.colLayer0Hover
+                color: missionCenterMA.containsMouse ? Appearance.colors.colLayer3 : Appearance.colors.colLayer0Hover
             }
 
             MaterialSymbol {
@@ -359,12 +357,12 @@ MouseArea {
             }
 
             MouseArea {
-                id: btopMA
+                id: missionCenterMA
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                onClicked: e => root.openBtop(e.button)
+                acceptedButtons: Qt.LeftButton
+                onClicked: root.openMissionCenter()
             }
         }
     }

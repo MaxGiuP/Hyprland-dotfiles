@@ -33,13 +33,15 @@ Scope {
                 component: PanelWindow { // Bar window
                 id: barRoot
                 screen: screenScope.modelData
-                property HyprlandMonitor monitor: Hyprland.monitorFor(screenScope.modelData)
-                readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === monitor?.name) ?? null
+                readonly property string screenName: screenScope.modelData?.name ?? ""
+                readonly property bool tvOutput: screenName === "HDMI-A-2"
+                readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === screenName) ?? null
                 readonly property real leftReserved: monitorData?.reserved?.[0] ?? 0
                 readonly property real rightReserved: monitorData?.reserved?.[2] ?? 0
-                readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
+                readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(screenName)
+                readonly property bool tvSpecialVisible: tvOutput && HyprlandData.monitorShowsTvSpecialWorkspace(screenName)
                 readonly property bool hideWhenFullscreen: Config.options.bar.hideWhenFullscreen ?? false
-                visible: !hideWhenFullscreen || !fullscreenOnMonitor
+                visible: !tvSpecialVisible && (!hideWhenFullscreen || !fullscreenOnMonitor)
                 readonly property bool topBarVisible: !Config.options.bar.bottom
                     && visible
                     && !launchpadOnThisScreen

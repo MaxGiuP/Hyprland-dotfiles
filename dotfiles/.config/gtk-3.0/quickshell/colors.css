@@ -528,8 +528,29 @@ spinbutton {
   background-image: none;
 }
 entry:focus,
+entry:focus-within,
 spinbutton:focus {
   border-color: #ffb878;
+  background-color: #261e18;
+  background-image: none;
+}
+entry.search,
+searchentry,
+searchbar entry,
+searchbar entry.search,
+searchbar searchentry,
+entry.search:focus,
+entry.search:focus-within,
+searchentry:focus,
+searchentry:focus-within,
+searchbar entry:focus,
+searchbar entry:focus-within,
+searchbar entry.search:focus,
+searchbar entry.search:focus-within,
+searchbar searchentry:focus,
+searchbar searchentry:focus-within {
+  background-color: #312822;
+  background-image: none;
 }
 entry:disabled {
   background-color: #221a14;

@@ -20,7 +20,7 @@ Item {
     property bool barAutoHideEnabled: Config.options.bar.autoHide.enable
 
     function launchUpdateScript() {
-        Services.Updates.launchUpdateScript()
+        Quickshell.execDetached(["kitty", "-1", "--hold=yes", Services.Updates.updateScriptPath])
     }
 
     function toggleBarAutoHideInFile() {

@@ -205,14 +205,23 @@ Singleton {
             command = "curl -s --max-time 15 '" + url + "'"
                 + " | jq '. + {city:\"GPS Location\"}' || echo '{}'";
         } else {
-            const city = formatCityName(root.city);
+            const citySpec = root.citySearchSpec(root.city);
+            const city = root.urlEncodeQuery(citySpec.query);
+            const hints = citySpec.hints.join("|");
             const geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name="
-                + city + "&count=1&language=en&format=json";
+                + city + "&count=10&language=en&format=json";
             const weatherBase = "https://api.open-meteo.com/v1/forecast?" + params;
-            command = "GEO=$(curl -s --max-time 10 '" + geoUrl + "'); "
-                + "LAT=$(echo \"$GEO\" | jq -r '.results[0].latitude // empty'); "
-                + "LON=$(echo \"$GEO\" | jq -r '.results[0].longitude // empty'); "
-                + "CITY=$(echo \"$GEO\" | jq -r '.results[0].name // \"Unknown\"'); "
+            const jqSelect = "def haystack: [.name, .country, .country_code, .admin1, .admin2, .admin3, .admin4] | map(. // \"\" | tostring | ascii_downcase) | join(\" \"); "
+                + "(.results // []) as $results | "
+                + "($hints | ascii_downcase | split(\"|\") | map(select(length > 0))) as $hintList | "
+                + "if ($hintList | length) > 0 then "
+                + "(($results | map(select(. as $item | ($item | haystack) as $hay | all($hintList[]; . as $hint | $hay | contains($hint)))) | .[0]) // $results[0] // {}) "
+                + "else ($results[0] // {}) end";
+            command = "GEO=$(curl -s --max-time 10 " + root.shellSingleQuote(geoUrl) + "); "
+                + "MATCH=$(printf '%s' \"$GEO\" | jq -c --arg hints " + root.shellSingleQuote(hints) + " " + root.shellSingleQuote(jqSelect) + "); "
+                + "LAT=$(printf '%s' \"$MATCH\" | jq -r '.latitude // empty'); "
+                + "LON=$(printf '%s' \"$MATCH\" | jq -r '.longitude // empty'); "
+                + "CITY=$(printf '%s' \"$MATCH\" | jq -r '.name // \"Unknown\"'); "
                 + "[ -z \"$LAT\" ] && echo '{}' && exit 0; "
                 + "curl -s --max-time 15 '" + weatherBase + "&latitude='\"$LAT\"'&longitude='\"$LON\"''"
                 + " | jq --arg c \"$CITY\" '. + {city: $c}' || echo '{}'";
@@ -224,6 +233,22 @@ Singleton {
 
     function formatCityName(cityName) {
         return cityName.trim().split(/\s+/).join('+');
+    }
+
+    function citySearchSpec(cityName) {
+        const parts = cityName.trim().split(",").map(part => part.trim()).filter(part => part.length > 0);
+        return {
+            query: parts.length > 0 ? parts[0] : cityName.trim(),
+            hints: parts.slice(1)
+        };
+    }
+
+    function shellSingleQuote(value) {
+        return "'" + String(value ?? "").replace(/'/g, "'\"'\"'") + "'";
+    }
+
+    function urlEncodeQuery(value) {
+        return encodeURIComponent(value.trim()).replace(/%20/g, "+");
     }
 
     Component.onCompleted: {

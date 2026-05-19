@@ -19,6 +19,9 @@ Item {
     property string activeWindowAddress: `0x${activeWindow?.HyprlandToplevel?.address}`
     property bool focusingThisMonitor: HyprlandData.activeWorkspace?.monitor == monitorName
     property var biggestWindow: HyprlandData.biggestWindowForWorkspace(root.monitorData?.activeWorkspace?.id ?? -1)
+    readonly property string specialWorkspaceRawName: `${root.monitorData?.specialWorkspace?.name ?? ""}`
+    readonly property string specialWorkspaceLabel: specialWorkspaceRawName.replace(/^special:/, "")
+    readonly property bool specialWorkspaceVisible: specialWorkspaceLabel.length > 0
 
     implicitWidth: colLayout.implicitWidth
 
@@ -37,7 +40,7 @@ Item {
             elide: Text.ElideRight
             text: root.focusingThisMonitor && root.activeWindow?.activated && root.biggestWindow ? 
                 root.activeWindow?.title :
-                (root.biggestWindow?.title) ?? `${Translation.tr("Workspace")} ${root.monitorData?.activeWorkspace?.id ?? 1}`
+                (root.biggestWindow?.title) ?? (root.specialWorkspaceVisible ? `${Translation.tr("Workspace")} ${root.specialWorkspaceLabel}` : `${Translation.tr("Workspace")} ${root.monitorData?.activeWorkspace?.id ?? 1}`)
         }
 
         StyledText {

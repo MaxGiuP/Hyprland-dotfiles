@@ -11,6 +11,7 @@ AbstractBackgroundWidget {
     id: root
 
     configEntryName: "weather"
+    leastBusyLeftPadding: screenWidth < 1920 ? Math.round(scaledScreenWidth / 2) : 200
 
     implicitHeight: backgroundShape.implicitHeight
     implicitWidth: backgroundShape.implicitWidth

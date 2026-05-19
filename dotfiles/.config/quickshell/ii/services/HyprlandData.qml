@@ -196,6 +196,15 @@ Singleton {
         return false;
     }
 
+    function monitorShowsTvSpecialWorkspace(monitorName) {
+        if (!monitorName)
+            return false;
+
+        const monitor = root.monitors.find(m => m.name === monitorName);
+        const specialName = `${monitor?.specialWorkspace?.name ?? ""}`;
+        return specialName === "special:tv" || specialName === "special:tv-app";
+    }
+
     Component.onCompleted: {
         updateAll();
     }

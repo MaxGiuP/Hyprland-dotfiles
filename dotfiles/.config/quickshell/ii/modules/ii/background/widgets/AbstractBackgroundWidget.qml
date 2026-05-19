@@ -85,20 +85,25 @@ AbstractWidget {
             leastBusyRegionProc.running = true;
         }
     }
+    property int leastBusyLeftPadding: 200
+    property int leastBusyRightPadding: 200
+    property int leastBusyTopPadding: 200
+    property int leastBusyBottomPadding: 200
+
     Process {
         id: leastBusyRegionProc
         property string wallpaperPath: root.wallpaperPath
         property int contentWidth: Math.max(1, Math.round(root.effectiveWidgetWidth))
         property int contentHeight: Math.max(1, Math.round(root.effectiveWidgetHeight))
-        property int horizontalPadding: 200
-        property int verticalPadding: 200
         command: [Quickshell.shellPath("scripts/images/least-busy-region-venv.sh") // Comments to force the formatter to break lines
             , "--screen-width", Math.round(root.scaledScreenWidth) //
             , "--screen-height", Math.round(root.scaledScreenHeight) //
             , "--width", contentWidth //
             , "--height", contentHeight //
-            , "--horizontal-padding", horizontalPadding //
-            , "--vertical-padding", verticalPadding //
+            , "--left-padding", root.leastBusyLeftPadding //
+            , "--right-padding", root.leastBusyRightPadding //
+            , "--top-padding", root.leastBusyTopPadding //
+            , "--bottom-padding", root.leastBusyBottomPadding //
             , wallpaperPath //
             , ...(root.placementStrategy === "mostBusy" ? ["--busiest"] : [])
             // "--visual-output",
