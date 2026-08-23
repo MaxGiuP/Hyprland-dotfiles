@@ -24,7 +24,8 @@ DOLPHINRC = XDG_CONFIG_HOME / "dolphinrc"
 KVANTUM_CONFIG = XDG_CONFIG_HOME / "Kvantum" / "MaterialAdw" / "MaterialAdw.kvconfig"
 SCHEME_NAME = "MaterialYouDynamic"
 COLOR_SCHEME_FILE = XDG_DATA_HOME / "color-schemes" / f"{SCHEME_NAME}.colors"
-DEFAULT_ICON_THEME = "Papirus-Dark"
+DEFAULT_DARK_ICON_THEME = "Papirus-Dark"
+DEFAULT_LIGHT_ICON_THEME = "Papirus"
 
 
 def load_colors() -> dict[str, str]:
@@ -97,22 +98,30 @@ def theme_exists(name: str) -> bool:
     )
 
 
-def dark_icon_theme() -> str:
+def icon_theme_for_mode(colors: dict[str, str]) -> str:
     settings = XDG_CONFIG_HOME / "gtk-3.0" / "settings.ini"
+    dark = is_dark_mode(colors)
     if settings.exists():
         for line in settings.read_text(errors="ignore").splitlines():
             if line.startswith("gtk-icon-theme-name="):
                 name = line.split("=", 1)[1].strip().strip('"')
                 if name:
-                    if name == "Papirus" and theme_exists("Papirus-Dark"):
-                        return "Papirus-Dark"
-                    if name == "WhiteSur" and theme_exists("WhiteSur-dark"):
-                        return "WhiteSur-dark"
-                    if name == "Tela" and theme_exists("Tela-dark"):
-                        return "Tela-dark"
+                    families = {
+                        "Papirus": ("Papirus", "Papirus-Dark", "Papirus-Light"),
+                        "WhiteSur": ("WhiteSur", "WhiteSur-dark", "WhiteSur-light"),
+                        "Tela": ("Tela", "Tela-dark", "Tela-light"),
+                        "breeze": ("breeze", "breeze-dark", "breeze"),
+                    }
+                    for variants in families.values():
+                        if name in variants:
+                            candidate = variants[1] if dark else variants[0]
+                            if theme_exists(candidate):
+                                return candidate
                     if theme_exists(name):
                         return name
-    return DEFAULT_ICON_THEME if theme_exists(DEFAULT_ICON_THEME) else "breeze-dark"
+    preferred = DEFAULT_DARK_ICON_THEME if dark else DEFAULT_LIGHT_ICON_THEME
+    fallback = "breeze-dark" if dark else "breeze"
+    return preferred if theme_exists(preferred) else fallback
 
 
 def update_kdeglobals(colors: dict[str, str]) -> None:
@@ -253,7 +262,7 @@ def update_kdeglobals(colors: dict[str, str]) -> None:
             cfg.remove_option("KDE", "widgetStyle")
 
         ensure_section(cfg, "Icons")
-        cfg.set("Icons", "Theme", dark_icon_theme())
+        cfg.set("Icons", "Theme", icon_theme_for_mode(colors))
 
         ensure_section(cfg, "WM")
         cfg.set("WM", "activeBackground", rgb_triplet(high))
@@ -297,8 +306,8 @@ def update_color_scheme_file() -> None:
     write_ini(COLOR_SCHEME_FILE, scheme)
 
 
-def update_qtct_configs() -> None:
-    icon_theme = dark_icon_theme()
+def update_qtct_configs(colors: dict[str, str]) -> None:
+    icon_theme = icon_theme_for_mode(colors)
     for path in QT_CONF_PATHS:
         cfg = read_ini(path)
         ensure_section(cfg, "Appearance")
@@ -503,7 +512,7 @@ def main() -> None:
     colors = load_colors()
     update_kdeglobals(colors)
     update_color_scheme_file()
-    update_qtct_configs()
+    update_qtct_configs(colors)
     update_dolphinrc()
     update_kvantum_config(colors)
 

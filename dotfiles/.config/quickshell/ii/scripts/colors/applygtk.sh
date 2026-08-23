@@ -3849,12 +3849,39 @@ pick_gnome_accent() {
 #   ~/.config/gtk-3.0/settings.ini, ~/.gtkrc-2.0, ~/.icons/default/index.theme,
 #   ~/.config/xsettingsd/xsettingsd.conf, ~/.config/gtk-4.0/*
 sync_gtk_settings() {
-  local gtk_theme icon_theme cursor_theme font_name prefer_dark
+  local gtk_theme icon_theme cursor_theme font_name color_scheme prefer_dark
   gtk_theme="MaterialYou"
   icon_theme=$(gsettings get org.gnome.desktop.interface icon-theme     2>/dev/null | tr -d "'")
   cursor_theme=$(gsettings get org.gnome.desktop.interface cursor-theme 2>/dev/null | tr -d "'")
   font_name=$(gsettings get org.gnome.desktop.interface font-name       2>/dev/null | tr -d "'")
-  prefer_dark=$(gsettings get org.gnome.desktop.interface color-scheme  2>/dev/null | grep -q "dark" && echo 1 || echo 0)
+
+  # colors.json comes from the user's light/dark selection. Publish that mode
+  # through the system preference so GTK, portals and toolkit-neutral apps all
+  # observe the same value as the generated palette.
+  if [ "$darkmode" = "true" ]; then
+    color_scheme="prefer-dark"
+    prefer_dark=1
+  else
+    color_scheme="prefer-light"
+    prefer_dark=0
+  fi
+
+  # Select a readable icon variant for the generated surface palette while
+  # preserving the user's chosen icon family.
+  case "$icon_theme" in
+    Papirus|Papirus-Dark|Papirus-Light)
+      [ "$prefer_dark" = 1 ] && icon_theme="Papirus-Dark" || icon_theme="Papirus"
+      ;;
+    WhiteSur|WhiteSur-dark|WhiteSur-light)
+      [ "$prefer_dark" = 1 ] && icon_theme="WhiteSur-dark" || icon_theme="WhiteSur"
+      ;;
+    Tela|Tela-dark|Tela-light)
+      [ "$prefer_dark" = 1 ] && icon_theme="Tela-dark" || icon_theme="Tela"
+      ;;
+    breeze|breeze-dark)
+      [ "$prefer_dark" = 1 ] && icon_theme="breeze-dark" || icon_theme="breeze"
+      ;;
+  esac
 
   [ -z "$icon_theme" ]   && icon_theme="Papirus"
   [ -z "$cursor_theme" ] && cursor_theme="Bibata-Modern-Classic"
@@ -3876,7 +3903,9 @@ sync_gtk_settings() {
   # Set GNOME accent colour from the wallpaper-derived primary
   local gnome_accent
   gnome_accent=$(pick_gnome_accent "$primary")
+  gsettings set org.gnome.desktop.interface color-scheme "$color_scheme" 2>/dev/null || true
   gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme" 2>/dev/null || true
+  gsettings set org.gnome.desktop.interface icon-theme "$icon_theme" 2>/dev/null || true
   gsettings set org.gnome.desktop.interface accent-color "$gnome_accent" 2>/dev/null || true
 
   # ── ~/.config/gtk-3.0/settings.ini ─────────────────────────────────────────
@@ -3931,21 +3960,14 @@ sync_gtk_settings() {
     gsettings set org.cinnamon.desktop.interface cursor-theme "$cursor_theme" 2>/dev/null || true
   fi
 
-  # ── User session environment — pin GTK_THEME away from stale old themes ────
-  # Some apps inherit GTK_THEME from an earlier imported session environment,
-  # which bypasses settings.ini and makes the generated wallpaper colors appear
-  # to do nothing. Write the current GTK theme explicitly for new logins.
-  local envd_dir="$XDG_CONFIG_HOME/environment.d"
-  local gtk_env_file="$envd_dir/90-gtk-theme.conf"
-  mkdir -p "$envd_dir"
-  cat > "$gtk_env_file" <<EOF
-GTK_THEME=$gtk_theme
-EOF
-
-  # ── Systemd user environment — unset GTK_THEME so GTK reads settings.ini ───
-  # A stale GTK_THEME pointing to a missing theme causes GTK to fall back to
-  # Adwaita light, overriding everything. Keep it unset; settings.ini wins.
-  systemctl --user unset-environment GTK_THEME 2>/dev/null || true
+  # GTK_THEME is a debug override, not the desktop preference. Remove the old
+  # generated override and clear it from the user manager so newly launched
+  # applications inherit the system mode through settings.ini/GSettings.
+  local gtk_env_file="$XDG_CONFIG_HOME/environment.d/90-gtk-theme.conf"
+  rm -f -- "$gtk_env_file"
+  # An empty value also masks a value retained by a running user manager from
+  # an earlier environment.d generation. GTK treats it as no override.
+  systemctl --user set-environment GTK_THEME= 2>/dev/null || true
 }
 
 sync_gtk_settings
