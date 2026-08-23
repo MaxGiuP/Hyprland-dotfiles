@@ -7,6 +7,7 @@ import Quickshell.Wayland
 
 Singleton {
     id: root
+    property var appEntryCache: new Map()
 
     function normalizeAppId(appId) {
         return String(appId ?? "").trim().toLowerCase();
@@ -158,6 +159,53 @@ Singleton {
         Config.options.dock.pinnedApps = reorderedApps;
     }
 
+    function sameToplevels(first, second) {
+        if (first.length !== second.length)
+            return false;
+
+        for (let index = 0; index < first.length; ++index) {
+            if (first[index] !== second[index])
+                return false;
+        }
+        return true;
+    }
+
+    function cachedAppEntry(appId, value) {
+        const cached = root.appEntryCache.get(appId);
+        if (cached
+                && cached.pinned === value.pinned
+                && cached.desktopEntry === value.desktopEntry
+                && root.sameToplevels(cached.toplevels, value.toplevels))
+            return cached.object;
+
+        const object = appEntryComp.createObject(root, {
+            appId: appId,
+            desktopEntry: value.desktopEntry,
+            toplevels: value.toplevels,
+            pinned: value.pinned
+        });
+        root.appEntryCache.set(appId, ({
+            object: object,
+            pinned: value.pinned,
+            desktopEntry: value.desktopEntry,
+            toplevels: value.toplevels.slice()
+        }));
+
+        if (cached?.object)
+            Qt.callLater(() => cached.object.destroy());
+        return object;
+    }
+
+    function pruneAppEntryCache(activeAppIds) {
+        for (const [appId, cached] of root.appEntryCache) {
+            if (activeAppIds.has(appId))
+                continue;
+            root.appEntryCache.delete(appId);
+            if (cached?.object)
+                Qt.callLater(() => cached.object.destroy());
+        }
+    }
+
     property list<var> apps: {
         var map = new Map();
 
@@ -197,15 +245,14 @@ Singleton {
         }
 
         var values = [];
+        const activeAppIds = new Set();
 
         for (const [key, value] of map) {
-            values.push(appEntryComp.createObject(null, {
-                appId: key,
-                desktopEntry: value.desktopEntry,
-                toplevels: value.toplevels,
-                pinned: value.pinned
-            }));
+            activeAppIds.add(key);
+            values.push(root.cachedAppEntry(key, value));
         }
+
+        root.pruneAppEntryCache(activeAppIds);
 
         return values;
     }

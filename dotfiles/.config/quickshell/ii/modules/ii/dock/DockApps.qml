@@ -26,6 +26,7 @@ Item {
     property bool launchStripeShown: false
     property bool launchCompleting: false
     property real launchProgress: 0
+    property int launchCompletionDuration: 420
     property string launchingAppId: ""
     property int launchingInitialWindowCount: 0
     property bool requestDockShow: previewPopup.show || dockDragging || contextMenuButton !== null || launchStripeShown
@@ -40,7 +41,7 @@ Item {
         root.launchingAppId = TaskbarApps.canonicalAppId(appId)
         root.launchingInitialWindowCount = Math.max(0, Number(initialWindowCount) || 0)
         root.launchCompleting = false
-        root.launchProgress = 0.06
+        root.launchProgress = 0.04
         root.launchStripeShown = true
         launchAdvanceAnimation.restart()
         launchTimeoutTimer.restart()
@@ -62,6 +63,7 @@ Item {
         root.launchCompleting = true
         launchAdvanceAnimation.stop()
         launchTimeoutTimer.stop()
+        root.launchCompletionDuration = Math.round(220 + 560 * (1 - root.launchProgress))
         launchCompleteAnimation.restart()
     }
 
@@ -69,9 +71,9 @@ Item {
         id: launchAdvanceAnimation
         target: root
         property: "launchProgress"
-        to: 0.82
-        duration: 8000
-        easing.type: Easing.OutCubic
+        to: 0.96
+        duration: launchTimeoutTimer.interval
+        easing.type: Easing.Linear
     }
 
     NumberAnimation {
@@ -79,8 +81,8 @@ Item {
         target: root
         property: "launchProgress"
         to: 1
-        duration: 220
-        easing.type: Easing.OutCubic
+        duration: root.launchCompletionDuration
+        easing.type: Easing.InOutCubic
         onFinished: launchHideTimer.restart()
     }
 
