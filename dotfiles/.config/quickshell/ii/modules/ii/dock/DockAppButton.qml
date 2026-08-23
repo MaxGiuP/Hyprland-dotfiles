@@ -83,7 +83,9 @@ DockButton {
     }
 
     function launchResolvedEntry(appId, initialWindowCount) {
-        if (AppLaunch.launchDesktopEntry(root.desktopEntry)) {
+        const launched = AppLaunch.launchDesktopEntry(root.desktopEntry)
+            || (root.isPinnedApp && AppLaunch.launchDesktopId(appId))
+        if (launched) {
             root.appListRoot.beginAppLaunch(appId, initialWindowCount)
             return
         }
@@ -99,11 +101,6 @@ DockButton {
     function launchNewInstance() {
         const appId = String(root.appToplevel?.appId ?? "")
         const initialWindowCount = root.appWindowCount()
-        if (!root.desktopEntry) {
-            root.launchResolvedEntry(appId, initialWindowCount)
-            return
-        }
-
         const desktopId = String(root.desktopEntry?.id ?? appId).toLowerCase().replace(/\.desktop$/, "")
         if (desktopId === "steam") {
             if (steamLaunchPreflight.running)

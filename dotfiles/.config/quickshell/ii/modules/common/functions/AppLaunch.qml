@@ -38,6 +38,14 @@ Singleton {
         return true;
     }
 
+    function launchDesktopId(appId) {
+        const launchId = String(appId ?? "").trim().replace(/\.desktop$/i, "");
+        if (launchId.length === 0)
+            return false;
+
+        return launchCommand(["gtk-launch", launchId]);
+    }
+
     function fallbackLaunch(entryOrAction) {
         if (entryOrAction && typeof entryOrAction.execute === "function") {
             entryOrAction.execute();
