@@ -68,9 +68,11 @@ Item {
                     property int displayCount: Services.Updates.count >= 0 ? Services.Updates.count : 0
                     visible: displayCount > 0
                     anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.rightMargin: -5
-                    anchors.topMargin: -5
+                    // Keep the count inside the utility button and, therefore,
+                    // inside the bar's rounded background.
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.verticalCenterOffset: 3
+                    anchors.rightMargin: -2
 
                     property int badgeH: 14
                     property int badgeHorizontalPadding: 4
@@ -83,7 +85,9 @@ Item {
                         anchors.fill: parent
                         radius: height / 2
                         antialiasing: true
-                        color: badge.displayCount > 0 ? "#FFFFFF" : Appearance.colors.colLayer2
+                        color: badge.displayCount > 0
+                            ? (Appearance.m3colors.darkmode ? "#FFFFFF" : Appearance.colors.colPrimary)
+                            : Appearance.colors.colLayer2
                     }
 
                     Text {
@@ -92,7 +96,9 @@ Item {
                         text: badge.badgeTextValue
                         font.pixelSize: 10
                         font.weight: Font.DemiBold
-                        color: badge.displayCount > 0 ? "#000000" : Appearance.colors.colOnLayer2
+                        color: badge.displayCount > 0
+                            ? (Appearance.m3colors.darkmode ? "#000000" : Appearance.colors.colOnPrimary)
+                            : Appearance.colors.colOnLayer2
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                     }

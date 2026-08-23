@@ -18,12 +18,12 @@ MaterialSymbol {
         visible: !Notifications.silent && Notifications.unread > 0
         anchors {
             right: parent.right
-            top: parent.top
+            verticalCenter: parent.verticalCenter
             rightMargin: root.showUnreadCount ? 0 : 1
-            topMargin: root.showUnreadCount ? 0 : 3
+            verticalCenterOffset: root.showUnreadCount ? 3 : 0
         }
         radius: Appearance.rounding.full
-        color: "#FFFFFF"
+        color: Appearance.m3colors.darkmode ? "#FFFFFF" : Appearance.colors.colPrimary
         z: 1
 
         implicitHeight: root.showUnreadCount ? root.badgeHeight : 8
@@ -38,7 +38,7 @@ MaterialSymbol {
             visible: root.showUnreadCount
             anchors.centerIn: parent
             font.pixelSize: Appearance.font.pixelSize.smallest
-            color: "#000000"
+            color: Appearance.m3colors.darkmode ? "#000000" : Appearance.colors.colOnPrimary
             text: root.badgeTextValue
         }
     }

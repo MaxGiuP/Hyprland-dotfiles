@@ -1,4 +1,5 @@
 import qs.modules.common
+import qs.modules.common.functions
 import QtQuick
 import QtQuick.Layouts
 
@@ -6,6 +7,12 @@ Item {
     id: root
     property bool vertical: false
     property real padding: 5
+    readonly property color backgroundColor: Appearance.m3colors.darkmode
+        ? Appearance.colors.colLayer1
+        : ColorUtils.mix(Appearance.colors.colLayer0Base, Appearance.colors.colOnLayer0, 0.88)
+    readonly property color backgroundBorderColor: Appearance.m3colors.darkmode
+        ? "transparent"
+        : ColorUtils.applyAlpha(Appearance.colors.colOutline, 0.55)
     implicitWidth: vertical ? Appearance.sizes.baseVerticalBarWidth : (gridLayout.implicitWidth + padding * 2)
     implicitHeight: vertical ? (gridLayout.implicitHeight + padding * 2) : Appearance.sizes.baseBarHeight
     default property alias items: gridLayout.children
@@ -19,8 +26,10 @@ Item {
             leftMargin: root.vertical ? 4 : 0
             rightMargin: root.vertical ? 4 : 0
         }
-        color: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colLayer1
+        color: Config.options?.bar.borderless ? "transparent" : root.backgroundColor
         radius: Appearance.rounding.small
+        border.width: (!Appearance.m3colors.darkmode && !Config.options?.bar.borderless) ? 1 : 0
+        border.color: root.backgroundBorderColor
     }
 
     GridLayout {

@@ -17,6 +17,22 @@ Item { // Bar content region
     property real useShortenedForm: (Appearance.sizes.barHellaShortenScreenWidthThreshold >= screen?.width) ? 2 : (Appearance.sizes.barShortenScreenWidthThreshold >= screen?.width) ? 1 : 0
     readonly property int centerSideModuleWidth: (useShortenedForm == 2) ? Appearance.sizes.barCenterSideModuleWidthHellaShortened : (useShortenedForm == 1) ? Appearance.sizes.barCenterSideModuleWidthShortened : Appearance.sizes.barCenterSideModuleWidth
 
+    // Light palettes need more depth than the generated Material surfaces provide.
+    // Keep the existing dark-mode colors, but make the bar and its controls clearly
+    // distinct from each other when the surrounding palette is bright.
+    readonly property color barSurfaceColor: Appearance.m3colors.darkmode
+        ? Appearance.colors.colLayer0
+        : ColorUtils.mix(Appearance.colors.colLayer0Base, Appearance.colors.colOnLayer0, 0.95)
+    readonly property color controlSurfaceColor: Appearance.m3colors.darkmode
+        ? Appearance.colors.colLayer1
+        : ColorUtils.mix(Appearance.colors.colLayer0Base, Appearance.colors.colOnLayer0, 0.88)
+    readonly property color controlHoverColor: Appearance.m3colors.darkmode
+        ? Appearance.colors.colLayer1Hover
+        : ColorUtils.mix(Appearance.colors.colLayer0Base, Appearance.colors.colOnLayer0, 0.80)
+    readonly property color controlBorderColor: Appearance.m3colors.darkmode
+        ? "transparent"
+        : ColorUtils.applyAlpha(Appearance.colors.colOutline, 0.55)
+
 
     // NEW: hide media + active window on narrow screens
     readonly property bool hideLeftHeavy: !!screen && screen.width < 1920
@@ -51,14 +67,16 @@ Item { // Bar content region
             const level = Config.options.bar.backgroundOpacity ?? 0
             if (level >= 2) return "transparent"
             if (level === 1) {
-                const c = Appearance.colors.colLayer0
+                const c = root.barSurfaceColor
                 return Qt.rgba(c.r, c.g, c.b, 0.5)
             }
-            return Appearance.colors.colLayer0
+            return root.barSurfaceColor
         }
         radius: Config.options.bar.cornerStyle === 1 ? Appearance.rounding.windowRounding : 0
         border.width: Config.options.bar.cornerStyle === 1 ? 1 : 0
-        border.color: Appearance.colors.colLayer0Border
+        border.color: Appearance.m3colors.darkmode
+            ? Appearance.colors.colLayer0Border
+            : ColorUtils.applyAlpha(Appearance.colors.colOutline, 0.65)
     }
 
 
@@ -107,7 +125,10 @@ Item { // Bar content region
                 preferredScreen: root.screen?.name ?? ""
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: Appearance.rounding.screenRounding
-                colBackground: barLeftSideMouseArea.hovered ? Appearance.colors.colLayer1Hover : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
+                colBackground: barLeftSideMouseArea.hovered
+                    ? root.controlHoverColor
+                    : (Appearance.m3colors.darkmode ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1) : root.controlSurfaceColor)
+                colBackgroundHover: root.controlHoverColor
             }
 
             BarGroup {
@@ -156,8 +177,10 @@ Item { // Bar content region
                 topMargin: 4
                 bottomMargin: 4
             }
-            color: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colLayer1
+            color: Config.options?.bar.borderless ? "transparent" : root.controlSurfaceColor
             radius: Appearance.rounding.small
+            border.width: (!Appearance.m3colors.darkmode && !Config.options?.bar.borderless) ? 1 : 0
+            border.color: root.controlBorderColor
         }
 
         RowLayout {
@@ -261,8 +284,10 @@ Item { // Bar content region
                 implicitHeight: Math.min(indicatorsRowLayout.implicitHeight + 5 * 2, Appearance.sizes.barHeight)
 
                 buttonRadius: Appearance.rounding.full
-                colBackground: barRightSideMouseArea.hovered ? Appearance.colors.colLayer1Hover : ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1)
-                colBackgroundHover: Appearance.colors.colLayer1Hover
+                colBackground: barRightSideMouseArea.hovered
+                    ? root.controlHoverColor
+                    : (Appearance.m3colors.darkmode ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1) : root.controlSurfaceColor)
+                colBackgroundHover: root.controlHoverColor
                 colRipple: Appearance.colors.colLayer1Active
                 colBackgroundToggled: Appearance.colors.colSecondaryContainer
                 colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
