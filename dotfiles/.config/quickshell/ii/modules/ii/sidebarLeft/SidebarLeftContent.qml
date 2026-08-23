@@ -15,11 +15,11 @@ Item {
     property bool aiEnabled: (Config.options?.policies?.ai ?? 1) !== 0
     property bool translatorEnabled: Config.options?.sidebar?.translator?.enable ?? false
     property var tabButtonList: [
-        ...(root.aiEnabled ? [{"icon": "hub", "name": "", "title": Translation.tr("AI")}] : []),
-        ...(root.translatorEnabled ? [{"icon": "translate", "name": "", "title": Translation.tr("Translator")}] : []),
-        {"icon": "calculate", "name": "", "title": Translation.tr("Calculator")},
-        {"icon": "smartphone", "name": "", "title": Translation.tr("KDE Connect")},
-        {"icon": "terminal", "name": "", "title": Translation.tr("Console")},
+        ...(root.aiEnabled ? [{"id": "ai", "icon": "hub", "name": "", "title": Translation.tr("AI")}] : []),
+        ...(root.translatorEnabled ? [{"id": "translator", "icon": "translate", "name": "", "title": Translation.tr("Translator")}] : []),
+        {"id": "calculator", "icon": "calculate", "name": "", "title": Translation.tr("Calculator")},
+        {"id": "kde-connect", "icon": "smartphone", "name": "", "title": Translation.tr("KDE Connect")},
+        {"id": "console", "icon": "terminal", "name": "", "title": Translation.tr("Console")},
     ]
     property var tabPageComponents: [
         ...(root.aiEnabled ? [aiHarness] : []),
@@ -31,6 +31,22 @@ Item {
     ]
     property int tabCount: tabPageComponents.length
 
+    function restorePersistedTab() {
+        if (root.tabButtonList.length === 0)
+            return;
+
+        const savedTabId = Persistent.states.sidebar.leftTab;
+        const savedIndex = root.tabButtonList.findIndex(tab => tab.id === savedTabId);
+        tabBar.setCurrentIndex(savedIndex >= 0 ? savedIndex : 0);
+    }
+
+    function persistTab(index) {
+        if (!Persistent.ready || index < 0 || index >= root.tabButtonList.length)
+            return;
+
+        Persistent.states.sidebar.leftTab = root.tabButtonList[index].id;
+    }
+
     function focusActiveItem() {
         const currentPage = swipeView.currentItem;
         const target = currentPage?.loadedItem ?? currentPage;
@@ -38,6 +54,17 @@ Item {
             target.focusActiveItem();
         } else if (target?.forceActiveFocus) {
             target.forceActiveFocus();
+        }
+    }
+
+    Component.onCompleted: Qt.callLater(root.restorePersistedTab)
+    onTabButtonListChanged: Qt.callLater(root.restorePersistedTab)
+
+    Connections {
+        target: Persistent
+        function onReadyChanged() {
+            if (Persistent.ready)
+                root.restorePersistedTab();
         }
     }
 
@@ -103,6 +130,7 @@ Item {
                 anchors.fill: parent
                 spacing: 10
                 currentIndex: tabBar.currentIndex
+                onCurrentIndexChanged: root.persistTab(currentIndex)
 
                 clip: true
                 layer.enabled: true
