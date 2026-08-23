@@ -139,12 +139,17 @@ def period_directory(base: Path, period: str) -> Path:
     return candidate if candidate.is_dir() else base
 
 
-def wallpaper_matches_period(path: str, base: Path, period: str, prefer_time: bool) -> bool:
+def wallpaper_is_usable(path: str) -> bool:
     if not path:
         return False
     candidate = Path(path).expanduser()
-    if not candidate.is_file() or candidate.suffix.lower() not in EXTENSIONS:
+    return candidate.is_file() and candidate.suffix.lower() in EXTENSIONS
+
+
+def wallpaper_matches_period(path: str, base: Path, period: str, prefer_time: bool) -> bool:
+    if not wallpaper_is_usable(path):
         return False
+    candidate = Path(path).expanduser()
     expected_directory = period_directory(base, period) if prefer_time else base
     try:
         candidate.resolve().relative_to(expected_directory.resolve())
@@ -371,6 +376,22 @@ def apply_and_record(path: Path, mode: str, period: str) -> int:
     return result
 
 
+def rotation_threshold_reached(
+    rotation_state: dict | None,
+    period: str,
+    interval: int,
+    now_timestamp: float | None = None,
+) -> bool:
+    """Only schedule boundaries and elapsed intervals may advance wallpaper."""
+    if rotation_state is None:
+        return True
+    current_timestamp = time.time() if now_timestamp is None else now_timestamp
+    return (
+        rotation_state["period"] != period
+        or current_timestamp >= float(rotation_state["applied_at"]) + max(1, interval)
+    )
+
+
 def read_pid() -> int | None:
     try:
         return int(PID_FILE.read_text().strip())
@@ -435,6 +456,7 @@ def daemon(args: argparse.Namespace) -> None:
             now = datetime.now()
             period = period_for_args(now, args)
             configured_wallpaper = current_wallpaper()
+            configured_is_usable = wallpaper_is_usable(configured_wallpaper)
             configured_is_valid = wallpaper_matches_period(
                 configured_wallpaper, base, period, args.prefer_time
             )
@@ -459,15 +481,17 @@ def daemon(args: argparse.Namespace) -> None:
                 float(rotation_state["applied_at"]) + max(1, args.interval)
                 if rotation_state is not None else 0.0
             )
-            rotation_due = (
-                rotation_state is None
-                or not configured_is_valid
-                or rotation_state["period"] != period
-                or time.time() >= interval_due_at
-            )
+            rotation_due = rotation_threshold_reached(rotation_state, period, args.interval)
 
-            if rotation_due:
-                selected = choose_wallpaper(base, configured_wallpaper, period, args.prefer_time)
+            if rotation_state is None and not configured_is_usable:
+                # Config hydration can briefly expose an empty path during a
+                # Quickshell restart. Wait for the saved wallpaper instead of
+                # treating that transient state as a request to pick a new one.
+                if first_iteration:
+                    log("preserve: waiting for configured wallpaper before initializing rotation timer")
+            elif rotation_due:
+                previous_wallpaper = configured_wallpaper if configured_is_usable else rotation_state["path"]
+                selected = choose_wallpaper(base, previous_wallpaper, period, args.prefer_time)
                 result = apply_and_record(selected, desired_mode(period, args.auto_mode), period)
                 rotation_state = read_rotation_state()
                 if result != 0:
