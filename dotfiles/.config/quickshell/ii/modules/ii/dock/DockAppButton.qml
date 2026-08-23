@@ -18,7 +18,7 @@ DockButton {
     readonly property real availableButtonSize: Math.max(0, height - topInset - bottomInset)
     readonly property bool showWindowDots: appToplevel.toplevels.length > 0
     property int iconSize: Math.max(26, Math.round(availableButtonSize * 0.9))
-    property real countDotWidth: Math.max(8, iconSize * 0.28)
+    property real countDotWidth: Math.max(7, iconSize * 0.22)
     property real countDotHeight: Math.max(3, iconSize * 0.11)
     readonly property real dotTopMargin: Math.max(2, iconSize * 0.04)
     readonly property real indicatorHeight: showWindowDots ? (dotTopMargin + countDotHeight) : 0
