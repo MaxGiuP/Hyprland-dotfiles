@@ -198,6 +198,27 @@ ContentPage {
             id: searchField
             Layout.fillWidth: true
             placeholderText: Translation.tr("Type to search…")
+
+            onTextEdited: {
+                const host = root.settingsHost ?? Window.window
+                if (!host)
+                    return
+                if (typeof host.updateSearchQuery === "function")
+                    host.updateSearchQuery(text)
+                else if ("searchQuery" in host)
+                    host.searchQuery = text
+            }
+
+            Binding {
+                target: searchField
+                property: "text"
+                value: {
+                    const host = root.settingsHost
+                    return host && "searchQuery" in host ? host.searchQuery : ""
+                }
+                when: !searchField.activeFocus
+                restoreMode: Binding.RestoreNone
+            }
         }
 
         Repeater {
@@ -208,12 +229,32 @@ ContentPage {
                 const pages = host?.pages ?? []
                 const seen = new Set()
                 const results = []
+
+                for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+                    const page = pages[pageIndex]
+                    const pageName = page?.displayName ?? ""
+                    const description = page?.description ?? ""
+                    if (`${pageName} ${description}`.toLowerCase().includes(q)) {
+                        seen.add(`page:${pageIndex}`)
+                        results.push({
+                            icon: page.icon,
+                            label: pageName,
+                            pageName: description,
+                            pageIndex: pageIndex,
+                            subTab: -1,
+                            sectionId: ""
+                        })
+                    }
+                }
+
                 for (const entry of root.searchIndex) {
-                    if (entry.label.toLowerCase().includes(q) && !seen.has(entry.label)) {
-                        seen.add(entry.label)
+                    const localizedLabel = Translation.tr(entry.label)
+                    const resultKey = `${entry.page}:${localizedLabel}:${entry.subTab ?? -1}:${entry.sectionId ?? ""}`
+                    if ((localizedLabel.toLowerCase().includes(q) || entry.label.toLowerCase().includes(q)) && !seen.has(resultKey)) {
+                        seen.add(resultKey)
                         results.push({
                             icon: entry.icon,
-                            label: entry.label,
+                            label: localizedLabel,
                             pageName: pages[entry.page]?.displayName ?? "",
                             pageIndex: entry.page,
                             subTab: entry.subTab ?? -1,
@@ -221,7 +262,7 @@ ContentPage {
                         })
                     }
                 }
-                return results
+                return results.slice(0, 24)
             }
 
             delegate: RippleButton {
@@ -233,6 +274,8 @@ ContentPage {
                     const win = root.settingsHost ?? Window.window
                     if (!win)
                         return
+                    if ("searchQuery" in win)
+                        win.searchQuery = ""
                     // Only set subTab nav when there's actually a subtab specified
                     win.requestedSubTab = modelData.subTab !== undefined ? modelData.subTab : -1
                     win.requestedSectionId = modelData.sectionId ?? ""
@@ -287,11 +330,17 @@ ContentPage {
             uniform: true
 
             HomeStatusButton {
-                iconName: Network.wifiEnabled ? (Network.wifi ? "wifi" : "wifi_find") : "wifi_off"
+                iconName: Network.wifi && Network.wifiEnabled
+                    ? (Network.wifiStatus === "connected" ? "wifi" : "signal_wifi_bad")
+                    : Network.ethernet
+                        ? "lan"
+                        : Network.wifiEnabled ? "wifi_find" : "wifi_off"
                 label: Translation.tr("Network")
-                value: Network.wifiEnabled
-                    ? (Network.wifi ? Network.networkName : Translation.tr("Not connected"))
-                    : Translation.tr("Off")
+                value: Network.wifi && Network.wifiEnabled
+                    ? (Network.networkName || Translation.tr("Connected"))
+                    : Network.ethernet
+                        ? Translation.tr("Ethernet connected")
+                        : Network.wifiEnabled ? Translation.tr("Not connected") : Translation.tr("Off")
                 onClicked: root.navigate(1, 0, "networks")
             }
 

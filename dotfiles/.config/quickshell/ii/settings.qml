@@ -25,6 +25,7 @@ ApplicationWindow {
     // Sub-tab + scroll-target forwarded from search results (-1 = no pending nav)
     property int requestedSubTab: -1
     property string requestedSectionId: ""
+    property string searchQuery: ""
 
     property var pages: [
         { displayName: Translation.tr("Home"), description: Translation.tr("Overview and shortcuts"), icon: "home", component: "modules/settings/HomeConfig.qml" },
@@ -50,6 +51,17 @@ ApplicationWindow {
 
     function openConfigFile() {
         Quickshell.execDetached(["xdg-open", Directories.shellConfigPath])
+    }
+
+    function updateSearchQuery(query) {
+        root.searchQuery = query
+        if (query.trim().length > 0)
+            root.currentPage = 0
+    }
+
+    onCurrentPageChanged: {
+        if (root.currentPage !== 0 && root.searchQuery.length > 0)
+            root.searchQuery = ""
     }
 
     function prepareLoadedPage(item) {
@@ -274,6 +286,11 @@ ApplicationWindow {
                                     font.pixelSize: Appearance.font.pixelSize.smaller
                                     elide: Text.ElideRight
                                 }
+                            }
+
+                            SettingsHeaderSearch {
+                                query: root.searchQuery
+                                onQueryEdited: value => root.updateSearchQuery(value)
                             }
 
                             IconToolbarButton {

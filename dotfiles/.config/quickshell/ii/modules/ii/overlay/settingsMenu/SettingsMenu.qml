@@ -19,6 +19,7 @@ StyledOverlayWidget {
     property bool configPathCopied: false
     property int requestedSubTab: -1
     property string requestedSectionId: ""
+    property string searchQuery: ""
 
     readonly property var pages: [
         { displayName: Translation.tr("Home"), description: Translation.tr("Overview and shortcuts"), icon: "home", component: "modules/settings/HomeConfig.qml" },
@@ -36,7 +37,11 @@ StyledOverlayWidget {
         { displayName: Translation.tr("Hyprland"), description: Translation.tr("Keybinds, rules and configuration"), icon: "deployed_code", component: "modules/settings/HyprConfig.qml" }
     ]
 
-    onCurrentPageChanged: Persistent.states.overlay.settingsMenu.currentPage = currentPage
+    onCurrentPageChanged: {
+        Persistent.states.overlay.settingsMenu.currentPage = currentPage
+        if (root.currentPage !== 0 && root.searchQuery.length > 0)
+            root.searchQuery = ""
+    }
 
     function copyConfigPath() {
         root.configPathCopied = true
@@ -46,6 +51,12 @@ StyledOverlayWidget {
 
     function openConfigFile() {
         Quickshell.execDetached(["xdg-open", Directories.shellConfigPath])
+    }
+
+    function updateSearchQuery(query) {
+        root.searchQuery = query
+        if (query.trim().length > 0)
+            root.currentPage = 0
     }
 
     function applyNavigation(page, subTab = -1, sectionId = "") {
@@ -198,6 +209,11 @@ StyledOverlayWidget {
                                 font.pixelSize: Appearance.font.pixelSize.smaller
                                 elide: Text.ElideRight
                             }
+                        }
+
+                        SettingsHeaderSearch {
+                            query: root.searchQuery
+                            onQueryEdited: value => root.updateSearchQuery(value)
                         }
 
                         IconToolbarButton {

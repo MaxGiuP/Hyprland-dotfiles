@@ -13,7 +13,6 @@ import qs.services.network
  */
 Singleton {
     id: root
-    readonly property bool settingsApp: Quickshell.env("II_SETTINGS_APP") === "1"
 
     property bool wifi: true
     property bool ethernet: false
@@ -46,24 +45,25 @@ Singleton {
 
     property string networkName: ""
     property int networkStrength
-    property string materialSymbol: root.ethernet
-        ? "lan"
-        : root.wifiEnabled
-            ? (
-                Network.networkStrength > 83 ? "signal_wifi_4_bar" :
-                Network.networkStrength > 67 ? "network_wifi" :
-                Network.networkStrength > 50 ? "network_wifi_3_bar" :
-                Network.networkStrength > 33 ? "network_wifi_2_bar" :
-                Network.networkStrength > 17 ? "network_wifi_1_bar" :
-                "signal_wifi_0_bar"
-            )
+    readonly property string wifiMaterialSymbol: !root.wifiEnabled
+        ? "signal_wifi_off"
+        : root.wifi
+            ? root.wifiStatus !== "connected"
+                ? "signal_wifi_bad"
+                : (
+                    Network.networkStrength > 83 ? "signal_wifi_4_bar" :
+                    Network.networkStrength > 67 ? "network_wifi" :
+                    Network.networkStrength > 50 ? "network_wifi_3_bar" :
+                    Network.networkStrength > 33 ? "network_wifi_2_bar" :
+                    Network.networkStrength > 17 ? "network_wifi_1_bar" :
+                    "signal_wifi_0_bar"
+                )
             : (root.wifiStatus === "connecting")
                 ? "signal_wifi_statusbar_not_connected"
                 : (root.wifiStatus === "disconnected")
                     ? "wifi_find"
-                    : (root.wifiStatus === "disabled")
-                        ? "signal_wifi_off"
-                        : "signal_wifi_bad"
+                    : "signal_wifi_bad"
+    readonly property string materialSymbol: root.ethernet ? "lan" : root.wifiMaterialSymbol
 
     // Control
     function enableWifi(enabled = true): void {
@@ -211,8 +211,6 @@ Singleton {
 
     // Status update
     function update() {
-        if (root.settingsApp)
-            return;
         updateConnectionType.startCheck();
         root.refreshEthernetDevices();
         wifiStatusProcess.running = true
@@ -222,7 +220,7 @@ Singleton {
 
     Process {
         id: subscriber
-        running: !root.settingsApp
+        running: true
         command: ["nmcli", "monitor"]
         stdout: SplitParser {
             onRead: root.update()
@@ -233,7 +231,8 @@ Singleton {
         id: updateConnectionType
         property string buffer
         command: ["sh", "-c", "nmcli -t -f TYPE,STATE d status && nmcli -t -f CONNECTIVITY g"]
-        running: !root.settingsApp
+        running: true
+        environment: ({ LANG: "C", LC_ALL: "C" })
         function startCheck() {
             buffer = "";
             updateConnectionType.running = true;
@@ -250,26 +249,27 @@ Singleton {
             let hasWifi = false;
             let wifiStatus = "disconnected";
             lines.forEach(line => {
-                if (line.includes("ethernet") && line.includes("connected"))
+                const separator = line.indexOf(":");
+                const type = separator >= 0 ? line.slice(0, separator) : line;
+                const state = separator >= 0 ? line.slice(separator + 1) : "";
+                if (type === "ethernet" && state.startsWith("connected"))
                     hasEthernet = true;
-                else if (line.includes("wifi:")) {
-                    if (line.includes("disconnected")) {
-                        wifiStatus = "disconnected"
+                else if (type === "wifi") {
+                    if (state.startsWith("disconnected")) {
+                        if (!hasWifi && wifiStatus !== "connecting")
+                            wifiStatus = "disconnected"
                     }
-                    else if (line.includes("connected")) {
+                    else if (state.startsWith("connected")) {
                         hasWifi = true;
-                        wifiStatus = "connected"
-
-                        if (connectivity === "limited") {
-                            hasWifi = false;
-                            wifiStatus = "limited"
-                        }
+                        wifiStatus = connectivity === "full" ? "connected" : connectivity
                     }
-                    else if (line.includes("connecting")) {
-                        wifiStatus = "connecting"
+                    else if (state.startsWith("connecting")) {
+                        if (!hasWifi)
+                            wifiStatus = "connecting"
                     }
-                    else if (line.includes("unavailable")) {
-                        wifiStatus = "disabled"
+                    else if (state.startsWith("unavailable")) {
+                        if (!hasWifi && wifiStatus !== "connecting")
+                            wifiStatus = "disabled"
                     }
                 }
             });
@@ -281,22 +281,24 @@ Singleton {
 
     Process {
         id: updateNetworkName
-        command: ["sh", "-c", "nmcli -t -f NAME c show --active | head -1"]
-        running: !root.settingsApp
-        stdout: SplitParser {
-            onRead: data => {
-                root.networkName = data;
+        command: ["sh", "-c", "nmcli -t -f TYPE,NAME connection show --active | awk -F: '$1 == \"802-11-wireless\" { print substr($0, index($0, \":\") + 1); exit }'"]
+        running: true
+        environment: ({ LANG: "C", LC_ALL: "C" })
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.networkName = text.trim();
             }
         }
     }
 
     Process {
         id: updateNetworkStrength
-        running: !root.settingsApp
+        running: true
         command: ["sh", "-c", "nmcli -f IN-USE,SIGNAL,SSID device wifi | awk '/^\*/{if (NR!=1) {print $2}}'"]
-        stdout: SplitParser {
-            onRead: data => {
-                root.networkStrength = parseInt(data);
+        environment: ({ LANG: "C", LC_ALL: "C" })
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.networkStrength = parseInt(text.trim()) || 0;
             }
         }
     }
@@ -304,10 +306,7 @@ Singleton {
     Process {
         id: wifiStatusProcess
         command: ["nmcli", "radio", "wifi"]
-        Component.onCompleted: {
-            if (!root.settingsApp)
-                running = true
-        }
+        running: true
         environment: ({
             LANG: "C",
             LC_ALL: "C"
@@ -321,7 +320,7 @@ Singleton {
 
     Process {
         id: getNetworks
-        running: !root.settingsApp
+        running: true
         command: ["nmcli", "-g", "ACTIVE,SIGNAL,FREQ,SSID,BSSID,SECURITY", "d", "w"]
         environment: ({
             LANG: "C",
@@ -389,7 +388,7 @@ Singleton {
 
     Process {
         id: getEthernetDevices
-        running: !root.settingsApp
+        running: true
         command: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"]
         environment: ({
             LANG: "C",
