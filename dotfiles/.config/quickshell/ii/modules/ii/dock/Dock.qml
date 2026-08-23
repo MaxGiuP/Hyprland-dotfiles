@@ -211,12 +211,14 @@ Scope { // Scope
                         Item {
                             id: dockLaunchStripe
                             z: 20
-                            x: dockVisualBackground.x + (root.floatingDock ? dockVisualBackground.radius : 0)
+                            readonly property real horizontalInset: root.floatingDock
+                                ? dockVisualBackground.radius
+                                : (root.flaredDockBase ? dockVisualBackground.fixedDockFlare : 0)
+                            x: dockVisualBackground.x + horizontalInset
                             y: dockVisualBackground.y
                                 + (root.floatingDock ? dockVisualBackground.height : dockVisualBackground.fixedDockVisibleBottom)
                                 - height
-                            width: Math.max(0, dockVisualBackground.width
-                                - (root.floatingDock ? dockVisualBackground.radius * 2 : 0))
+                            width: Math.max(0, dockVisualBackground.width - horizontalInset * 2)
                             height: 3
                             clip: true
                             visible: opacity > 0
