@@ -12,6 +12,8 @@ Singleton {
     id: root
 
     property string query: ""
+    readonly property int appResultLimit: 24
+    property var appResultCache: new Map()
 
     function ensurePrefix(prefix) {
         if ([Config.options.search.prefix.action, Config.options.search.prefix.app, Config.options.search.prefix.clipboard, Config.options.search.prefix.emojis, Config.options.search.prefix.math, Config.options.search.prefix.shellCommand, Config.options.search.prefix.webSearch,].some(i => root.query.startsWith(i))) {
@@ -124,7 +126,12 @@ Singleton {
     }
 
     function createAppResultObject(entry) {
-        return resultComp.createObject(null, {
+        const cacheKey = `${entry.id}\u0000${entry.name}\u0000${entry.icon}`;
+        const cached = root.appResultCache.get(cacheKey);
+        if (cached)
+            return cached;
+
+        const result = resultComp.createObject(root, {
             type: Translation.tr("App"),
             id: entry.id,
             name: entry.name,
@@ -149,9 +156,9 @@ Singleton {
                 });
             })
         });
+        root.appResultCache.set(cacheKey, result);
+        return result;
     }
-
-    property list<var> suggestedAppResults: AppSearch.fuzzyQuery("").map(entry => root.createAppResultObject(entry))
 
     function containsUnsafeLink(entry) {
         if (entry == undefined)
@@ -262,7 +269,10 @@ Singleton {
                 Quickshell.clipboardText = root.mathResult;
             }
         });
-        const appResultObjects = AppSearch.fuzzyQuery(StringUtils.cleanPrefix(root.query, Config.options.search.prefix.app)).map(entry => root.createAppResultObject(entry));
+        const appResultObjects = AppSearch
+            .fuzzyQuery(StringUtils.cleanPrefix(root.query, Config.options.search.prefix.app))
+            .slice(0, root.appResultLimit)
+            .map(entry => root.createAppResultObject(entry));
         const commandResultObject = resultComp.createObject(null, {
             name: StringUtils.cleanPrefix(root.query, Config.options.search.prefix.shellCommand).replace("file://", ""),
             verb: Translation.tr("Run"),

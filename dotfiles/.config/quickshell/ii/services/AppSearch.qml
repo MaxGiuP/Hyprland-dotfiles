@@ -12,6 +12,7 @@ Singleton {
     id: root
     property bool sloppySearch: Config.options?.search.sloppy ?? false
     property real scoreThreshold: 0.2
+    property var resolvedIconPaths: ({})
     property var substitutions: ({
         "code-url-handler": "visual-studio-code",
         "Code": "visual-studio-code",
@@ -81,9 +82,11 @@ Singleton {
     }
 
     function iconPriority(iconName) {
-        if (!iconExists(iconName)) return 0;
+        const name = String(iconName ?? "");
+        if (name.length === 0 || name.includes("image-missing")) return 0;
 
-        const resolvedPath = Quickshell.iconPath(iconName, true);
+        const resolvedPath = resolvedIconPath(name);
+        if (resolvedPath.length === 0) return 0;
         const genericNames = [
             "application-x-executable",
             "application-default-icon",
@@ -92,10 +95,21 @@ Singleton {
             "image-missing"
         ];
 
-        if (genericNames.indexOf(iconName) !== -1) return 0;
+        if (genericNames.indexOf(name) !== -1) return 0;
         if (genericNames.some(name => resolvedPath.indexOf(`/${name}`) !== -1)) return 0;
         if (resolvedPath.indexOf("/hicolor/") !== -1) return 1;
         return 2;
+    }
+
+    function resolvedIconPath(iconName) {
+        const name = String(iconName ?? "");
+        if (name.length === 0) return "";
+        if (Object.prototype.hasOwnProperty.call(root.resolvedIconPaths, name))
+            return root.resolvedIconPaths[name];
+
+        const path = Quickshell.iconPath(name, true);
+        root.resolvedIconPaths[name] = path;
+        return path;
     }
 
     function shouldShowApp(app) {
@@ -208,7 +222,7 @@ Singleton {
 
     function iconExists(iconName) {
         if (!iconName || iconName.length == 0) return false;
-        return (Quickshell.iconPath(iconName, true).length > 0) 
+        return (resolvedIconPath(iconName).length > 0)
             && !iconName.includes("image-missing");
     }
 

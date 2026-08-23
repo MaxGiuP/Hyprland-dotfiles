@@ -16,7 +16,6 @@ Item { // Wrapper
     id: root
 
     readonly property string xdgConfigHome: Directories.config
-    readonly property int typingDebounceInterval: 200
     readonly property int typingResultLimit: 15 // Should be enough to cover the whole view
 
     property string searchingText: LauncherSearch.query
@@ -185,20 +184,11 @@ Item { // Wrapper
                     }
                 }
 
-                Timer {
-                    id: debounceTimer
-                    interval: root.typingDebounceInterval
-                    onTriggered: {
-                        resultModel.values = LauncherSearch.results ?? [];
-                    }
-                }
-
                 Connections {
                     target: LauncherSearch
                     function onResultsChanged() {
                         resultModel.values = LauncherSearch.results.slice(0, root.typingResultLimit);
                         root.focusFirstItem();
-                        debounceTimer.restart();
                     }
                 }
 

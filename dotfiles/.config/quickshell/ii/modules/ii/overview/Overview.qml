@@ -17,10 +17,11 @@ Scope {
     property bool dontAutoCancelSearch: false
     property string pendingSearchingText: ""
     property bool pendingFocusFirstItem: false
-    property bool panelLoaded: false
+    // Keep the launcher surface warm. Recreating the PanelWindow, app model and
+    // icon delegates on every open made the drawer feel unresponsive.
+    property bool panelLoaded: true
     readonly property int entranceDuration: 150
     readonly property int exitDuration: 210
-    readonly property int unloadDelay: exitDuration + 40
     signal searchRequested(string text, bool focusFirst)
 
     function requestSearch(text, focusFirst = true) {
@@ -28,27 +29,6 @@ Scope {
         overviewScope.pendingFocusFirstItem = focusFirst;
         overviewScope.searchRequested(text, focusFirst);
     }
-
-    Timer {
-        id: overviewUnloadTimer
-        interval: overviewScope.unloadDelay
-        repeat: false
-        onTriggered: overviewScope.panelLoaded = false
-    }
-
-    Connections {
-        target: GlobalStates
-        function onOverviewOpenChanged() {
-            if (GlobalStates.overviewOpen) {
-                overviewUnloadTimer.stop();
-                overviewScope.panelLoaded = true;
-            } else if (overviewScope.panelLoaded) {
-                overviewUnloadTimer.restart();
-            }
-        }
-    }
-
-    Component.onCompleted: overviewScope.panelLoaded = GlobalStates.overviewOpen
 
     LazyLoader {
         id: overviewPanelLoader
@@ -240,7 +220,11 @@ Scope {
             Loader {
                 id: overviewLoader
                 anchors.horizontalCenter: parent.horizontalCenter
-                active: panelWindow.overviewContentReady && searchWidget.displayedText == "" && (Config?.options.overview.enable ?? true)
+                active: GlobalStates.overviewOpen
+                    && !GlobalStates.overviewDrawerMode
+                    && panelWindow.overviewContentReady
+                    && searchWidget.displayedText == ""
+                    && (Config?.options.overview.enable ?? true)
                 sourceComponent: OverviewWidget {
                     screen: panelWindow.screen
                     visible: (searchWidget.displayedText == "")
