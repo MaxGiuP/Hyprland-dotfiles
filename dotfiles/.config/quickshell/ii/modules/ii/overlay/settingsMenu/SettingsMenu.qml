@@ -55,14 +55,28 @@ StyledOverlayWidget {
 
     function updateSearchQuery(query) {
         root.searchQuery = query
-        if (query.trim().length > 0)
-            root.currentPage = 0
     }
 
     function applyNavigation(page, subTab = -1, sectionId = "") {
-        root.currentPage = Math.max(0, Math.min(page, root.pages.length - 1))
         root.requestedSubTab = subTab
         root.requestedSectionId = sectionId
+        const targetPage = Math.max(0, Math.min(page, root.pages.length - 1))
+
+        if (root.currentPage === targetPage) {
+            root.applyRequestedNavigationTo(pageLoader.item)
+            return
+        }
+
+        root.currentPage = targetPage
+    }
+
+    function applyRequestedNavigationTo(item) {
+        if (!item || root.requestedSubTab < 0 || typeof item.applySubTab !== "function")
+            return
+
+        item.applySubTab(root.requestedSubTab, root.requestedSectionId)
+        root.requestedSubTab = -1
+        root.requestedSectionId = ""
     }
 
     contentItem: Rectangle {
@@ -167,6 +181,7 @@ StyledOverlayWidget {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     height: 64
+                    z: 10
 
                     RowLayout {
                         anchors.fill: parent
@@ -213,7 +228,13 @@ StyledOverlayWidget {
 
                         SettingsHeaderSearch {
                             query: root.searchQuery
+                            pages: root.pages
                             onQueryEdited: value => root.updateSearchQuery(value)
+                            onResultSelected: result => root.applyNavigation(
+                                result.pageIndex,
+                                result.subTab,
+                                result.sectionId
+                            )
                         }
 
                         IconToolbarButton {
@@ -267,11 +288,7 @@ StyledOverlayWidget {
                         if (item && "settingsHost" in item)
                             item.settingsHost = root
 
-                        if (root.requestedSubTab >= 0 && typeof item.applySubTab === "function") {
-                            item.applySubTab(root.requestedSubTab, root.requestedSectionId)
-                            root.requestedSubTab = -1
-                            root.requestedSectionId = ""
-                        }
+                        root.applyRequestedNavigationTo(item)
                     }
 
                     SequentialAnimation {

@@ -1394,5 +1394,6 @@
   "Connection details": "Verbindungsdetails",
   "%1 active links": "%1 aktive Verbindungen",
   "Using %1": "Über %1",
-  "Clear search": "Suche löschen"
+  "Clear search": "Suche löschen",
+  "No matching settings": "Keine passenden Einstellungen"
 }

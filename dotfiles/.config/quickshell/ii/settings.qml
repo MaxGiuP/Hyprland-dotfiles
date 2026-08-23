@@ -55,8 +55,18 @@ ApplicationWindow {
 
     function updateSearchQuery(query) {
         root.searchQuery = query
-        if (query.trim().length > 0)
-            root.currentPage = 0
+    }
+
+    function applyNavigation(page, subTab = -1, sectionId = "") {
+        root.requestedSubTab = subTab
+        root.requestedSectionId = sectionId
+        root.currentPage = Math.max(0, Math.min(page, root.pages.length - 1))
+
+        Qt.callLater(() => {
+            const loader = pageLoaders.itemAt(root.currentPage)
+            if (loader && loader.status === Loader.Ready)
+                root.applyRequestedNavigationTo(loader.item)
+        })
     }
 
     onCurrentPageChanged: {
@@ -242,8 +252,10 @@ ApplicationWindow {
                     spacing: 0
 
                     Item {
+                        id: pageHeader
                         Layout.fillWidth: true
                         Layout.preferredHeight: 64
+                        z: 10
 
                         RowLayout {
                             anchors.fill: parent
@@ -290,7 +302,13 @@ ApplicationWindow {
 
                             SettingsHeaderSearch {
                                 query: root.searchQuery
+                                pages: root.pages
                                 onQueryEdited: value => root.updateSearchQuery(value)
+                                onResultSelected: result => root.applyNavigation(
+                                    result.pageIndex,
+                                    result.subTab,
+                                    result.sectionId
+                                )
                             }
 
                             IconToolbarButton {
@@ -320,6 +338,7 @@ ApplicationWindow {
                         Layout.fillHeight: true
 
                         Repeater {
+                            id: pageLoaders
                             model: root.pages
 
                             Loader {
