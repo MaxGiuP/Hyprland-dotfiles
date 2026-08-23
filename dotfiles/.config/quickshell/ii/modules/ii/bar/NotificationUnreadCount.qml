@@ -20,7 +20,7 @@ MaterialSymbol {
             right: parent.right
             verticalCenter: parent.verticalCenter
             rightMargin: root.showUnreadCount ? 0 : 1
-            verticalCenterOffset: root.showUnreadCount ? 3 : 0
+            verticalCenterOffset: 0
         }
         radius: Appearance.rounding.full
         color: Appearance.m3colors.darkmode ? "#FFFFFF" : Appearance.colors.colPrimary
