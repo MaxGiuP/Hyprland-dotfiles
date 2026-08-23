@@ -19,7 +19,7 @@ Scope {
     property bool pendingFocusFirstItem: false
     property bool panelLoaded: false
     readonly property int entranceDuration: 150
-    readonly property int exitDuration: 160
+    readonly property int exitDuration: 210
     readonly property int unloadDelay: exitDuration + 40
     signal searchRequested(string text, bool focusFirst)
 
@@ -205,13 +205,13 @@ Scope {
             Behavior on opacity {
                 NumberAnimation {
                     duration: panelWindow.entranceShown ? overviewScope.entranceDuration : overviewScope.exitDuration
-                    easing.type: panelWindow.entranceShown ? Easing.OutCubic : Easing.InCubic
+                    easing.type: panelWindow.entranceShown ? Easing.OutCubic : Easing.InOutQuad
                 }
             }
             Behavior on slideY {
                 NumberAnimation {
                     duration: panelWindow.entranceShown ? overviewScope.entranceDuration : overviewScope.exitDuration
-                    easing.type: panelWindow.entranceShown ? Easing.OutCubic : Easing.InCubic
+                    easing.type: panelWindow.entranceShown ? Easing.OutCubic : Easing.InOutQuad
                 }
             }
 
@@ -296,7 +296,7 @@ Scope {
                 property: "slideY"
                 to: drawerPanel.height
                 duration: overviewScope.exitDuration
-                easing.type: Easing.InCubic
+                easing.type: Easing.InOutQuad
             }
 
             DrawerAppList {
