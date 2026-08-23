@@ -377,6 +377,21 @@ Singleton {
                 }
                 property string wallpaperPath: ""
                 property string thumbnailPath: ""
+                property string wallpaperMode: "static" // "static" or "dynamic"
+                property JsonObject dynamic: JsonObject {
+                    property string directory: `${Directories.pictures}/Wallpapers/dynamic-system`
+                    property int intervalSeconds: 1200
+                    property bool autoMode: true
+                    property bool preferTime: true
+                    property string city: "Abingdon, Oxfordshire"
+                    property real latitude: 51.6714842
+                    property real longitude: -1.2779715
+                    property string scheduleMode: "sun" // "sun" or "manual"
+                    property string morningTime: "06:00"
+                    property string dayTime: "10:30"
+                    property string eveningTime: "17:30"
+                    property string nightTime: "21:30"
+                }
                 property bool hideWhenFullscreen: true
                 property JsonObject parallax: JsonObject {
                     property bool vertical: false

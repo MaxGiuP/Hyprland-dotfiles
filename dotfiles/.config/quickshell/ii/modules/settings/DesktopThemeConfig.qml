@@ -411,6 +411,295 @@ ContentPage {
             }
         }
 
+        ContentSubsection {
+            title: Translation.tr("Wallpaper mode")
+
+            ConfigSelectionArray {
+                currentValue: Config.options.background.wallpaperMode ?? "static"
+                onSelected: newValue => Wallpapers.setWallpaperMode(newValue)
+                options: [
+                    { value: "static", displayName: Translation.tr("Static"), icon: "image" },
+                    { value: "dynamic", displayName: Translation.tr("Dynamic"), icon: "wallpaper_slideshow" }
+                ]
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Appearance.colors.colSubtext
+                text: (Config.options.background.wallpaperMode ?? "static") === "dynamic"
+                    ? Translation.tr("Dynamic picks a random wallpaper from morning/day/evening/night folders using the local sunrise and sunset schedule, then applies colours through the same pipeline as static wallpapers.")
+                    : Translation.tr("Static keeps the current wallpaper until you pick another one.")
+            }
+
+            ConfigRow {
+                uniform: true
+
+                RippleButtonWithIcon {
+                    Layout.fillWidth: true
+                    materialIcon: "wallpaper"
+                    mainText: Translation.tr("Choose wallpaper")
+                    onClicked: Wallpapers.openFallbackPicker(Appearance.m3colors.darkmode)
+                }
+
+                RippleButtonWithIcon {
+                    Layout.fillWidth: true
+                    materialIcon: "shuffle"
+                    mainText: Translation.tr("Random from folder")
+                    onClicked: Wallpapers.randomFromCurrentFolder(Appearance.m3colors.darkmode)
+                }
+
+                RippleButtonWithIcon {
+                    Layout.fillWidth: true
+                    materialIcon: "skip_next"
+                    mainText: Translation.tr("Next dynamic")
+                    onClicked: Wallpapers.dynamicNext()
+                    StyledToolTip { text: Translation.tr("Applies one wallpaper from the dynamic folder now without enabling rotation.") }
+                }
+            }
+
+            ContentSubsection {
+                visible: (Config.options.background.wallpaperMode ?? "static") === "dynamic"
+                title: Translation.tr("Dynamic wallpaper settings")
+
+                ConfigRow {
+                    uniform: true
+
+                    ConfigSwitch {
+                        buttonIcon: "routine"
+                        text: Translation.tr("Auto light/dark")
+                        checked: Config.options.background.dynamic.autoMode
+                        onCheckedChanged: Config.options.background.dynamic.autoMode = checked
+                    }
+
+                    ConfigSwitch {
+                        buttonIcon: "wb_twilight"
+                        text: Translation.tr("Use period folders")
+                        checked: Config.options.background.dynamic.preferTime
+                        onCheckedChanged: Config.options.background.dynamic.preferTime = checked
+                    }
+                }
+
+                ConfigSelectionArray {
+                    currentValue: Config.options.background.dynamic.scheduleMode ?? "sun"
+                    onSelected: newValue => Config.options.background.dynamic.scheduleMode = newValue
+                    options: [
+                        { value: "sun", displayName: Translation.tr("Sunrise/sunset"), icon: "wb_twilight" },
+                        { value: "manual", displayName: Translation.tr("Custom times"), icon: "schedule" }
+                    ]
+                }
+
+                ConfigRow {
+                    visible: (Config.options.background.dynamic.scheduleMode ?? "sun") === "manual"
+                    uniform: true
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        StyledText {
+                            text: Translation.tr("Morning starts")
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: Config.options.background.dynamic.morningTime ?? "06:00"
+                            placeholderText: "06:00"
+                            onAccepted: Config.options.background.dynamic.morningTime = text
+                            onEditingFinished: Config.options.background.dynamic.morningTime = text
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        StyledText {
+                            text: Translation.tr("Day starts")
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: Config.options.background.dynamic.dayTime ?? "10:30"
+                            placeholderText: "10:30"
+                            onAccepted: Config.options.background.dynamic.dayTime = text
+                            onEditingFinished: Config.options.background.dynamic.dayTime = text
+                        }
+                    }
+                }
+
+                ConfigRow {
+                    visible: (Config.options.background.dynamic.scheduleMode ?? "sun") === "manual"
+                    uniform: true
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        StyledText {
+                            text: Translation.tr("Evening starts")
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: Config.options.background.dynamic.eveningTime ?? "17:30"
+                            placeholderText: "17:30"
+                            onAccepted: Config.options.background.dynamic.eveningTime = text
+                            onEditingFinished: Config.options.background.dynamic.eveningTime = text
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        StyledText {
+                            text: Translation.tr("Night starts")
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: Config.options.background.dynamic.nightTime ?? "21:30"
+                            placeholderText: "21:30"
+                            onAccepted: Config.options.background.dynamic.nightTime = text
+                            onEditingFinished: Config.options.background.dynamic.nightTime = text
+                        }
+                    }
+                }
+
+                StyledText {
+                    visible: (Config.options.background.dynamic.scheduleMode ?? "sun") === "manual"
+                    Layout.fillWidth: true
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
+                    text: Translation.tr("Use 24-hour HH:MM times. Each time is the start of that wallpaper period; night can continue past midnight until morning starts.")
+                }
+
+                ConfigSpinBox {
+                    icon: "timer"
+                    text: Translation.tr("Rotation interval (minutes)")
+                    value: Math.max(1, Math.round(Config.options.background.dynamic.intervalSeconds / 60))
+                    from: 1
+                    to: 240
+                    stepSize: 1
+                    onValueChanged: Config.options.background.dynamic.intervalSeconds = value * 60
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    StyledText {
+                        text: Translation.tr("Dynamic folder")
+                        color: Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.small
+                    }
+
+                    MaterialTextField {
+                        id: dynamicWallpaperDirectoryField
+                        Layout.fillWidth: true
+                        text: Config.options.background.dynamic.directory
+                        placeholderText: `${Directories.pictures}/Wallpapers/dynamic-system`
+                        onAccepted: Config.options.background.dynamic.directory = text
+                        onEditingFinished: Config.options.background.dynamic.directory = text
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+
+                    StyledText {
+                        text: Translation.tr("Sunrise/sunset location")
+                        color: Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.small
+                    }
+
+                    MaterialTextField {
+                        Layout.fillWidth: true
+                        text: Config.options.background.dynamic.city
+                        placeholderText: "Abingdon, Oxfordshire"
+                        onAccepted: Config.options.background.dynamic.city = text
+                        onEditingFinished: Config.options.background.dynamic.city = text
+                    }
+                }
+
+                ConfigRow {
+                    uniform: true
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        StyledText {
+                            text: Translation.tr("Latitude")
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: String(Config.options.background.dynamic.latitude)
+                            placeholderText: "51.6715"
+                            onAccepted: Config.options.background.dynamic.latitude = parseFloat(text)
+                            onEditingFinished: Config.options.background.dynamic.latitude = parseFloat(text)
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        StyledText {
+                            text: Translation.tr("Longitude")
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                        MaterialTextField {
+                            Layout.fillWidth: true
+                            text: String(Config.options.background.dynamic.longitude)
+                            placeholderText: "-1.2780"
+                            onAccepted: Config.options.background.dynamic.longitude = parseFloat(text)
+                            onEditingFinished: Config.options.background.dynamic.longitude = parseFloat(text)
+                        }
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
+                    text: (Config.options.background.dynamic.scheduleMode ?? "sun") === "manual"
+                        ? Translation.tr("Folder must contain morning, day, evening and night subfolders. Custom times decide when each folder is used.")
+                        : Translation.tr("Folder must contain morning, day, evening and night subfolders. Location is used locally to calculate sunrise and sunset; no network call is needed during rotation.")
+                }
+
+                ConfigRow {
+                    uniform: true
+
+                    RippleButtonWithIcon {
+                        Layout.fillWidth: true
+                        materialIcon: Wallpapers.dynamicRunning ? "pause" : "play_arrow"
+                        mainText: Wallpapers.dynamicRunning ? Translation.tr("Stop dynamic") : Translation.tr("Start dynamic")
+                        onClicked: Wallpapers.dynamicRunning ? Wallpapers.stopDynamic() : Wallpapers.startDynamic()
+                    }
+
+                    RippleButtonWithIcon {
+                        Layout.fillWidth: true
+                        materialIcon: "refresh"
+                        mainText: Translation.tr("Refresh status")
+                        onClicked: Wallpapers.refreshDynamicStatus()
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    color: Wallpapers.dynamicRunning ? Appearance.colors.colPrimary : Appearance.colors.colSubtext
+                    text: Translation.tr("Status: %1").arg(Wallpapers.dynamicStatus)
+                    wrapMode: Text.Wrap
+                }
+            }
+        }
+
         // ── Material You color palette ─────────────────────────────────────
         ContentSubsection {
             title: Translation.tr("Current color palette")

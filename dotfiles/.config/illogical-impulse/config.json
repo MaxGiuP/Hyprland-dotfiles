@@ -71,6 +71,20 @@
         }
     },
     "background": {
+        "dynamic": {
+            "autoMode": true,
+            "city": "Abingdon, Oxfordshire",
+            "dayTime": "10:30",
+            "directory": "/home/linmax/Pictures/Wallpapers/dynamic-system",
+            "eveningTime": "17:30",
+            "intervalSeconds": 1200,
+            "latitude": 51.6714842,
+            "longitude": -1.2779715,
+            "morningTime": "06:00",
+            "nightTime": "21:30",
+            "preferTime": true,
+            "scheduleMode": "sun"
+        },
         "hideWhenFullscreen": false,
         "parallax": {
             "autoVertical": false,
@@ -81,6 +95,7 @@
             "workspaceZoom": 1.1
         },
         "thumbnailPath": "/home/linmax/Immagini/Wallpapers/226539-3840x2160-desktop-4k-megan-fox-background-image.jpg",
+        "wallpaperMode": "dynamic",
         "wallpaperPath": "/home/linmax/Pictures/Wallpapers/226539-3840x2160-desktop-4k-megan-fox-background-image.jpg",
         "widgets": {
             "clock": {
