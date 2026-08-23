@@ -462,9 +462,16 @@ def daemon(args: argparse.Namespace) -> None:
             )
             rotation_state = read_rotation_state()
 
+            # Starting the daemon is recovery, not a rotation event. If the
+            # configured image still belongs to the current time period, keep
+            # it and begin a fresh interval from recovery time. A period change
+            # is still handled below so morning/day/evening/night stay correct.
+            if first_iteration and configured_is_valid:
+                rotation_state = write_rotation_state(configured_wallpaper, period)
+                log(f"restore period={period} {Path(configured_wallpaper).name} (restarted rotation timer)")
             # Migrate an already-valid dynamic wallpaper into persistent state
-            # without changing it on the first daemon start after this update.
-            if rotation_state is None and configured_is_valid:
+            # if the state file is removed while the daemon is running.
+            elif rotation_state is None and configured_is_valid:
                 rotation_state = write_rotation_state(configured_wallpaper, period)
                 log(f"preserve period={period} {Path(configured_wallpaper).name} (initialized rotation timer)")
             elif (
