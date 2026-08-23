@@ -208,6 +208,34 @@ Scope { // Scope
                             }
                         }
 
+                        Item {
+                            id: dockLaunchStripe
+                            z: 20
+                            x: dockVisualBackground.x + (root.floatingDock ? dockVisualBackground.radius : 0)
+                            y: dockVisualBackground.y
+                                + (root.floatingDock ? dockVisualBackground.height : dockVisualBackground.fixedDockVisibleBottom)
+                                - height
+                            width: Math.max(0, dockVisualBackground.width
+                                - (root.floatingDock ? dockVisualBackground.radius * 2 : 0))
+                            height: 3
+                            clip: true
+                            visible: opacity > 0
+                            opacity: dockApps.launchStripeShown ? 1 : 0
+
+                            Behavior on opacity {
+                                NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+                            }
+
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                width: parent.width * Math.max(0, Math.min(1, dockApps.launchProgress))
+                                radius: height / 2
+                                color: Appearance.colors.colPrimary
+                            }
+                        }
+
                         component DockWallpaperBackdrop: Item {
                             Image {
                                 id: dockWallpaper

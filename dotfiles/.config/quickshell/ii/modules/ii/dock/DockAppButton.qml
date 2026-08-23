@@ -74,6 +74,32 @@ DockButton {
         appListRoot.hidePreviewForButton(root);
     }
 
+    function appWindowCount() {
+        return Array.from(root.appToplevel?.toplevels ?? [])
+            .filter(toplevel => toplevel !== null && toplevel !== undefined).length
+    }
+
+    function launchNewInstance() {
+        const appId = String(root.appToplevel?.appId ?? "")
+        const initialWindowCount = root.appWindowCount()
+        if (AppLaunch.launchDesktopEntry(root.desktopEntry))
+            root.appListRoot.beginAppLaunch(appId, initialWindowCount)
+    }
+
+    function reportWindowCount() {
+        root.appListRoot.observeAppWindows(String(root.appToplevel?.appId ?? ""), root.appWindowCount())
+    }
+
+    Component.onCompleted: Qt.callLater(root.reportWindowCount)
+    onAppToplevelChanged: Qt.callLater(root.reportWindowCount)
+
+    Connections {
+        target: root.appToplevel
+        function onToplevelsChanged() {
+            root.reportWindowCount()
+        }
+    }
+
     function forceQuitApp() {
         const pidSet = new Set()
         for (const toplevel of appToplevel.toplevels) {
@@ -179,7 +205,7 @@ DockButton {
 
     onClicked: {
         if (appToplevel.toplevels.length === 0) {
-            AppLaunch.launchDesktopEntry(root.desktopEntry);
+            root.launchNewInstance();
             return;
         }
         lastFocused = (lastFocused + 1) % appToplevel.toplevels.length
@@ -187,7 +213,7 @@ DockButton {
     }
 
     middleClickAction: () => {
-        AppLaunch.launchDesktopEntry(root.desktopEntry);
+        root.launchNewInstance();
     }
 
     altAction: () => {
@@ -234,7 +260,7 @@ DockButton {
                         label: Translation.tr("New window")
                         symbol: "add_box"
                         onTriggered: {
-                            AppLaunch.launchDesktopEntry(root.desktopEntry)
+                            root.launchNewInstance()
                             dockContextMenu.close()
                         }
                     }

@@ -23,7 +23,95 @@ Item {
     property bool dockDragging: false
     property string draggedPinnedAppId: ""
     property string dropTargetPinnedAppId: ""
-    property bool requestDockShow: previewPopup.show || dockDragging || contextMenuButton !== null
+    property bool launchStripeShown: false
+    property bool launchCompleting: false
+    property real launchProgress: 0
+    property string launchingAppId: ""
+    property int launchingInitialWindowCount: 0
+    property bool requestDockShow: previewPopup.show || dockDragging || contextMenuButton !== null || launchStripeShown
+
+    function beginAppLaunch(appId, initialWindowCount) {
+        launchAdvanceAnimation.stop()
+        launchCompleteAnimation.stop()
+        launchHideTimer.stop()
+        launchResetTimer.stop()
+        launchTimeoutTimer.stop()
+
+        root.launchingAppId = TaskbarApps.canonicalAppId(appId)
+        root.launchingInitialWindowCount = Math.max(0, Number(initialWindowCount) || 0)
+        root.launchCompleting = false
+        root.launchProgress = 0.06
+        root.launchStripeShown = true
+        launchAdvanceAnimation.restart()
+        launchTimeoutTimer.restart()
+    }
+
+    function observeAppWindows(appId, windowCount) {
+        if (!root.launchStripeShown || root.launchCompleting)
+            return
+        if (TaskbarApps.canonicalAppId(appId) !== root.launchingAppId)
+            return
+        if (Number(windowCount) > root.launchingInitialWindowCount)
+            root.completeAppLaunch()
+    }
+
+    function completeAppLaunch() {
+        if (!root.launchStripeShown || root.launchCompleting)
+            return
+
+        root.launchCompleting = true
+        launchAdvanceAnimation.stop()
+        launchTimeoutTimer.stop()
+        launchCompleteAnimation.restart()
+    }
+
+    NumberAnimation {
+        id: launchAdvanceAnimation
+        target: root
+        property: "launchProgress"
+        to: 0.82
+        duration: 8000
+        easing.type: Easing.OutCubic
+    }
+
+    NumberAnimation {
+        id: launchCompleteAnimation
+        target: root
+        property: "launchProgress"
+        to: 1
+        duration: 220
+        easing.type: Easing.OutCubic
+        onFinished: launchHideTimer.restart()
+    }
+
+    Timer {
+        id: launchTimeoutTimer
+        interval: 12000
+        repeat: false
+        onTriggered: root.completeAppLaunch()
+    }
+
+    Timer {
+        id: launchHideTimer
+        interval: 220
+        repeat: false
+        onTriggered: {
+            root.launchStripeShown = false
+            launchResetTimer.restart()
+        }
+    }
+
+    Timer {
+        id: launchResetTimer
+        interval: 260
+        repeat: false
+        onTriggered: {
+            root.launchProgress = 0
+            root.launchCompleting = false
+            root.launchingAppId = ""
+            root.launchingInitialWindowCount = 0
+        }
+    }
 
     function cancelPreviewImmediately() {
         root.previewTargetButton = null
