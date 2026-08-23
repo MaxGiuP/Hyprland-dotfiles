@@ -8,6 +8,7 @@ DialogListItem {
     id: root
     required property var device
     property bool expanded: false
+    property bool showExpansionIndicator: true
     pointingHandCursor: !expanded
 
     onClicked: expanded = !expanded
@@ -65,6 +66,7 @@ DialogListItem {
             }
 
             MaterialSymbol {
+                visible: root.showExpansionIndicator
                 text: "keyboard_arrow_down"
                 iconSize: Appearance.font.pixelSize.larger
                 color: Appearance.colors.colOnLayer3

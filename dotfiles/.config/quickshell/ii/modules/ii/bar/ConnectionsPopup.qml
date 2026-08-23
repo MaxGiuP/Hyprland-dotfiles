@@ -9,13 +9,12 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Bluetooth
 
 StyledPopup {
     id: root
 
     keepOpenOnPopupHover: true
-    horizontalOffset: -190
+    horizontalOffset: -80
     property real contentWidth: 390
     property real maxListHeight: 150
 
@@ -77,24 +76,6 @@ StyledPopup {
                 }
             }
 
-            RippleButton {
-                implicitWidth: 34
-                implicitHeight: 34
-                buttonRadius: Appearance.rounding.full
-                toggled: Network.wifiEnabled
-                colBackgroundToggled: Appearance.colors.colSecondaryContainer
-                colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
-                onClicked: Network.toggleWifi()
-
-                contentItem: MaterialSymbol {
-                    anchors.centerIn: parent
-                    text: Network.wifiEnabled ? "wifi" : "wifi_off"
-                    iconSize: 20
-                    color: Network.wifiEnabled
-                        ? Appearance.colors.colOnSecondaryContainer
-                        : Appearance.colors.colOnSurfaceVariant
-                }
-            }
         }
 
         StyledIndeterminateProgressBar {
@@ -244,18 +225,6 @@ StyledPopup {
                             }
                         }
 
-                        MaterialSymbol {
-                            text: Network.ethernetActionRunning
-                                    && Network.ethernetActionDevice === (ethernetDeviceItem.modelData?.device ?? "")
-                                ? "progress_activity"
-                                : "keyboard_arrow_down"
-                            rotation: ethernetDeviceItem.expanded ? 180 : 0
-                            iconSize: Appearance.font.pixelSize.larger
-                            color: Appearance.colors.colOnSurfaceVariant
-                            Behavior on rotation {
-                                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-                            }
-                        }
                     }
 
                     RowLayout {
@@ -335,28 +304,6 @@ StyledPopup {
                 }
             }
 
-            RippleButton {
-                implicitWidth: 34
-                implicitHeight: 34
-                buttonRadius: Appearance.rounding.full
-                enabled: BluetoothStatus.available
-                toggled: BluetoothStatus.enabled
-                colBackgroundToggled: Appearance.colors.colSecondaryContainer
-                colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
-                onClicked: {
-                    if (Bluetooth.defaultAdapter)
-                        Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter.enabled;
-                }
-
-                contentItem: MaterialSymbol {
-                    anchors.centerIn: parent
-                    text: BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
-                    iconSize: 20
-                    color: BluetoothStatus.enabled
-                        ? Appearance.colors.colOnSecondaryContainer
-                        : Appearance.colors.colOnSurfaceVariant
-                }
-            }
         }
 
         ListView {
@@ -374,6 +321,7 @@ StyledPopup {
             delegate: BluetoothDeviceItem {
                 required property var modelData
                 device: modelData
+                showExpansionIndicator: false
                 width: ListView.view.width
             }
 
