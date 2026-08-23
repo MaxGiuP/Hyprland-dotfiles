@@ -31,25 +31,16 @@ Scope {
 
     property var _slotCounters: ({})
     property string contextMenuScreen: ""
+    property var contextMenuToplevelAtOpen: null
 
     function openDesktopContextMenu(screenName) {
         root.contextMenuScreen = screenName || ""
+        root.contextMenuToplevelAtOpen = ToplevelManager.activeToplevel
     }
 
     function closeDesktopContextMenu() {
         root.contextMenuScreen = ""
-    }
-
-    function screenForGlobalPoint(globalX, globalY) {
-        const x = Number(globalX ?? -1)
-        const y = Number(globalY ?? -1)
-        return HyprlandData.monitors.find(m => {
-            const left = Number(m?.x ?? 0)
-            const top = Number(m?.y ?? 0)
-            const width = Number(m?.width ?? 0)
-            const height = Number(m?.height ?? 0)
-            return x >= left && x < left + width && y >= top && y < top + height
-        })?.name ?? ""
+        root.contextMenuToplevelAtOpen = null
     }
 
     FileView {
@@ -338,40 +329,14 @@ Scope {
         sortField: FolderListModel.Name
     }
 
-    // A context menu belongs to the monitor where it was opened. Poll only
-    // while one is visible so crossing a layer-shell boundary dismisses it
-    // even when the destination surface consumes pointer hover events.
-    Timer {
-        id: contextMenuMonitorTimer
-        interval: 100
-        repeat: true
-        running: root.contextMenuScreen.length > 0
-        onTriggered: {
-            if (!Quickshell.screens.some(screen => screen.name === root.contextMenuScreen)) {
+    Connections {
+        target: ToplevelManager
+        function onActiveToplevelChanged() {
+            const activeToplevel = ToplevelManager.activeToplevel
+            if (root.contextMenuScreen.length > 0
+                    && activeToplevel !== null
+                    && activeToplevel !== root.contextMenuToplevelAtOpen)
                 root.closeDesktopContextMenu()
-                return
-            }
-            if (!contextMenuCursorProcess.running)
-                contextMenuCursorProcess.running = true
-        }
-    }
-
-    Process {
-        id: contextMenuCursorProcess
-        command: ["hyprctl", "cursorpos", "-j"]
-        stdout: StdioCollector {
-            id: contextMenuCursorCollector
-            onStreamFinished: {
-                if (root.contextMenuScreen.length === 0)
-                    return
-                try {
-                    const position = JSON.parse(contextMenuCursorCollector.text)
-                    const pointerScreen = root.screenForGlobalPoint(position?.x, position?.y)
-                    if (pointerScreen.length > 0 && pointerScreen !== root.contextMenuScreen)
-                        root.closeDesktopContextMenu()
-                } catch (e) {
-                }
-            }
         }
     }
 
