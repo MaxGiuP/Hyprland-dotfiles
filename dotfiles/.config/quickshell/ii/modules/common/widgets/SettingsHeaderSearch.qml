@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import qs.services
 import qs.modules.common
@@ -78,8 +79,6 @@ FocusScope {
         results.sort((left, right) => left.score - right.score || left.label.localeCompare(right.label))
         return results.slice(0, root.maxResults)
     }
-    readonly property bool dropdownVisible: root.activeFocus && root.query.trim().length > 0
-
     Layout.preferredWidth: Math.max(180, Math.min(280, (parent?.width ?? 700) * 0.32))
     Layout.minimumWidth: 180
     Layout.maximumWidth: 280
@@ -90,6 +89,7 @@ FocusScope {
     function clearQuery(keepFocus = true) {
         searchField.clear()
         root.queryEdited("")
+        dropdown.close()
         if (keepFocus)
             searchField.forceActiveFocus()
     }
@@ -111,6 +111,12 @@ FocusScope {
         root.focus = false
     }
 
+    onQueryChanged: {
+        if (root.query.trim().length > 0 && searchField.activeFocus)
+            dropdown.open()
+        else if (root.query.trim().length === 0)
+            dropdown.close()
+    }
     onRecommendationsChanged: recommendationList.currentIndex = recommendations.length > 0 ? 0 : -1
 
     ToolbarTextField {
@@ -122,6 +128,10 @@ FocusScope {
         selectByMouse: true
 
         onTextEdited: root.queryEdited(text)
+        onActiveFocusChanged: {
+            if (activeFocus && root.query.trim().length > 0)
+                dropdown.open()
+        }
         Keys.onDownPressed: event => {
             if (root.recommendations.length > 0)
                 recommendationList.currentIndex = Math.min(recommendationList.currentIndex + 1, root.recommendations.length - 1)
@@ -182,106 +192,112 @@ FocusScope {
         }
     }
 
-    Rectangle {
+    Popup {
         id: dropdown
-        visible: root.dropdownVisible
-        anchors.top: parent.bottom
-        anchors.topMargin: 8
-        anchors.right: parent.right
+        x: root.width - width
+        y: root.height + 8
         width: Math.max(root.width, 390)
         height: root.recommendations.length > 0
-            ? Math.min(404, recommendationList.contentHeight + 8)
+            ? Math.min(408, recommendationList.contentHeight + topPadding + bottomPadding)
             : 56
-        radius: Appearance.rounding.small
-        color: Appearance.colors.colSurfaceContainerHigh
-        border.width: 1
-        border.color: Appearance.colors.colOutlineVariant
-        clip: true
+        padding: 4
+        modal: false
+        focus: false
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside | Popup.CloseOnPressOutsideParent
 
-        ListView {
-            id: recommendationList
-            visible: root.recommendations.length > 0
-            anchors.fill: parent
-            anchors.margins: 4
-            clip: true
-            spacing: 2
-            model: root.recommendations
-            currentIndex: root.recommendations.length > 0 ? 0 : -1
+        background: Rectangle {
+            radius: Appearance.rounding.small
+            color: Appearance.m3colors.m3surfaceContainerHigh
+            border.width: 1
+            border.color: Appearance.m3colors.m3outlineVariant
+        }
 
-            delegate: RippleButton {
-                required property var modelData
-                required property int index
+        contentItem: Item {
+            ListView {
+                id: recommendationList
+                visible: root.recommendations.length > 0
+                anchors.fill: parent
+                clip: true
+                spacing: 2
+                model: root.recommendations
+                currentIndex: root.recommendations.length > 0 ? 0 : -1
 
-                width: recommendationList.width
-                height: 48
-                buttonRadius: Appearance.rounding.small
-                colBackground: index === recommendationList.currentIndex
-                    ? Appearance.colors.colLayer2
-                    : "transparent"
-                colBackgroundHover: Appearance.colors.colLayer2Hover
-                onHoveredChanged: {
-                    if (hovered)
-                        recommendationList.currentIndex = index
-                }
-                onClicked: root.selectResult(modelData)
+                delegate: RippleButton {
+                    required property var modelData
+                    required property int index
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 8
-                    spacing: 10
+                    width: recommendationList.width
+                    height: 48
+                    buttonRadius: Appearance.rounding.small
+                    colBackground: index === recommendationList.currentIndex
+                        ? Appearance.m3colors.m3surfaceContainerHighest
+                        : Appearance.m3colors.m3surfaceContainerHigh
+                    colBackgroundHover: Appearance.m3colors.m3surfaceContainerHighest
+                    colRipple: Appearance.m3colors.m3surfaceContainerHighest
+                    onHoveredChanged: {
+                        if (hovered)
+                            recommendationList.currentIndex = index
+                    }
+                    onClicked: root.selectResult(modelData)
 
-                    Rectangle {
-                        Layout.preferredWidth: 30
-                        Layout.preferredHeight: 30
-                        radius: Appearance.rounding.small
-                        color: Appearance.colors.colSecondaryContainer
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 8
+                        spacing: 10
+
+                        Rectangle {
+                            Layout.preferredWidth: 30
+                            Layout.preferredHeight: 30
+                            radius: Appearance.rounding.small
+                            color: Appearance.m3colors.m3secondaryContainer
+
+                            MaterialSymbol {
+                                anchors.centerIn: parent
+                                text: modelData.icon
+                                iconSize: 17
+                                color: Appearance.m3colors.m3onSecondaryContainer
+                            }
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: modelData.label
+                                color: Appearance.m3colors.m3onSurface
+                                font.pixelSize: Appearance.font.pixelSize.small
+                                font.weight: Font.Medium
+                                elide: Text.ElideRight
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: modelData.pageName
+                                color: Appearance.m3colors.m3onSurfaceVariant
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                elide: Text.ElideRight
+                            }
+                        }
 
                         MaterialSymbol {
-                            anchors.centerIn: parent
-                            text: modelData.icon
+                            text: "chevron_right"
                             iconSize: 17
-                            color: Appearance.colors.colOnSecondaryContainer
+                            color: Appearance.m3colors.m3onSurfaceVariant
                         }
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 0
-
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: modelData.label
-                            color: Appearance.colors.colOnLayer1
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            font.weight: Font.Medium
-                            elide: Text.ElideRight
-                        }
-
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: modelData.pageName
-                            color: Appearance.colors.colSubtext
-                            font.pixelSize: Appearance.font.pixelSize.smaller
-                            elide: Text.ElideRight
-                        }
-                    }
-
-                    MaterialSymbol {
-                        text: "chevron_right"
-                        iconSize: 17
-                        color: Appearance.colors.colSubtext
                     }
                 }
             }
-        }
 
-        StyledText {
-            visible: root.recommendations.length === 0
-            anchors.centerIn: parent
-            text: Translation.tr("No matching settings")
-            color: Appearance.colors.colSubtext
-            font.pixelSize: Appearance.font.pixelSize.small
+            StyledText {
+                visible: root.recommendations.length === 0
+                anchors.centerIn: parent
+                text: Translation.tr("No matching settings")
+                color: Appearance.m3colors.m3onSurfaceVariant
+                font.pixelSize: Appearance.font.pixelSize.small
+            }
         }
     }
 }
