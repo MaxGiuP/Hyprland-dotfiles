@@ -27,13 +27,15 @@ Item {
     readonly property string specialWorkspaceLabel: specialWorkspaceRawName.replace(/^special:/, "")
     
     readonly property int workspacesShown: Math.max(Config.options.bar.workspaces.shown, 1)
+    readonly property int eventServiceActiveWorkspaceId: validWorkspaceId(HyprlandData.activeWorkspaceIdsByMonitor[monitorName])
     readonly property int nativeActiveWorkspaceId: validWorkspaceId(monitor?.activeWorkspace?.id)
     readonly property int polledServiceActiveWorkspaceId: validWorkspaceId(monitorData?.activeWorkspace?.id)
     readonly property int reportedActiveWorkspaceId: polledServiceActiveWorkspaceId
     property int lastValidActiveWorkspaceId: 0
-    readonly property int activeWorkspaceId: reportedActiveWorkspaceId > 0
-        ? reportedActiveWorkspaceId
-        : (nativeActiveWorkspaceId > 0 ? nativeActiveWorkspaceId : lastValidActiveWorkspaceId)
+    readonly property int activeWorkspaceId: eventServiceActiveWorkspaceId > 0
+        ? eventServiceActiveWorkspaceId
+        : (reportedActiveWorkspaceId > 0 ? reportedActiveWorkspaceId
+        : (nativeActiveWorkspaceId > 0 ? nativeActiveWorkspaceId : lastValidActiveWorkspaceId))
     readonly property int workspaceGroup: activeWorkspaceId > 0 ? Math.floor((root.activeWorkspaceId - 1) / root.workspacesShown) : 0
     property list<bool> workspaceOccupied: []
     property int widgetPadding: 4
@@ -51,9 +53,11 @@ Item {
     }
 
     function rememberReportedWorkspace() {
-        const reportedId = root.reportedActiveWorkspaceId > 0
+        const reportedId = root.eventServiceActiveWorkspaceId > 0
+            ? root.eventServiceActiveWorkspaceId
+            : (root.reportedActiveWorkspaceId > 0
             ? root.reportedActiveWorkspaceId
-            : root.nativeActiveWorkspaceId;
+            : root.nativeActiveWorkspaceId);
         if (reportedId > 0 && root.lastValidActiveWorkspaceId !== reportedId)
             root.lastValidActiveWorkspaceId = reportedId;
     }
@@ -61,6 +65,7 @@ Item {
     onReportedActiveWorkspaceIdChanged: {
         root.rememberReportedWorkspace();
     }
+    onEventServiceActiveWorkspaceIdChanged: root.rememberReportedWorkspace()
     onNativeActiveWorkspaceIdChanged: root.rememberReportedWorkspace()
     onMonitorNameChanged: root.rememberReportedWorkspace()
     Component.onCompleted: {

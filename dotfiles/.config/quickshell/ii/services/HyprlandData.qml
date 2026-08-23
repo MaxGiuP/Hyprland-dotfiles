@@ -23,6 +23,10 @@ Singleton {
     property var monitors: []
     property var layers: ({})
     property bool monitorRefreshPending: false
+    property var activeWorkspaceIdsByMonitor: ({})
+    property var workspaceEventTimesByMonitor: ({})
+    property string eventFocusedMonitorName: ""
+    readonly property string workspaceEventSocketPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr/${Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")}/.socket2.sock`
 
     // Convenient stuff
 
@@ -129,6 +133,89 @@ Singleton {
 
     // Internals
 
+    function validWorkspaceId(value) {
+        const id = Number(value ?? 0);
+        return Number.isFinite(id) && id > 0 ? Math.round(id) : 0;
+    }
+
+    function workspaceIdFromEvent(value) {
+        const numericId = root.validWorkspaceId(value);
+        if (numericId > 0)
+            return numericId;
+        const name = `${value ?? ""}`;
+        return root.validWorkspaceId(root.workspaces.find(ws => `${ws.name}` === name)?.id);
+    }
+
+    function setEventWorkspace(monitorName, workspaceId) {
+        const name = `${monitorName ?? ""}`;
+        const id = root.validWorkspaceId(workspaceId);
+        if (!name || id <= 0)
+            return;
+
+        const ids = Object.assign({}, root.activeWorkspaceIdsByMonitor);
+        const times = Object.assign({}, root.workspaceEventTimesByMonitor);
+        const changed = ids[name] !== id;
+        ids[name] = id;
+        times[name] = Date.now();
+        if (changed)
+            root.activeWorkspaceIdsByMonitor = ids;
+        root.workspaceEventTimesByMonitor = times;
+    }
+
+    function handleWorkspaceEvent(event) {
+        const name = event.name;
+        const parts = `${event.data ?? ""}`.split(",");
+
+        if (name === "focusedmon") {
+            const monitorName = parts.shift() ?? "";
+            root.eventFocusedMonitorName = monitorName;
+            root.setEventWorkspace(monitorName, root.workspaceIdFromEvent(parts.join(",")));
+            return;
+        }
+
+        if (name !== "workspace" && name !== "workspacev2")
+            return;
+
+        if (!root.eventFocusedMonitorName)
+            root.eventFocusedMonitorName = root.monitors.find(m => m.focused)?.name ?? "";
+        const workspaceId = name === "workspacev2"
+            ? root.workspaceIdFromEvent(parts[0])
+            : root.workspaceIdFromEvent(event.data);
+        root.setEventWorkspace(root.eventFocusedMonitorName, workspaceId);
+    }
+
+    function handleWorkspaceSocketLine(line) {
+        const separator = line.indexOf(">>");
+        if (separator <= 0)
+            return;
+        root.handleWorkspaceEvent({
+            name: line.substring(0, separator),
+            data: line.substring(separator + 2)
+        });
+    }
+
+    function reconcileMonitorWorkspaceState(nextMonitors) {
+        const now = Date.now();
+        const ids = Object.assign({}, root.activeWorkspaceIdsByMonitor);
+        const times = root.workspaceEventTimesByMonitor;
+        let changed = false;
+
+        for (const monitor of nextMonitors) {
+            const name = `${monitor?.name ?? ""}`;
+            const id = root.validWorkspaceId(monitor?.activeWorkspace?.id);
+            if (name && id > 0 && ids[name] !== id
+                    && (ids[name] === undefined || now - Number(times[name] ?? 0) >= 500)) {
+                ids[name] = id;
+                changed = true;
+            }
+            if (monitor?.focused)
+                root.eventFocusedMonitorName = name;
+        }
+
+        if (changed)
+            root.activeWorkspaceIdsByMonitor = ids;
+    }
+
     function updateWindowList() {
         if (!getClients.running)
             getClients.running = true;
@@ -225,15 +312,88 @@ Singleton {
         }
 
         function onRawEvent(event) {
-            // console.log("Hyprland raw event:", event.name);
-            if (["openlayer", "closelayer", "screencast"].includes(event.name)) return;
-            if (["workspace", "workspacev2", "focusedmon", "activespecial"].includes(event.name)) {
+            const name = event.name;
+
+            // Window titles can change many times per second (for example a
+            // terminal spinner). They must never congest workspace/monitor
+            // refreshes; only the client metadata depends on these events.
+            if (["windowtitle", "windowtitlev2"].includes(name)) {
+                windowTitleRefresh.restart();
+                return;
+            }
+
+            if (["workspace", "workspacev2", "focusedmon", "activespecial",
+                    "moveworkspace", "moveworkspacev2", "createworkspace",
+                    "createworkspacev2", "destroyworkspace", "destroyworkspacev2",
+                    "renameworkspace"].includes(name)) {
+                root.handleWorkspaceEvent(event);
                 // Keep Quickshell's native objects current as well as the
                 // richer hyprctl-backed data used elsewhere in the shell.
                 Hyprland.refreshWorkspaces();
                 Hyprland.refreshMonitors();
+                root.updateMonitors();
+                root.updateWorkspaces();
+                root.updateWindowList();
+                return;
             }
-            updateAll()
+
+            if (["openlayer", "closelayer", "screencast"].includes(name))
+            {
+                if (name !== "screencast")
+                    root.updateLayers();
+                return;
+            }
+
+            if (["openwindow", "closewindow", "movewindow", "movewindowv2",
+                    "activewindow", "activewindowv2", "fullscreen", "pin",
+                    "changefloatingmode", "minimize", "togglegroup", "moveintogroup",
+                    "moveoutofgroup", "changegroupactive", "lockgroups"].includes(name)) {
+                root.updateWindowList();
+                return;
+            }
+
+            if (["monitoradded", "monitoraddedv2", "monitorremoved"].includes(name)) {
+                Hyprland.refreshMonitors();
+                root.updateMonitors();
+                root.updateWorkspaces();
+                return;
+            }
+
+            if (name === "configreloaded")
+                root.updateAll();
+        }
+    }
+
+    Timer {
+        id: windowTitleRefresh
+        interval: 200
+        repeat: false
+        onTriggered: root.updateWindowList()
+    }
+
+    // Quickshell's built-in Hyprland event connection can remain disconnected
+    // after PeerClosedError. Keep workspace highlighting independent from that
+    // connection and filter the noisy event stream before it reaches QML.
+    Process {
+        id: workspaceEventSocket
+        running: root.workspaceEventSocketPath.length > 0
+        command: [
+            "bash", "-c",
+            `socat -u UNIX-CONNECT:${root.workspaceEventSocketPath} - | grep --line-buffered -E '^(workspace|workspacev2|focusedmon)>>'`
+        ]
+        stdout: SplitParser {
+            onRead: line => root.handleWorkspaceSocketLine(line)
+        }
+        onExited: workspaceEventSocketRestart.restart()
+    }
+
+    Timer {
+        id: workspaceEventSocketRestart
+        interval: 250
+        repeat: false
+        onTriggered: {
+            if (!workspaceEventSocket.running && root.workspaceEventSocketPath.length > 0)
+                workspaceEventSocket.running = true;
         }
     }
 
@@ -281,16 +441,28 @@ Singleton {
         id: getMonitors
         command: ["hyprctl", "monitors", "-j"]
         onRunningChanged: {
-            if (!running && root.monitorRefreshPending) {
-                root.monitorRefreshPending = false;
-                running = true;
-            }
+            if (!running && root.monitorRefreshPending)
+                monitorRefreshRetry.restart();
         }
         stdout: StdioCollector {
             id: monitorsCollector
             onStreamFinished: {
-                root.monitors = JSON.parse(monitorsCollector.text);
+                const nextMonitors = JSON.parse(monitorsCollector.text);
+                root.reconcileMonitorWorkspaceState(nextMonitors);
+                root.monitors = nextMonitors;
             }
+        }
+    }
+
+    Timer {
+        id: monitorRefreshRetry
+        interval: 0
+        repeat: false
+        onTriggered: {
+            if (getMonitors.running)
+                return;
+            root.monitorRefreshPending = false;
+            getMonitors.running = true;
         }
     }
 
