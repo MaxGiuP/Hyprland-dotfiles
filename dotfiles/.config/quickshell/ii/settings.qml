@@ -29,10 +29,10 @@ ApplicationWindow {
     property var pages: [
         { displayName: Translation.tr("Home"), icon: "home", component: "modules/settings/HomeConfig.qml" },
         { displayName: Translation.tr("Connectivity"), icon: "language", component: "modules/settings/ConnectivityConfig.qml" },
+        { displayName: Translation.tr("Peripherals"), icon: "mouse", component: "modules/settings/PeripheralsConfig.qml" },
         { displayName: Translation.tr("Display"), icon: "desktop_windows", component: "modules/settings/DisplayPowerConfig.qml" },
         { displayName: Translation.tr("Audio"), icon: "volume_up", component: "modules/settings/AudioControlConfig.qml" },
-        { displayName: Translation.tr("Customisation"), icon: "palette", component: "modules/settings/DesktopThemeConfig.qml" },
-        { displayName: Translation.tr("Interface & Apps"), icon: "preview", component: "modules/settings/InterfaceConfig.qml" },
+        { displayName: Translation.tr("Personalisation"), icon: "palette", component: "modules/settings/PersonalisationConfig.qml" },
         { displayName: Translation.tr("Account"), icon: "person", component: "modules/settings/AccountsConfig.qml" },
         { displayName: Translation.tr("Date, time & language"), icon: "schedule", component: "modules/settings/DateTimeLanguageConfig.qml" },
         { displayName: Translation.tr("Accessibility"), icon: "accessibility_new", component: "modules/settings/AccessibilityConfig.qml" },
@@ -50,6 +50,20 @@ ApplicationWindow {
 
     function openConfigFile() {
         Quickshell.execDetached(["xdg-open", Directories.shellConfigPath])
+    }
+
+    function prepareLoadedPage(item) {
+        if (item && "settingsHost" in item)
+            item.settingsHost = root
+    }
+
+    function applyRequestedNavigationTo(item) {
+        if (!item || root.requestedSubTab < 0 || typeof item.applySubTab !== "function")
+            return
+
+        item.applySubTab(root.requestedSubTab, root.requestedSectionId)
+        root.requestedSubTab = -1
+        root.requestedSectionId = ""
     }
 
     visible: true
@@ -222,76 +236,51 @@ ApplicationWindow {
                 radius: Appearance.rounding.windowRounding - root.contentPadding
                 clip: true
 
-                Loader {
-                    id: pageLoader
+                Item {
+                    id: pageStack
                     anchors.fill: parent
-                    opacity: 1.0
-                    active: Config.ready
 
-                    Component.onCompleted: {
-                        source = root.pages[0].component
-                    }
+                    Repeater {
+                        model: root.pages
 
-                    Connections {
-                        target: root
-                        function onCurrentPageChanged() {
-                            switchAnim.complete()
-                            switchAnim.start()
-                        }
-                    }
+                        Loader {
+                            required property int index
+                            required property var modelData
 
-                    onLoaded: {
-                        if (root.requestedSubTab >= 0 && typeof item.applySubTab === "function") {
-                            item.applySubTab(root.requestedSubTab, root.requestedSectionId)
-                            root.requestedSubTab = -1
-                            root.requestedSectionId = ""
-                        }
-                    }
+                            property bool loadedOnce: false
+                            readonly property bool current: root.currentPage === index
 
-                    SequentialAnimation {
-                        id: switchAnim
+                            anchors.fill: parent
+                            active: Config.ready && (current || loadedOnce)
+                            asynchronous: !current
+                            source: modelData.component
+                            visible: active && (current || opacity > 0.001)
+                            enabled: current
+                            opacity: current && status === Loader.Ready ? 1 : 0
+                            z: current ? 1 : 0
 
-                        // Fade out current page
-                        NumberAnimation {
-                            target: pageLoader
-                            properties: "opacity"
-                            from: 1
-                            to: 0
-                            duration: 100
-                            easing.type: Appearance.animation.elementMoveExit.type
-                            easing.bezierCurve: Appearance.animationCurves.emphasizedAccel
-                        }
-                        // Swap content and push position down (will slide up during enter)
-                        ParallelAnimation {
-                            PropertyAction {
-                                target: pageLoader
-                                property: "source"
-                                value: root.pages[root.currentPage].component
+                            onLoaded: {
+                                loadedOnce = true
+                                root.prepareLoadedPage(item)
+                                applyRequestedNavigation()
                             }
-                            PropertyAction {
-                                target: pageLoader
-                                property: "anchors.topMargin"
-                                value: 20
+
+                            onCurrentChanged: {
+                                if (current)
+                                    applyRequestedNavigation()
                             }
-                        }
-                        // Fade in + slide up
-                        ParallelAnimation {
-                            NumberAnimation {
-                                target: pageLoader
-                                properties: "opacity"
-                                from: 0
-                                to: 1
-                                duration: 200
-                                easing.type: Appearance.animation.elementMoveEnter.type
-                                easing.bezierCurve: Appearance.animationCurves.emphasizedDecel
+
+                            function applyRequestedNavigation() {
+                                if (current && status === Loader.Ready)
+                                    root.applyRequestedNavigationTo(item)
                             }
-                            NumberAnimation {
-                                target: pageLoader
-                                properties: "anchors.topMargin"
-                                to: 0
-                                duration: 200
-                                easing.type: Appearance.animation.elementMoveEnter.type
-                                easing.bezierCurve: Appearance.animationCurves.emphasizedDecel
+
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: current ? 200 : 100
+                                    easing.type: current ? Appearance.animation.elementMoveEnter.type : Appearance.animation.elementMoveExit.type
+                                    easing.bezierCurve: current ? Appearance.animationCurves.emphasizedDecel : Appearance.animationCurves.emphasizedAccel
+                                }
                             }
                         }
                     }

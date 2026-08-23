@@ -23,6 +23,7 @@ ContentPage {
     property string promptPasswordKey: ""
     property string pendingConnectKey: ""
     property string pendingConnectError: ""
+    property bool connectionDetailsExpanded: false
     property bool extraSettingsExpanded: false
     property var cards: []
     property var wifiScanResults: []
@@ -605,21 +606,79 @@ ContentPage {
             }
         }
 
-        StyledComboBox {
+        RippleButton {
             Layout.fillWidth: true
-            buttonIcon: "router"
-            textRole: "displayName"
-            model: root.adapterOptions
-            currentIndex: Math.max(0, model.findIndex(item => item.value === root.selectedAdapterMode))
-            onActivated: index => {
-                root.selectedAdapterMode = model[index]?.value ?? ""
-                root.promptPasswordKey = ""
-                root.pendingConnectKey = ""
+            implicitHeight: 44
+            buttonRadius: Appearance.rounding.normal
+            colBackground: Appearance.colors.colLayer1
+            colBackgroundHover: Appearance.colors.colLayer1Hover
+            colRipple: Appearance.colors.colLayer1Active
+            onClicked: root.connectionDetailsExpanded = !root.connectionDetailsExpanded
+
+            contentItem: RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 12
+                anchors.rightMargin: 12
+                spacing: 9
+
+                MaterialSymbol {
+                    text: root.showingEthernet ? "lan" : "router"
+                    iconSize: 19
+                    color: Appearance.colors.colOnLayer1
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: Translation.tr("Connection details")
+                        color: Appearance.colors.colOnLayer1
+                        font.weight: Font.Medium
+                    }
+
+                    StyledText {
+                        Layout.fillWidth: true
+                        text: root.connectedLabel()
+                        color: Appearance.colors.colSubtext
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        elide: Text.ElideRight
+                    }
+                }
+
+                MaterialSymbol {
+                    text: root.connectionDetailsExpanded ? "expand_less" : "expand_more"
+                    iconSize: 20
+                    color: Appearance.colors.colSubtext
+                }
             }
         }
 
-        Rectangle {
+        Revealer {
             Layout.fillWidth: true
+            reveal: root.connectionDetailsExpanded
+            vertical: true
+
+            ColumnLayout {
+                width: parent.width
+                spacing: 8
+
+                StyledComboBox {
+                    Layout.fillWidth: true
+                    buttonIcon: "router"
+                    textRole: "displayName"
+                    model: root.adapterOptions
+                    currentIndex: Math.max(0, model.findIndex(item => item.value === root.selectedAdapterMode))
+                    onActivated: index => {
+                        root.selectedAdapterMode = model[index]?.value ?? ""
+                        root.promptPasswordKey = ""
+                        root.pendingConnectKey = ""
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
             radius: Appearance.rounding.normal
             color: Appearance.colors.colLayer1
             border.width: 1
@@ -798,7 +857,9 @@ ContentPage {
                         onClicked: root.runAction(["connect-device", root.primaryEthernetCard.device])
                     }
                 }
+                }
             }
+        }
         }
 
         StyledText {
