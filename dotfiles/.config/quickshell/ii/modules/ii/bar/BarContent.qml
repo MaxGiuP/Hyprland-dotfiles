@@ -303,6 +303,10 @@ Item { // Bar content region
                     GlobalStates.toggleSidebarRight(root.screen?.name ?? "");
                 }
 
+                ConnectionsPopup {
+                    hoverTarget: rightSidebarButton
+                }
+
                 RowLayout {
                     id: indicatorsRowLayout
                     anchors.centerIn: parent

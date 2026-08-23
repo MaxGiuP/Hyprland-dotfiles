@@ -13,12 +13,40 @@ LazyLoader {
     default property Item contentItem
     property real popupBackgroundMargin: 0
     property real horizontalOffset: 0
+    property bool keepOpenOnPopupHover: false
+    property bool popupHovered: false
+    property bool hoverHeld: false
+    property int hoverCloseDelay: 220
 
     function clamp(value, minValue, maxValue) {
         return Math.max(minValue, Math.min(maxValue, value));
     }
 
-    active: hoverTarget && hoverTarget.containsMouse
+    active: hoverTarget && (hoverTarget.containsMouse || (keepOpenOnPopupHover && hoverHeld))
+
+    Connections {
+        target: root.hoverTarget
+        enabled: root.keepOpenOnPopupHover && root.hoverTarget !== null
+
+        function onContainsMouseChanged() {
+            if (root.hoverTarget?.containsMouse) {
+                hoverCloseTimer.stop();
+                root.hoverHeld = true;
+            } else {
+                hoverCloseTimer.restart();
+            }
+        }
+    }
+
+    Timer {
+        id: hoverCloseTimer
+        interval: root.hoverCloseDelay
+        repeat: false
+        onTriggered: {
+            if (!root.popupHovered && !(root.hoverTarget?.containsMouse ?? false))
+                root.hoverHeld = false;
+        }
+    }
 
     component: PanelWindow {
         id: popupWindow
@@ -93,6 +121,19 @@ LazyLoader {
 
             border.width: 1
             border.color: Appearance.colors.colLayer0Border
+
+            HoverHandler {
+                enabled: root.keepOpenOnPopupHover
+                onHoveredChanged: {
+                    root.popupHovered = hovered;
+                    if (hovered) {
+                        hoverCloseTimer.stop();
+                        root.hoverHeld = true;
+                    } else if (!(root.hoverTarget?.containsMouse ?? false)) {
+                        hoverCloseTimer.restart();
+                    }
+                }
+            }
         }
     }
 }
