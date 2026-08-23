@@ -348,7 +348,24 @@ def build_firefox_css(colors: dict[str, str]) -> str:
   box-shadow: 0 0 0 1px {primary}, 0 12px 28px {alpha("#000000", 0.24 if is_dark(bg) else 0.14)} !important;
 }}
 
-menupopup,
+/* The popup host is a rectangular native surface. Keep it transparent and put
+ * the fill on Firefox's exported, rounded content part so no square corners
+ * can show outside the menu border. */
+:root menupopup {{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}}
+
+:root menupopup::part(content) {{
+  background: {popup_bg} !important;
+  background-clip: padding-box !important;
+  color: {contrast_text(container)} !important;
+  border: 1px solid {popup_border} !important;
+  border-radius: var(--panel-border-radius, 12px) !important;
+  overflow: hidden !important;
+}}
+
 panel,
 .panel-arrowcontent,
 .PanelUI-subView {{

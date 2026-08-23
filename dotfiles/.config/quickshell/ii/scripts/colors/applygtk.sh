@@ -2528,33 +2528,22 @@ CSS
 # ── Geometry CSS ─────────────────────────────────────────────────────────────
 geometry_css=$(cat <<'CSS'
 /*
- * Quickshell GTK geometry tuning
+ * Quickshell GTK geometry tuning.
+ * Keep values concrete: GTK's CSS parser does not support :root custom
+ * properties or var(), even though the syntax looks like browser CSS.
  */
-
-:root {
-  --qs-pad-1: 2px;
-  --qs-pad-2: 4px;
-  --qs-pad-3: 6px;
-  --qs-pad-4: 8px;
-  --qs-control-gap: 2px;
-  --qs-radius-control: 6px;
-  --qs-radius-list: 8px;
-  --qs-radius-window: 12px;
-  --qs-radius-menu: 10px;
-  --qs-radius-popover: 12px;
-}
 
 window.csd,
 window.csd.background,
 dialog.background,
 messagedialog.background {
-  border-radius: var(--qs-radius-window);
+  border-radius: 12px;
 }
 
 headerbar,
 .titlebar {
   min-height: 40px;
-  padding: var(--qs-pad-1) var(--qs-pad-2);
+  padding: 2px 4px;
 }
 
 button,
@@ -2566,9 +2555,9 @@ spinbutton,
 combobox,
 dropdown {
   min-height: 26px;
-  padding: var(--qs-pad-1) var(--qs-pad-3);
-  margin: var(--qs-control-gap);
-  border-radius: var(--qs-radius-control);
+  padding: 2px 6px;
+  margin: 2px;
+  border-radius: 6px;
 }
 
 list row,
@@ -2577,20 +2566,20 @@ columnview row,
 sidebar row,
 navigation-sidebar row {
   margin: 1px 4px;
-  border-radius: var(--qs-radius-list);
+  border-radius: 8px;
 }
 
 menu,
 .menu {
-  padding: var(--qs-pad-2);
-  border-radius: var(--qs-radius-menu);
+  padding: 4px;
+  border-radius: 10px;
 }
 
 menuitem {
   min-height: 26px;
-  padding: var(--qs-pad-1) var(--qs-pad-3);
+  padding: 2px 6px;
   margin: 1px 2px;
-  border-radius: var(--qs-radius-control);
+  border-radius: 6px;
 }
 
 popover > contents {
@@ -2600,7 +2589,7 @@ popover > contents {
 notebook > stack,
 frame,
 .card {
-  border-radius: var(--qs-radius-list);
+  border-radius: 8px;
 }
 
 /* Motion */
