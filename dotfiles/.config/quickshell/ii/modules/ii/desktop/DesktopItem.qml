@@ -266,7 +266,9 @@ MouseArea {
             maximumLineCount: 2
             elide: Text.ElideRight
             style: Text.Outline
-            styleColor: Qt.rgba(0, 0, 0, 0.75)
+            // An opaque outline reads a touch thicker against bright wallpapers
+            // without adding a soft shadow around the label.
+            styleColor: Qt.rgba(0, 0, 0, 1)
         }
     }
 }

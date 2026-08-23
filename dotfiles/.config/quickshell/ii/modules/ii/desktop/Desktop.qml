@@ -650,7 +650,8 @@ Scope {
                             maximumLineCount: 2
                             elide: Text.ElideRight
                             style: Text.Outline
-                            styleColor: Qt.rgba(0, 0, 0, 0.75)
+                            // Keep the drag preview consistent with desktop labels.
+                            styleColor: Qt.rgba(0, 0, 0, 1)
                         }
                     }
                 }
