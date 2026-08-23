@@ -12,17 +12,17 @@ Item {
     required property var scopeRoot
     property int sidebarPadding: 10
     anchors.fill: parent
-    property bool aiChatEnabled: (Config.options?.policies?.ai ?? 1) !== 0
+    property bool aiEnabled: (Config.options?.policies?.ai ?? 1) !== 0
     property bool translatorEnabled: Config.options?.sidebar?.translator?.enable ?? false
     property var tabButtonList: [
-        ...(root.aiChatEnabled ? [{"icon": "neurology", "name": "", "title": Translation.tr("Intelligence")}] : []),
+        ...(root.aiEnabled ? [{"icon": "hub", "name": "", "title": Translation.tr("AI")}] : []),
         ...(root.translatorEnabled ? [{"icon": "translate", "name": "", "title": Translation.tr("Translator")}] : []),
         {"icon": "calculate", "name": "", "title": Translation.tr("Calculator")},
         {"icon": "smartphone", "name": "", "title": Translation.tr("KDE Connect")},
         {"icon": "terminal", "name": "", "title": Translation.tr("Console")},
     ]
     property var tabPageComponents: [
-        ...(root.aiChatEnabled ? [aiChat] : []),
+        ...(root.aiEnabled ? [aiHarness] : []),
         ...(root.translatorEnabled ? [translator] : []),
         calculatorTab,
         kdeConnectTab,
@@ -126,22 +126,33 @@ Item {
 
         component SidebarLeftPageHost: Item {
             id: pageHost
+            required property int index
             required property Component pageComponent
             readonly property var loadedItem: pageLoader.item
+            readonly property bool current: SwipeView.view?.currentIndex === index
+            property bool activated: current
             width: SwipeView.view ? SwipeView.view.width : 0
             height: SwipeView.view ? SwipeView.view.height : 0
+
+            onCurrentChanged: {
+                if (current)
+                    activated = true;
+            }
 
             Loader {
                 id: pageLoader
                 anchors.fill: parent
-                asynchronous: false
+                active: pageHost.activated
+                visible: pageHost.current
+                asynchronous: true
                 sourceComponent: pageHost.pageComponent
+                onLoaded: if (pageHost.current) Qt.callLater(root.focusActiveItem)
             }
         }
 
         Component {
-            id: aiChat
-            AiChat {}
+            id: aiHarness
+            AiHarness {}
         }
         Component {
             id: translator

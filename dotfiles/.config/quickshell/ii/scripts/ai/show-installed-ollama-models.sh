@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
-# Get the list, skip the header, and extract the first column (model names)
-model_names=$(ollama list | tail -n +2 | awk '{print $1}')
+if ! command -v ollama >/dev/null 2>&1; then
+    exit 127
+fi
+
+# Keep the installed runtime visible while its service is offline.
+model_names=$(ollama list 2>/dev/null | tail -n +2 | awk '{print $1}' || true)
 
 # Build a JSON array
 json_array="["

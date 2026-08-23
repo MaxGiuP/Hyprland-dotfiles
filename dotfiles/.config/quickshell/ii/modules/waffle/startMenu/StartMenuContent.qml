@@ -17,6 +17,9 @@ WBarAttachedPanelContent {
 
     property bool searching: false
     property string searchText: LauncherSearch.query
+    fadeOnOpen: true
+    openSlideDistance: 28
+    openAnimDuration: 220
 
     StartMenuContext {
         id: context

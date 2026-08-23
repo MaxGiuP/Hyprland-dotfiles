@@ -741,9 +741,10 @@ Singleton {
         return "installed";
     }
 
-    function addModel(modelName, data) {
+    function addModel(modelName, data, refreshList = true) {
         root.models[modelName] = aiModelComponent.createObject(this, data);
-        root.modelList = Object.keys(root.models);
+        if (refreshList)
+            root.modelList = Object.keys(root.models);
     }
 
     function removeModels(modelIds) {
@@ -788,7 +789,7 @@ Singleton {
                             "endpoint": "http://localhost:11434/v1/chat/completions",
                             "model": model,
                             "requires_key": false,
-                        })
+                        }, false)
                     });
                     root.dynamicOllamaModelIds = registered;
                     root.modelList = Object.keys(root.models);
@@ -842,7 +843,7 @@ Singleton {
 
     Timer {
         id: onlineModelsWatchTimer
-        interval: 90000
+        interval: 900000
         repeat: true
         running: true
         triggeredOnStart: false
@@ -997,7 +998,7 @@ Singleton {
                                     ? Translation.tr("Create a Mistral API key in Mistral Console.")
                                     : Translation.tr("Create an OpenRouter API key in OpenRouter settings.")),
                             "api_format": model.api_format ?? "openai",
-                        });
+                        }, false);
                     });
                     if ((payload.errors ?? []).length > 0)
                         console.log("[Ai] Online model discovery notices:", (payload.errors ?? []).join(" | "));

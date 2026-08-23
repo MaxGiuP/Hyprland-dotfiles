@@ -121,17 +121,51 @@ Singleton {
         root.openOverlayWidget(identifier, pin)
     }
 
+    function hasPinnedOverlayWidgets() {
+        if (!Persistent.ready)
+            return false
+        const openWidgets = Persistent.states.overlay.open ?? []
+        return openWidgets.some(identifier => Persistent.states.overlay[identifier]?.pinned ?? false)
+    }
+
+    function validOverlayScreen(screenName) {
+        return screenName.length > 0 && Quickshell.screens.some(screen => screen.name === screenName)
+    }
+
+    function rememberOverlayScreen(preferredScreen = "") {
+        const targetScreen = root.validOverlayScreen(preferredScreen)
+            ? preferredScreen
+            : HyprlandData.monitors.find(m => m.focused)?.name
+                || Hyprland.focusedMonitor?.name
+                || Quickshell.screens[0]?.name
+                || ""
+        if (targetScreen.length === 0)
+            return ""
+        root.overlayScreen = targetScreen
+        if (Persistent.ready)
+            Persistent.states.overlay.screen = targetScreen
+        return targetScreen
+    }
+
     function resolvedOverlayScreen(preferredScreen = "") {
-        return preferredScreen
-            || HyprlandData.monitors.find(m => m.focused)?.name
+        if (root.validOverlayScreen(preferredScreen))
+            return preferredScreen
+
+        const rememberedScreen = root.overlayScreen
+            || (Persistent.ready ? (Persistent.states.overlay.screen ?? "") : "")
+        if ((root.overlayOpen || root.hasPinnedOverlayWidgets()) && root.validOverlayScreen(rememberedScreen))
+            return rememberedScreen
+
+        return HyprlandData.monitors.find(m => m.focused)?.name
             || Hyprland.focusedMonitor?.name
-            || root.overlayScreen
+            || (root.validOverlayScreen(rememberedScreen) ? rememberedScreen : "")
             || Quickshell.screens[0]?.name
             || ""
     }
 
     function openOverlay(preferredScreen = "") {
         root.overlayScreen = root.resolvedOverlayScreen(preferredScreen)
+        root.rememberOverlayScreen(root.overlayScreen)
         root.overlayOpen = true
     }
 
@@ -147,6 +181,7 @@ Singleton {
         }
 
         root.overlayScreen = targetScreen
+        root.rememberOverlayScreen(root.overlayScreen)
         root.overlayOpen = true
     }
 
@@ -402,6 +437,72 @@ Singleton {
         onReleased: {
             root.superDown = false
         }
+    }
+
+    signal workspacePreviewRequested(int workspaceId)
+
+    function requestWorkspacePreview(workspaceId) {
+        root.workspacePreviewRequested(workspaceId)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview1"
+        description: "Preview workspace 1 in the bar"
+        onPressed: root.requestWorkspacePreview(1)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview2"
+        description: "Preview workspace 2 in the bar"
+        onPressed: root.requestWorkspacePreview(2)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview3"
+        description: "Preview workspace 3 in the bar"
+        onPressed: root.requestWorkspacePreview(3)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview4"
+        description: "Preview workspace 4 in the bar"
+        onPressed: root.requestWorkspacePreview(4)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview5"
+        description: "Preview workspace 5 in the bar"
+        onPressed: root.requestWorkspacePreview(5)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview6"
+        description: "Preview workspace 6 in the bar"
+        onPressed: root.requestWorkspacePreview(6)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview7"
+        description: "Preview workspace 7 in the bar"
+        onPressed: root.requestWorkspacePreview(7)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview8"
+        description: "Preview workspace 8 in the bar"
+        onPressed: root.requestWorkspacePreview(8)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview9"
+        description: "Preview workspace 9 in the bar"
+        onPressed: root.requestWorkspacePreview(9)
+    }
+
+    GlobalShortcut {
+        name: "workspacePreview10"
+        description: "Preview workspace 10 in the bar"
+        onPressed: root.requestWorkspacePreview(10)
     }
 
     IpcHandler {

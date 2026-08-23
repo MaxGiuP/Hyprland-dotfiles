@@ -92,12 +92,14 @@ Singleton {
                 property string targetLanguage: "en"
                 property string model: "tiny"
                 property string tuningPreset: "realtime"
+                property bool desiredRunning: false
             }
 
             property JsonObject liveScreenTranslation: JsonObject {
                 property string targetLanguage: "en"
                 property string region: ""
                 property string regionLabel: ""
+                property bool desiredRunning: false
             }
 
             property JsonObject audio: JsonObject {
@@ -119,6 +121,7 @@ Singleton {
             // and are converted on the next save.
             property JsonObject overlay: JsonObject {
                 property list<string> open: ["crosshair", "recorder", "volumeMixer", "resources"]
+                property string screen: ""
                 property string geometryByScreenJson: "{}"
                 property JsonObject crosshair: JsonObject {
                     property bool pinned: false

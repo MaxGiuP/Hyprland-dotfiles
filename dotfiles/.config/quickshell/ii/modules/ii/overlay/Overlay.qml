@@ -75,6 +75,32 @@ Scope {
         function toggle(): void {
             GlobalStates.toggleOverlay()
         }
+
+        function pinWidget(identifier: string, pinned: bool): void {
+            const widget = OverlayContext.availableWidgets.find(entry => entry.identifier === identifier)
+            if (!widget || !Persistent.states.overlay[identifier])
+                return
+
+            if (pinned) {
+                const openWidgets = Persistent.states.overlay.open ?? []
+                if (!openWidgets.includes(identifier))
+                    Persistent.states.overlay.open = openWidgets.concat([identifier])
+                Persistent.states.overlay[identifier].pinned = true
+                GlobalStates.rememberOverlayScreen()
+            } else {
+                Persistent.states.overlay[identifier].pinned = false
+            }
+        }
+
+        function state(): string {
+            return JSON.stringify({
+                "open": Persistent.states.overlay.open ?? [],
+                "pinned": OverlayContext.persistedPinnedWidgetIdentifiers,
+                "hasPinnedWidgets": OverlayContext.hasPinnedWidgets,
+                "overlayOpen": GlobalStates.overlayOpen,
+                "screen": GlobalStates.resolvedOverlayScreen()
+            })
+        }
     }
 
     GlobalShortcut {

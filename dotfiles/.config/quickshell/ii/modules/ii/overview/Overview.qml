@@ -1,6 +1,7 @@
 import qs
 import qs.services
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 import Qt.labs.synchronizer
 import QtQuick
@@ -14,13 +15,44 @@ import Quickshell.Hyprland
 Scope {
     id: overviewScope
     property bool dontAutoCancelSearch: false
+    property string pendingSearchingText: ""
+    property bool pendingFocusFirstItem: false
+    signal searchRequested(string text, bool focusFirst)
+
+    function requestSearch(text, focusFirst = true) {
+        overviewScope.pendingSearchingText = text;
+        overviewScope.pendingFocusFirstItem = focusFirst;
+        overviewScope.searchRequested(text, focusFirst);
+    }
+
+    Timer {
+        id: overviewUnloadTimer
+        interval: 240
+        repeat: false
+    }
+
+    Connections {
+        target: GlobalStates
+        function onOverviewOpenChanged() {
+            if (GlobalStates.overviewOpen)
+                overviewUnloadTimer.stop();
+            else
+                overviewUnloadTimer.restart();
+        }
+    }
+
+    LazyLoader {
+        id: overviewPanelLoader
+        active: GlobalStates.overviewOpen || overviewUnloadTimer.running
 
     PanelWindow {
         id: panelWindow
         property string searchingText: ""
+        property bool overviewContentReady: false
+        property bool entranceShown: false
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
         property bool monitorIsFocused: (Hyprland.focusedMonitor?.id == monitor?.id)
-        visible: columnLayout.opacity > 0
+        visible: GlobalStates.overviewOpen || overviewUnloadTimer.running
 
         WlrLayershell.namespace: "quickshell:overview"
         WlrLayershell.layer: WlrLayer.Top
@@ -63,26 +95,26 @@ Scope {
                 GlobalFocusGrab.addDismissable(panelWindow);
             }
         }
+        Timer {
+            id: overviewContentDelay
+            interval: 60
+            repeat: false
+            onTriggered: panelWindow.overviewContentReady = true
+        }
+        Timer {
+            id: entranceDelay
+            interval: 24
+            repeat: false
+            onTriggered: panelWindow.entranceShown = true
+        }
 
         Connections {
             target: GlobalStates
             function onOverviewOpenChanged() {
-                if (!GlobalStates.overviewOpen) {
-                    searchWidget.disableExpandAnimation();
-                    overviewScope.dontAutoCancelSearch = false;
-                    GlobalFocusGrab.dismiss();
-                    GlobalStates.overviewDrawerMode = false;
-                } else {
-                    if (!overviewScope.dontAutoCancelSearch) {
-                        if (searchWidget.displayedText.length > 0) {
-                            searchWidget.setSearchingText(searchWidget.displayedText);
-                            searchWidget.focusFirstItem();
-                        } else {
-                            searchWidget.cancelSearch();
-                        }
-                    }
-                    focusGrabDelay.restart();
-                }
+                if (!GlobalStates.overviewOpen)
+                    panelWindow.handleOverviewClosed();
+                else
+                    panelWindow.handleOverviewOpened();
             }
             function onOverviewDrawerModeChanged() {
                 if (GlobalStates.overviewDrawerMode && searchWidget.displayedText.length > 0) {
@@ -105,28 +137,74 @@ Scope {
             searchWidget.focusFirstItem();
         }
 
+        function handleOverviewClosed() {
+            entranceDelay.stop();
+            panelWindow.entranceShown = false;
+            overviewContentDelay.stop();
+            panelWindow.overviewContentReady = false;
+            searchWidget.disableExpandAnimation();
+            overviewScope.dontAutoCancelSearch = false;
+            GlobalFocusGrab.dismiss();
+            GlobalStates.overviewDrawerMode = false;
+        }
+
+        function handleOverviewOpened() {
+            panelWindow.entranceShown = false;
+            entranceDelay.restart();
+            if (!overviewScope.dontAutoCancelSearch) {
+                if (searchWidget.displayedText.length > 0) {
+                    searchWidget.setSearchingText(searchWidget.displayedText);
+                    searchWidget.focusFirstItem();
+                } else {
+                    searchWidget.cancelSearch();
+                }
+            }
+            focusGrabDelay.restart();
+            overviewContentDelay.restart();
+        }
+
+        Component.onCompleted: {
+            if (GlobalStates.overviewOpen) {
+                panelWindow.handleOverviewOpened();
+                if (overviewScope.pendingSearchingText.length > 0)
+                    overviewScope.searchRequested(overviewScope.pendingSearchingText, overviewScope.pendingFocusFirstItem);
+            }
+        }
+
+        Connections {
+            target: overviewScope
+            function onSearchRequested(text, focusFirst) {
+                panelWindow.setSearchingText(text);
+                if (focusFirst)
+                    searchWidget.focusFirstItem();
+                overviewScope.pendingSearchingText = "";
+                overviewScope.pendingFocusFirstItem = false;
+            }
+        }
+
         Column {
             id: columnLayout
             visible: true
-            opacity: GlobalStates.overviewOpen ? 1.0 : 0.0
-            scale: GlobalStates.overviewOpen ? 1.0 : 0.96
-            transformOrigin: Item.Top
+            opacity: panelWindow.entranceShown ? 1.0 : 0.0
             anchors {
                 horizontalCenter: parent.horizontalCenter
                 top: parent.top
             }
             spacing: -8
 
-            property real slideY: GlobalStates.overviewOpen ? 0 : -24
+            property real slideY: panelWindow.entranceShown ? 0 : -30
 
             Behavior on opacity {
-                NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-            }
-            Behavior on scale {
-                NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                NumberAnimation {
+                    duration: panelWindow.entranceShown ? 220 : 140
+                    easing.type: Easing.OutCubic
+                }
             }
             Behavior on slideY {
-                NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                NumberAnimation {
+                    duration: panelWindow.entranceShown ? 220 : 140
+                    easing.type: Easing.OutCubic
+                }
             }
 
             transform: Translate { y: columnLayout.slideY }
@@ -136,10 +214,10 @@ Scope {
                     GlobalStates.overviewOpen = false;
                 } else if (event.key === Qt.Key_Left) {
                     if (!panelWindow.searchingText)
-                        Hyprland.dispatch("workspace r-1");
+                        HyprlandDispatch.dispatch("workspace r-1");
                 } else if (event.key === Qt.Key_Right) {
                     if (!panelWindow.searchingText)
-                        Hyprland.dispatch("workspace r+1");
+                        HyprlandDispatch.dispatch("workspace r+1");
                 }
             }
 
@@ -154,7 +232,7 @@ Scope {
             Loader {
                 id: overviewLoader
                 anchors.horizontalCenter: parent.horizontalCenter
-                active: panelWindow.visible && (Config?.options.overview.enable ?? true)
+                active: panelWindow.overviewContentReady && searchWidget.displayedText == "" && (Config?.options.overview.enable ?? true)
                 sourceComponent: OverviewWidget {
                     screen: panelWindow.screen
                     visible: (searchWidget.displayedText == "")
@@ -219,6 +297,7 @@ Scope {
             }
         }
     }
+    }
 
     function toggleClipboard() {
         if (GlobalStates.overviewOpen && overviewScope.dontAutoCancelSearch) {
@@ -226,7 +305,7 @@ Scope {
             return;
         }
         overviewScope.dontAutoCancelSearch = true;
-        panelWindow.setSearchingText(Config.options.search.prefix.clipboard);
+        overviewScope.requestSearch(Config.options.search.prefix.clipboard);
         GlobalStates.overviewOpen = true;
     }
 
@@ -236,8 +315,16 @@ Scope {
             return;
         }
         overviewScope.dontAutoCancelSearch = true;
-        panelWindow.setSearchingText(Config.options.search.prefix.emojis);
+        overviewScope.requestSearch(Config.options.search.prefix.emojis);
         GlobalStates.overviewOpen = true;
+    }
+
+    function toggleSearchAfterSuperRelease() {
+        if (!GlobalStates.superReleaseMightTrigger) {
+            GlobalStates.superReleaseMightTrigger = true;
+            return;
+        }
+        GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
     }
 
     IpcHandler {
@@ -296,11 +383,15 @@ Scope {
         }
 
         onReleased: {
-            if (!GlobalStates.superReleaseMightTrigger) {
-                GlobalStates.superReleaseMightTrigger = true;
-                return;
-            }
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            overviewScope.toggleSearchAfterSuperRelease();
+        }
+    }
+    GlobalShortcut {
+        name: "searchToggleIfTap"
+        description: "Toggles search when a Super release was not interrupted"
+
+        onPressed: {
+            overviewScope.toggleSearchAfterSuperRelease();
         }
     }
     GlobalShortcut {

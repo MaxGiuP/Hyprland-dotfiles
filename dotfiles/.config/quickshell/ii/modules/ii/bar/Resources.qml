@@ -15,9 +15,8 @@ MouseArea {
     hoverEnabled: !Config.options.bar.tooltips.clickToShow
     acceptedButtons: Qt.NoButton
 
-    function openMissionCenter() {
-        const cmd = "[float;size 1200 800;center] /var/lib/flatpak/exports/bin/io.missioncenter.MissionCenter"
-        Quickshell.execDetached(["hyprctl", "dispatch", "exec", cmd])
+    function openTaskManager() {
+        Quickshell.execDetached(["bash", "-lc", Config.options.apps.taskManager])
     }
 
     // GPU (NVIDIA via nvidia-smi -q)
@@ -334,9 +333,9 @@ MouseArea {
             }
         }
 
-        // 6) Mission Center button
+        // 6) Task manager button
         Item {
-            id: missionCenterBtn
+            id: taskManagerBtn
             Layout.leftMargin: 6
             Layout.alignment: Qt.AlignVCenter
             width: 22
@@ -345,7 +344,7 @@ MouseArea {
             Rectangle {
                 anchors.fill: parent
                 radius: 6
-                color: missionCenterMA.containsMouse ? Appearance.colors.colLayer3 : Appearance.colors.colLayer0Hover
+                color: taskManagerMA.containsMouse ? Appearance.colors.colLayer3 : Appearance.colors.colLayer0Hover
             }
 
             MaterialSymbol {
@@ -357,12 +356,12 @@ MouseArea {
             }
 
             MouseArea {
-                id: missionCenterMA
+                id: taskManagerMA
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 acceptedButtons: Qt.LeftButton
-                onClicked: root.openMissionCenter()
+                onClicked: root.openTaskManager()
             }
         }
     }

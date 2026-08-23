@@ -146,6 +146,8 @@ AbstractOverlayWidget {
     Component.onCompleted: {
         reportPinnedState();
         reportClickableState();
+        if (root.actuallyPinned)
+            Qt.callLater(() => GlobalStates.rememberOverlayScreen(root.screenName));
     }
     Component.onDestruction: {
         if (contentItem)
@@ -215,7 +217,10 @@ AbstractOverlayWidget {
     }
 
     function togglePinned() {
-        persistentStateEntry.pinned = !persistentStateEntry.pinned;
+        const nextPinned = !persistentStateEntry.pinned;
+        persistentStateEntry.pinned = nextPinned;
+        if (nextPinned)
+            GlobalStates.rememberOverlayScreen(root.screenName);
     }
 
     function toggleClickthrough() {

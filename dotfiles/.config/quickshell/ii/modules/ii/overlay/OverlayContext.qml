@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 import Quickshell
+import qs.modules.common
 
 Singleton {
     id: root
@@ -22,7 +23,14 @@ Singleton {
         { identifier: "terminal", materialSymbol: "terminal" },
     ]
     
-    readonly property bool hasPinnedWidgets: root.pinnedWidgetIdentifiers.length > 0
+    readonly property list<string> persistedPinnedWidgetIdentifiers: {
+        if (!Persistent.ready)
+            return []
+        const openWidgets = Persistent.states.overlay.open ?? []
+        return openWidgets.filter(identifier => Persistent.states.overlay[identifier]?.pinned ?? false)
+    }
+    readonly property bool hasPinnedWidgets: root.persistedPinnedWidgetIdentifiers.length > 0
+        || root.pinnedWidgetIdentifiers.length > 0
 
     property list<string> pinnedWidgetIdentifiers: []
     property list<var> clickableWidgets: []
@@ -30,7 +38,7 @@ Singleton {
     function pin(identifier: string, pin = true) {
         if (pin) {
             if (!root.pinnedWidgetIdentifiers.includes(identifier)) {
-                root.pinnedWidgetIdentifiers.push(identifier)
+                root.pinnedWidgetIdentifiers = root.pinnedWidgetIdentifiers.concat([identifier])
             }
         } else {
             root.pinnedWidgetIdentifiers = root.pinnedWidgetIdentifiers.filter(id => id !== identifier)

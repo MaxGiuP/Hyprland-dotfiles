@@ -23,8 +23,11 @@ Singleton {
     property bool stopRequested: false
     property bool selectingRegion: false
     property string backendStatusText: Translation.tr("Backend not checked yet.")
+    property int recoveryAttempts: 0
 
-    readonly property bool active: workerActive || launchPending
+    readonly property bool recovering: recoveryTimer.running
+    readonly property bool active: workerActive || launchPending || recovering
+    readonly property bool desiredRunning: Persistent.ready && Persistent.states.liveScreenTranslation.desiredRunning
     readonly property string ocrLanguage: "eng"
     readonly property var targetLanguageOptions: [
         { id: "en", label: Translation.tr("English") },
@@ -50,6 +53,8 @@ Singleton {
     readonly property string summaryText: {
         if (selectingRegion)
             return Translation.tr("Selecting region")
+        if (recovering)
+            return Translation.tr("Reconnecting")
         if (active && status === "running")
             return region.length > 0
                 ? Translation.tr("Watching selected area")
@@ -95,6 +100,32 @@ Singleton {
         Persistent.states.liveScreenTranslation.regionLabel = regionLabel
     }
 
+    function setDesiredRunning(enabled) {
+        if (Persistent.ready)
+            Persistent.states.liveScreenTranslation.desiredRunning = enabled
+    }
+
+    function probeWorker() {
+        if (workerStatusProc.running)
+            return
+        workerStatusProc.command = buildWorkerStatusCommand()
+        workerStatusProc.running = true
+    }
+
+    function scheduleRecovery() {
+        if (!root.desiredRunning || root.stopRequested || root.active || recoveryTimer.running)
+            return
+        root.recoveryAttempts += 1
+        recoveryTimer.interval = Math.min(30000, 1000 * Math.pow(2, Math.min(root.recoveryAttempts - 1, 5)))
+        recoveryTimer.restart()
+    }
+
+    function ensureDesiredWorker() {
+        if (root.desiredRunning && root.backendAvailable && root.isValidGeometry(root.region)
+                && !root.active && !root.stopRequested)
+            root.scheduleRecovery()
+    }
+
     function clearState(statusText = "stopped", messageText = "") {
         const payload = {
             "status": statusText,
@@ -137,22 +168,26 @@ Singleton {
 
     function buildWorkerStatusCommand() {
         const pidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationPidPath)
+        const scriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationBackendScriptPath)
         return [
             "bash",
             "-c",
             `if [ -f '${pidPath}' ]; then pid="$(cat '${pidPath}')"; ` +
-            `if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then exit 0; fi; ` +
+            `if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null ` +
+            `&& tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fq -- '${scriptPath}'; then exit 0; fi; ` +
             `rm -f '${pidPath}'; fi; exit 1`
         ]
     }
 
     function buildStopCommand() {
         const pidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationPidPath)
+        const scriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationBackendScriptPath)
         return [
             "bash",
             "-c",
             `if [ -f '${pidPath}' ]; then pid="$(cat '${pidPath}')"; ` +
-            `if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; fi; ` +
+            `if [ -n "$pid" ] && tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fq -- '${scriptPath}'; ` +
+            `then kill "$pid" 2>/dev/null || true; fi; ` +
             `rm -f '${pidPath}'; fi`
         ]
     }
@@ -191,7 +226,12 @@ Singleton {
         persistStatePayload(clearState("stopped", Translation.tr("No capture region selected.")))
     }
 
-    function start() {
+    function start(recovery = false) {
+        if (!recovery) {
+            root.setDesiredRunning(true)
+            root.recoveryAttempts = 0
+        }
+        recoveryTimer.stop()
         if (active)
             return
         if (!backendAvailable) {
@@ -219,12 +259,20 @@ Singleton {
         workerStatusTimer.restart()
     }
 
-    function stop() {
+    function stop(preserveRunIntent = false) {
+        if (!preserveRunIntent) {
+            root.setDesiredRunning(false)
+            recoveryTimer.stop()
+            stableWorkerTimer.stop()
+            root.recoveryAttempts = 0
+        }
         stopRequested = true
         launchPending = false
         workerActive = false
         Quickshell.execDetached(buildStopCommand())
         persistStatePayload(clearState("stopped", Translation.tr("Live screen translation stopped.")))
+        if (preserveRunIntent && root.restartPending)
+            delayedStartTimer.restart()
     }
 
     function toggleRunning() {
@@ -244,15 +292,22 @@ Singleton {
 
     function updateWorkerState(isRunning) {
         const wasActive = root.workerActive || root.launchPending
+        const wasWorkerActive = root.workerActive
         root.workerActive = isRunning
 
         if (isRunning) {
             root.launchPending = false
+            recoveryTimer.stop()
+            if (!wasWorkerActive)
+                stableWorkerTimer.restart()
+            stateFileView.reload()
             return
         }
 
-        if (!wasActive)
+        if (!wasActive) {
+            root.ensureDesiredWorker()
             return
+        }
 
         const shouldRestart = root.restartPending
         const expectedStop = root.stopRequested || root.restartPending
@@ -267,20 +322,36 @@ Singleton {
         root.restartPending = false
         if (shouldRestart)
             delayedStartTimer.restart()
+        else if (!expectedStop)
+            root.scheduleRecovery()
     }
 
     Timer {
         id: restartTimer
         interval: 150
         repeat: false
-        onTriggered: root.stop()
+        onTriggered: root.stop(true)
     }
 
     Timer {
         id: delayedStartTimer
         interval: 150
         repeat: false
-        onTriggered: root.start()
+        onTriggered: root.start(true)
+    }
+
+    Timer {
+        id: recoveryTimer
+        interval: 1000
+        repeat: false
+        onTriggered: root.start(true)
+    }
+
+    Timer {
+        id: stableWorkerTimer
+        interval: 30000
+        repeat: false
+        onTriggered: root.recoveryAttempts = 0
     }
 
     Timer {
@@ -340,6 +411,7 @@ Singleton {
             root.backendStatusText = root.backendAvailable
                 ? Translation.tr("OCR backend ready.")
                 : Translation.tr("Need grim, slurp, trans, and the English tesseract language pack.")
+            root.ensureDesiredWorker()
         }
     }
 
@@ -390,12 +462,14 @@ Singleton {
             if (!Persistent.ready)
                 return
             root.syncSettingsFromPersistent()
+            root.probeWorker()
         }
     }
 
     Component.onCompleted: {
         root.syncSettingsFromPersistent()
         root.refreshBackendAvailability()
-        root.persistStatePayload(root.clearState("stopped", Translation.tr("Live screen translation stopped.")))
+        stateFileView.reload()
+        root.probeWorker()
     }
 }

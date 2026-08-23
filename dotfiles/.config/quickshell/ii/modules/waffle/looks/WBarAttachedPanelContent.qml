@@ -15,12 +15,16 @@ Item {
 
     required property Item contentItem
     property real visualMargin: 12
+    property int openAnimDuration: 200
     property int closeAnimDuration: 150
     property bool revealFromSides: false
     property bool revealFromLeft: true
+    property bool fadeOnOpen: false
+    property real openSlideDistance: -1
 
     function close() {
-        closeAnim.start();
+        openAnim.stop();
+        closeAnim.restart();
     }
 
     readonly property bool barAtBottom: Config.options.waffles.bar.bottom
@@ -53,22 +57,46 @@ Item {
             openAnim.start();
         }
 
-        property real sourceEdgeMargin: -(implicitHeight + root.visualMargin)
-        property real sideEdgeMargin: -(implicitWidth + root.visualMargin)
-        OpenAnim {
+        opacity: root.fadeOnOpen ? 0 : 1
+        property real hiddenSourceEdgeMargin: root.openSlideDistance >= 0
+            ? root.visualMargin - root.openSlideDistance
+            : -(implicitHeight + root.visualMargin)
+        property real hiddenSideEdgeMargin: root.openSlideDistance >= 0
+            ? root.visualMargin - root.openSlideDistance
+            : -(implicitWidth + root.visualMargin)
+        property real sourceEdgeMargin: hiddenSourceEdgeMargin
+        property real sideEdgeMargin: hiddenSideEdgeMargin
+        ParallelAnimation {
             id: openAnim
-            properties: "sourceEdgeMargin, sideEdgeMargin"
+            OpenAnim {
+                properties: "sourceEdgeMargin, sideEdgeMargin"
+            }
+            PropertyAnimation {
+                target: panelContent
+                property: "opacity"
+                from: root.fadeOnOpen ? 0 : 1
+                to: 1
+                duration: root.fadeOnOpen ? root.openAnimDuration : 0
+                easing.type: Easing.OutCubic
+            }
         }
         SequentialAnimation {
             id: closeAnim
             ParallelAnimation {
                 CloseAnim {
                     property: "sourceEdgeMargin"
-                    to: -(implicitHeight + root.visualMargin)
+                    to: panelContent.hiddenSourceEdgeMargin
                 }
                 CloseAnim {
                     property: "sideEdgeMargin"
-                    to: -(implicitWidth + root.visualMargin)
+                    to: panelContent.hiddenSideEdgeMargin
+                }
+                PropertyAnimation {
+                    target: panelContent
+                    property: "opacity"
+                    to: root.fadeOnOpen ? 0 : 1
+                    duration: root.fadeOnOpen ? root.closeAnimDuration : 0
+                    easing.type: Easing.InCubic
                 }
             }
             ScriptAction {
@@ -85,7 +113,7 @@ Item {
     component OpenAnim: PropertyAnimation {
         target: panelContent
         to: root.visualMargin
-        duration: 200
+        duration: root.openAnimDuration
         easing.type: Easing.BezierSpline
         easing.bezierCurve: Looks.transition.easing.bezierCurve.easeIn
     }

@@ -54,9 +54,14 @@ Item {
 
         Repeater {
             model: ScriptModel {
-                values: Persistent.states.overlay.open.map(identifier => {
-                    return OverlayContext.availableWidgets.find(w => w.identifier === identifier);
-                })
+                values: {
+                    const identifiers = GlobalStates.overlayOpen
+                        ? (Persistent.states.overlay.open ?? [])
+                        : OverlayContext.persistedPinnedWidgetIdentifiers
+                    return identifiers
+                        .map(identifier => OverlayContext.availableWidgets.find(w => w.identifier === identifier))
+                        .filter(widget => widget !== undefined)
+                }
                 objectProp: "identifier"
             }
             delegate: OverlayWidgetDelegateChooser {

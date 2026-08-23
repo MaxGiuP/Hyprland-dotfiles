@@ -46,8 +46,11 @@ Singleton {
     property bool workerActive: false
     property string backendStatusText: Translation.tr("Backend not checked yet.")
     property string lastBackendLog: ""
+    property int recoveryAttempts: 0
 
-    readonly property bool active: workerActive || launchPending
+    readonly property bool recovering: recoveryTimer.running
+    readonly property bool active: workerActive || launchPending || recovering
+    readonly property bool desiredRunning: Persistent.ready && Persistent.states.liveCaptions.desiredRunning
     readonly property bool translating: displayMode !== "captions"
     property var state: ({
         "status": active ? "running" : "stopped",
@@ -86,6 +89,8 @@ Singleton {
     readonly property string visibleTranslatedStableText: root.tailLimitTranscript(root.translatedStableText, 26, 180)
     readonly property string visibleTranslatedUnstableText: root.tailLimitTranscript(root.translatedUnstableText, 20, 180)
     readonly property string summaryText: {
+        if (recovering)
+            return Translation.tr("Reconnecting")
         if (active && status === "loading")
             return Translation.tr("Loading caption model")
         if (active && status === "downloading")
@@ -214,6 +219,31 @@ Singleton {
         Persistent.states.liveCaptions.targetLanguage = targetLanguage
         Persistent.states.liveCaptions.model = modelName
         Persistent.states.liveCaptions.tuningPreset = tuningPreset
+    }
+
+    function setDesiredRunning(enabled) {
+        if (Persistent.ready)
+            Persistent.states.liveCaptions.desiredRunning = enabled
+    }
+
+    function probeWorker() {
+        if (workerStatusProc.running)
+            return
+        workerStatusProc.command = buildWorkerStatusCommand()
+        workerStatusProc.running = true
+    }
+
+    function scheduleRecovery() {
+        if (!root.desiredRunning || root.stopRequested || root.active || recoveryTimer.running)
+            return
+        root.recoveryAttempts += 1
+        recoveryTimer.interval = Math.min(30000, 1000 * Math.pow(2, Math.min(root.recoveryAttempts - 1, 5)))
+        recoveryTimer.restart()
+    }
+
+    function ensureDesiredWorker() {
+        if (root.desiredRunning && root.backendAvailable && !root.active && !root.stopRequested)
+            root.scheduleRecovery()
     }
 
     function setSourceMode(mode) {
@@ -356,39 +386,50 @@ Singleton {
 
     function buildWorkerStatusCommand() {
         const backendPidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsPidPath)
+        const backendScriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsBackendScriptPath)
         return [
             "bash",
             "-c",
             `if [ -f '${backendPidPath}' ]; then ` +
             `pid="$(cat '${backendPidPath}')"; ` +
-            `if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then exit 0; fi; ` +
+            `if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null ` +
+            `&& tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fq -- '${backendScriptPath}'; then exit 0; fi; ` +
             `rm -f '${backendPidPath}'; fi; exit 1`
         ]
     }
 
     function buildStopCommand() {
         const backendPidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsPidPath)
+        const backendScriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsBackendScriptPath)
         return [
             "bash",
             "-c",
             `if [ -f '${backendPidPath}' ]; then ` +
             `pid="$(cat '${backendPidPath}')"; ` +
-            `if [ -n "$pid" ]; then kill "$pid" 2>/dev/null || true; fi; ` +
+            `if [ -n "$pid" ] && tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fq -- '${backendScriptPath}'; ` +
+            `then kill "$pid" 2>/dev/null || true; fi; ` +
             `rm -f '${backendPidPath}'; fi`
         ]
     }
 
     function updateWorkerState(isRunning) {
         const wasActive = root.workerActive || root.launchPending
+        const wasWorkerActive = root.workerActive
         root.workerActive = isRunning
 
         if (isRunning) {
             root.launchPending = false
+            recoveryTimer.stop()
+            if (!wasWorkerActive)
+                stableWorkerTimer.restart()
+            stateFileView.reload()
             return
         }
 
-        if (!wasActive)
+        if (!wasActive) {
+            root.ensureDesiredWorker()
             return
+        }
 
         const shouldRestart = root.restartPending
         const expectedStop = root.stopRequested || root.restartPending
@@ -425,6 +466,8 @@ Singleton {
         root.refreshBackendAvailability()
         if (shouldRestart)
             delayedStartTimer.restart()
+        else if (!expectedStop)
+            root.scheduleRecovery()
     }
 
     function refreshBackendAvailability() {
@@ -432,7 +475,12 @@ Singleton {
         backendProbe.running = true
     }
 
-    function start() {
+    function start(recovery = false) {
+        if (!recovery) {
+            root.setDesiredRunning(true)
+            root.recoveryAttempts = 0
+        }
+        recoveryTimer.stop()
         if (root.active)
             return
 
@@ -452,12 +500,20 @@ Singleton {
         workerStatusTimer.restart()
     }
 
-    function stop() {
+    function stop(preserveRunIntent = false) {
+        if (!preserveRunIntent) {
+            root.setDesiredRunning(false)
+            recoveryTimer.stop()
+            stableWorkerTimer.stop()
+            root.recoveryAttempts = 0
+        }
         root.stopRequested = true
         root.launchPending = false
         root.workerActive = false
         Quickshell.execDetached(buildStopCommand())
         root.persistStatePayload(root.clearState("stopped", Translation.tr("Live captions stopped.")))
+        if (preserveRunIntent && root.restartPending)
+            delayedStartTimer.restart()
     }
 
     function toggleRunning() {
@@ -487,16 +543,28 @@ Singleton {
         id: restartTimer
         interval: 150
         repeat: false
-        onTriggered: {
-            root.stop()
-        }
+        onTriggered: root.stop(true)
     }
 
     Timer {
         id: delayedStartTimer
         interval: 150
         repeat: false
-        onTriggered: root.start()
+        onTriggered: root.start(true)
+    }
+
+    Timer {
+        id: recoveryTimer
+        interval: 1000
+        repeat: false
+        onTriggered: root.start(true)
+    }
+
+    Timer {
+        id: stableWorkerTimer
+        interval: 30000
+        repeat: false
+        onTriggered: root.recoveryAttempts = 0
     }
 
     Timer {
@@ -575,6 +643,7 @@ Singleton {
                 : Translation.tr("Install the live captions backend to enable transcription.")
             if (!root.backendAvailable && !root.active && root.status !== "error")
                 root.clearState("stopped", root.backendStatusText)
+            root.ensureDesiredWorker()
         }
     }
 
@@ -591,6 +660,7 @@ Singleton {
             if (!Persistent.ready)
                 return
             root.syncSettingsFromPersistent()
+            root.probeWorker()
         }
     }
 
@@ -606,6 +676,7 @@ Singleton {
     Component.onCompleted: {
         root.syncSettingsFromPersistent()
         root.refreshBackendAvailability()
-        root.clearState("stopped", Translation.tr("Live captions stopped."))
+        stateFileView.reload()
+        root.probeWorker()
     }
 }
