@@ -17,6 +17,10 @@ Scope {
     property bool dontAutoCancelSearch: false
     property string pendingSearchingText: ""
     property bool pendingFocusFirstItem: false
+    property bool panelLoaded: false
+    readonly property int entranceDuration: 150
+    readonly property int exitDuration: 160
+    readonly property int unloadDelay: exitDuration + 40
     signal searchRequested(string text, bool focusFirst)
 
     function requestSearch(text, focusFirst = true) {
@@ -27,23 +31,28 @@ Scope {
 
     Timer {
         id: overviewUnloadTimer
-        interval: 240
+        interval: overviewScope.unloadDelay
         repeat: false
+        onTriggered: overviewScope.panelLoaded = false
     }
 
     Connections {
         target: GlobalStates
         function onOverviewOpenChanged() {
-            if (GlobalStates.overviewOpen)
+            if (GlobalStates.overviewOpen) {
                 overviewUnloadTimer.stop();
-            else
+                overviewScope.panelLoaded = true;
+            } else if (overviewScope.panelLoaded) {
                 overviewUnloadTimer.restart();
+            }
         }
     }
 
+    Component.onCompleted: overviewScope.panelLoaded = GlobalStates.overviewOpen
+
     LazyLoader {
         id: overviewPanelLoader
-        active: GlobalStates.overviewOpen || overviewUnloadTimer.running
+        active: overviewScope.panelLoaded
 
     PanelWindow {
         id: panelWindow
@@ -52,7 +61,7 @@ Scope {
         property bool entranceShown: false
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
         property bool monitorIsFocused: (Hyprland.focusedMonitor?.id == monitor?.id)
-        visible: GlobalStates.overviewOpen || overviewUnloadTimer.running
+        visible: overviewScope.panelLoaded
 
         WlrLayershell.namespace: "quickshell:overview"
         WlrLayershell.layer: WlrLayer.Top
@@ -97,13 +106,13 @@ Scope {
         }
         Timer {
             id: overviewContentDelay
-            interval: 60
+            interval: 30
             repeat: false
             onTriggered: panelWindow.overviewContentReady = true
         }
         Timer {
             id: entranceDelay
-            interval: 24
+            interval: 8
             repeat: false
             onTriggered: panelWindow.entranceShown = true
         }
@@ -141,7 +150,6 @@ Scope {
             entranceDelay.stop();
             panelWindow.entranceShown = false;
             overviewContentDelay.stop();
-            panelWindow.overviewContentReady = false;
             searchWidget.disableExpandAnimation();
             overviewScope.dontAutoCancelSearch = false;
             GlobalFocusGrab.dismiss();
@@ -196,14 +204,14 @@ Scope {
 
             Behavior on opacity {
                 NumberAnimation {
-                    duration: panelWindow.entranceShown ? 220 : 140
-                    easing.type: Easing.OutCubic
+                    duration: panelWindow.entranceShown ? overviewScope.entranceDuration : overviewScope.exitDuration
+                    easing.type: panelWindow.entranceShown ? Easing.OutCubic : Easing.InCubic
                 }
             }
             Behavior on slideY {
                 NumberAnimation {
-                    duration: panelWindow.entranceShown ? 220 : 140
-                    easing.type: Easing.OutCubic
+                    duration: panelWindow.entranceShown ? overviewScope.entranceDuration : overviewScope.exitDuration
+                    easing.type: panelWindow.entranceShown ? Easing.OutCubic : Easing.InCubic
                 }
             }
 
@@ -278,7 +286,7 @@ Scope {
                 target: drawerPanel
                 property: "slideY"
                 to: 0
-                duration: 200
+                duration: overviewScope.entranceDuration
                 easing.type: Easing.OutExpo
             }
 
@@ -287,8 +295,8 @@ Scope {
                 target: drawerPanel
                 property: "slideY"
                 to: drawerPanel.height
-                duration: 320
-                easing.type: Easing.OutCubic
+                duration: overviewScope.exitDuration
+                easing.type: Easing.InCubic
             }
 
             DrawerAppList {
