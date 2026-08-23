@@ -8,7 +8,7 @@ Item {
     readonly property bool showUnreadCount: Config.options.bar.indicators.notifications.showUnreadCount
     readonly property int badgeHeight: 14
     readonly property int badgeHorizontalPadding: 4
-    readonly property int badgeOverlap: showUnreadCount ? 5 : 4
+    readonly property int badgeOverlap: showUnreadCount ? 7 : 4
     readonly property string badgeTextValue: Notifications.unread > 999 ? "999+" : String(Notifications.unread)
 
     // Include the complete badge in this item's layout bounds. This prevents the
