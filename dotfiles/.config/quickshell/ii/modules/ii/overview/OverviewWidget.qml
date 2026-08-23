@@ -167,7 +167,7 @@ Item {
                                 onPressed: {
                                     if (root.draggingTargetWorkspace === -1) {
                                         GlobalStates.overviewOpen = false
-                                        Hyprland.dispatch(`workspace ${workspace.workspaceValue}`)
+                                        HyprlandDispatch.dispatch(`workspace ${workspace.workspaceValue}`)
                                     }
                                 }
                             }
