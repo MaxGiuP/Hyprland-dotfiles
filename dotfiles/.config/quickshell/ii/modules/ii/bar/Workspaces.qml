@@ -30,12 +30,10 @@ Item {
     readonly property int nativeActiveWorkspaceId: validWorkspaceId(monitor?.activeWorkspace?.id)
     readonly property int polledServiceActiveWorkspaceId: validWorkspaceId(monitorData?.activeWorkspace?.id)
     readonly property int reportedActiveWorkspaceId: polledServiceActiveWorkspaceId
-    property int eventActiveWorkspaceId: 0
     property int lastValidActiveWorkspaceId: 0
-    readonly property int activeWorkspaceId: eventActiveWorkspaceId > 0
-        ? eventActiveWorkspaceId
-        : (nativeActiveWorkspaceId > 0 ? nativeActiveWorkspaceId
-        : (reportedActiveWorkspaceId > 0 ? reportedActiveWorkspaceId : lastValidActiveWorkspaceId))
+    readonly property int activeWorkspaceId: reportedActiveWorkspaceId > 0
+        ? reportedActiveWorkspaceId
+        : (nativeActiveWorkspaceId > 0 ? nativeActiveWorkspaceId : lastValidActiveWorkspaceId)
     readonly property int workspaceGroup: activeWorkspaceId > 0 ? Math.floor((root.activeWorkspaceId - 1) / root.workspacesShown) : 0
     property list<bool> workspaceOccupied: []
     property int widgetPadding: 4
@@ -53,16 +51,11 @@ Item {
     }
 
     function rememberReportedWorkspace() {
-        const reportedId = root.nativeActiveWorkspaceId > 0
-            ? root.nativeActiveWorkspaceId
-            : root.reportedActiveWorkspaceId;
+        const reportedId = root.reportedActiveWorkspaceId > 0
+            ? root.reportedActiveWorkspaceId
+            : root.nativeActiveWorkspaceId;
         if (reportedId > 0 && root.lastValidActiveWorkspaceId !== reportedId)
             root.lastValidActiveWorkspaceId = reportedId;
-
-        // Keep an event-derived value authoritative while stale process
-        // results drain, then return to the declarative monitor properties.
-        if (root.eventActiveWorkspaceId > 0 && reportedId === root.eventActiveWorkspaceId)
-            root.eventActiveWorkspaceId = 0;
     }
 
     onReportedActiveWorkspaceIdChanged: {
@@ -121,24 +114,6 @@ Item {
         }
         function onFocusedMonitorChanged() {
             root.rememberReportedWorkspace();
-        }
-        function onRawEvent(event) {
-            if (event.name !== "workspacev2")
-                return;
-
-            const focusedMonitorName = Hyprland.focusedMonitor?.name ?? "";
-            if (focusedMonitorName !== root.monitorName)
-                return;
-
-            const workspaceId = root.validWorkspaceId(`${event.data ?? ""}`.split(",", 1)[0]);
-            if (workspaceId <= 0)
-                return;
-
-            // The socket event is the earliest authoritative notification;
-            // use it immediately rather than waiting for an IPC round trip.
-            root.eventActiveWorkspaceId = workspaceId;
-            root.lastValidActiveWorkspaceId = workspaceId;
-            updateWorkspaceOccupied();
         }
     }
     onWorkspaceGroupChanged: {
