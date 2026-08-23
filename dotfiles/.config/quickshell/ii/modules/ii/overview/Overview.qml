@@ -245,13 +245,15 @@ Scope {
                 id: overviewLoader
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: item?.implicitWidth ?? 0
-                height: item?.implicitHeight ?? 0
+                height: GlobalStates.overviewDrawerMode ? 0 : (item?.implicitHeight ?? 0)
                 asynchronous: true
                 active: panelWindow.overviewContentReady
                     && (Config?.options.overview.enable ?? true)
                 sourceComponent: OverviewWidget {
                     screen: panelWindow.screen
-                    visible: GlobalStates.overviewOpen && searchWidget.displayedText == ""
+                    visible: GlobalStates.overviewOpen
+                        && !GlobalStates.overviewDrawerMode
+                        && searchWidget.displayedText == ""
                 }
             }
         }
@@ -274,37 +276,17 @@ Scope {
                                                  && GlobalStates.overviewDrawerMode
                                                  && searchWidget.displayedText == ""
 
-            property real slideY: height
+            property real slideY: drawerActive ? 0 : height
 
             transform: Translate { y: drawerPanel.slideY }
 
-            onDrawerActiveChanged: {
-                if (drawerActive) {
-                    slideOutAnim.stop()
-                    slideInAnim.start()
-                } else {
-                    slideInAnim.stop()
-                    slideOutAnim.to = drawerPanel.height
-                    slideOutAnim.start()
+            Behavior on slideY {
+                NumberAnimation {
+                    duration: drawerPanel.drawerActive
+                        ? overviewScope.entranceDuration
+                        : overviewScope.exitDuration
+                    easing.type: drawerPanel.drawerActive ? Easing.OutExpo : Easing.InOutQuad
                 }
-            }
-
-            NumberAnimation {
-                id: slideInAnim
-                target: drawerPanel
-                property: "slideY"
-                to: 0
-                duration: overviewScope.entranceDuration
-                easing.type: Easing.OutExpo
-            }
-
-            NumberAnimation {
-                id: slideOutAnim
-                target: drawerPanel
-                property: "slideY"
-                to: drawerPanel.height
-                duration: overviewScope.exitDuration
-                easing.type: Easing.InOutQuad
             }
 
             DrawerAppList {

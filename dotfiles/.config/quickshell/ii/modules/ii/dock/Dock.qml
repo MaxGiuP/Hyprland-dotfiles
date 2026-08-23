@@ -92,7 +92,7 @@ Scope { // Scope
                     ? dockRoot.revealRegionHeight + dockRoot.hiddenDockOvershoot
                     : 0)
 
-            property bool reveal: !launchpadOnThisScreen
+            property bool reveal: (root.pinned || !launchpadOnThisScreen)
                 && (
                     root.pinned
                     || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse)
@@ -107,7 +107,7 @@ Scope { // Scope
                 right: true
             }
 
-            readonly property bool launchpadOnThisScreen: GlobalStates.overviewDrawerMode
+            readonly property bool launchpadOnThisScreen: (GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode)
                 || (GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen)
             exclusiveZone: (dockRoot.visible && root.pinned && !launchpadOnThisScreen)
                 ? Math.max(0, implicitHeight
