@@ -326,7 +326,7 @@ Singleton {
 
     function incrementVolume() {
         const currentVolume = Audio.value;
-        const stepPercent = currentVolume < 0.09 ? 1 : 2;
+        const stepPercent = currentVolume < 0.10 ? 1 : 2;
         root.value = Math.min(root.hardMaxValue, currentVolume + (stepPercent / 100));
         Quickshell.execDetached(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", `${stepPercent}%+`]);
         root.scheduleSinkRefresh();
@@ -334,7 +334,7 @@ Singleton {
     
     function decrementVolume() {
         const currentVolume = Audio.value;
-        const stepPercent = currentVolume < 0.09 ? 1 : 2;
+        const stepPercent = currentVolume < 0.10 ? 1 : 2;
         root.value = Math.max(0, currentVolume - (stepPercent / 100));
         Quickshell.execDetached(["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", `${stepPercent}%-`]);
         root.scheduleSinkRefresh();
