@@ -76,9 +76,12 @@ ContentPage {
     }
 
     function monitorDraft(mon) {
-        if (!root.monitorDrafts[mon.name])
-            root.syncMonitorDrafts(true);
-        return root.monitorDrafts[mon.name];
+        return root.monitorDrafts[mon.name] ?? {
+            x: mon.x,
+            y: mon.y,
+            scale: mon.scale,
+            transform: mon.transform
+        };
     }
 
     function draftWidth(mon) {

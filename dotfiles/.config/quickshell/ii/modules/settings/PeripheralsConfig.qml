@@ -51,6 +51,73 @@ ContentPage {
     readonly property bool g502OnboardDisabled: root.g502OnboardProfile.toLowerCase() === "disabled"
     readonly property var g502ReportRateOptions: root.g502Options("report_rate", ["1ms", "2ms", "4ms", "8ms"], "speed")
     readonly property var g502ProfileOptions: root.g502Options("onboard_profile", ["Disabled", "Profile 1", "Profile 2"], "memory")
+    property string appliedMouseState: ""
+    property string appliedTouchpadState: ""
+    property string appliedKeyboardState: ""
+    property bool deviceListExpanded: false
+    readonly property string mouseState: [
+        Config.options.peripherals.mouse.sensitivity,
+        Config.options.peripherals.mouse.accelProfile,
+        Config.options.peripherals.mouse.scrollFactor,
+        Config.options.peripherals.mouse.followMouse,
+        Config.options.peripherals.mouse.leftHanded
+    ].join("|")
+    readonly property string touchpadState: [
+        Config.options.peripherals.touchpad.naturalScroll,
+        Config.options.peripherals.touchpad.tapToClick,
+        Config.options.peripherals.touchpad.tapAndDrag,
+        Config.options.peripherals.touchpad.disableWhileTyping,
+        Config.options.peripherals.touchpad.dragLock,
+        Config.options.peripherals.touchpad.scrollFactor
+    ].join("|")
+    readonly property string keyboardState: `${Config.options.peripherals.keyboard.numlockByDefault}`
+    readonly property bool mouseDirty: root.appliedMouseState.length > 0 && root.mouseState !== root.appliedMouseState
+    readonly property bool touchpadDirty: root.appliedTouchpadState.length > 0 && root.touchpadState !== root.appliedTouchpadState
+    readonly property bool keyboardDirty: root.appliedKeyboardState.length > 0 && root.keyboardState !== root.appliedKeyboardState
+
+    function captureAppliedStates() {
+        root.appliedMouseState = root.mouseState;
+        root.appliedTouchpadState = root.touchpadState;
+        root.appliedKeyboardState = root.keyboardState;
+    }
+
+    function applyMouseDraft() {
+        PeripheralSettings.applyMouse();
+        root.appliedMouseState = root.mouseState;
+    }
+
+    function applyTouchpadDraft() {
+        PeripheralSettings.applyTouchpad();
+        root.appliedTouchpadState = root.touchpadState;
+    }
+
+    function applyKeyboardDraft() {
+        PeripheralSettings.applyKeyboard();
+        root.appliedKeyboardState = root.keyboardState;
+    }
+
+    function resetMouseDraft() {
+        const defaults = PeripheralSettings.mouseDefaults;
+        Config.options.peripherals.mouse.sensitivity = defaults.sensitivity;
+        Config.options.peripherals.mouse.accelProfile = defaults.accelProfile;
+        Config.options.peripherals.mouse.scrollFactor = defaults.scrollFactor;
+        Config.options.peripherals.mouse.followMouse = defaults.followMouse;
+        Config.options.peripherals.mouse.leftHanded = defaults.leftHanded;
+    }
+
+    function resetTouchpadDraft() {
+        const defaults = PeripheralSettings.touchpadDefaults;
+        Config.options.peripherals.touchpad.naturalScroll = defaults.naturalScroll;
+        Config.options.peripherals.touchpad.tapToClick = defaults.tapToClick;
+        Config.options.peripherals.touchpad.tapAndDrag = defaults.tapAndDrag;
+        Config.options.peripherals.touchpad.disableWhileTyping = defaults.disableWhileTyping;
+        Config.options.peripherals.touchpad.dragLock = defaults.dragLock;
+        Config.options.peripherals.touchpad.scrollFactor = defaults.scrollFactor;
+    }
+
+    function resetKeyboardDraft() {
+        Config.options.peripherals.keyboard.numlockByDefault = PeripheralSettings.keyboardDefaults.numlockByDefault;
+    }
 
     function rounded(value, decimals = 2) {
         const parsed = Number(value);
@@ -277,6 +344,7 @@ ContentPage {
         PeripheralSettings.refreshDevices();
         MechlandsM75.refresh();
         LogitechG502.refresh();
+        Qt.callLater(root.captureAppliedStates);
     }
 
     Connections {
@@ -296,13 +364,65 @@ ContentPage {
     }
 
     ContentSection {
+        icon: "devices"
+        title: Translation.tr("Connected devices")
+        description: root.deviceRows.length === 0
+            ? Translation.tr("No physical input devices detected")
+            : Translation.tr("%1 input devices reported by Hyprland").arg(root.deviceRows.length)
+
+        RowLayout {
+            Layout.fillWidth: true
+
+            Item {
+                Layout.fillWidth: true
+            }
+
+            IconToolbarButton {
+                visible: root.deviceRows.length > 2
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 36
+                text: root.deviceListExpanded ? "expand_less" : "expand_more"
+                onClicked: root.deviceListExpanded = !root.deviceListExpanded
+
+                StyledToolTip {
+                    text: root.deviceListExpanded
+                        ? Translation.tr("Show fewer devices")
+                        : Translation.tr("Show all devices")
+                }
+            }
+
+            IconToolbarButton {
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 36
+                text: PeripheralSettings.refreshingDevices ? "progress_activity" : "refresh"
+                enabled: !PeripheralSettings.refreshingDevices
+                onClicked: PeripheralSettings.refreshDevices()
+
+                StyledToolTip { text: Translation.tr("Refresh devices") }
+            }
+        }
+
+        Repeater {
+            model: root.deviceListExpanded ? root.deviceRows : root.deviceRows.slice(0, 2)
+
+            delegate: DeviceChip {
+                required property var modelData
+                icon: modelData.icon
+                label: modelData.label
+                detail: modelData.detail
+            }
+        }
+    }
+
+    ContentSection {
         icon: "mouse"
         title: Translation.tr("Mouse")
+        description: Translation.tr("Pointer speed, scrolling and focus behavior")
 
         ConfigSlider {
             text: `${Translation.tr("Sensitivity")} (${root.rounded(Config.options.peripherals.mouse.sensitivity)})`
             buttonIcon: "speed"
-            textWidth: 170
+            textWidth: 200
             value: Config.options.peripherals.mouse.sensitivity
             from: PeripheralSettings.mouseSensitivityMin
             to: PeripheralSettings.mouseSensitivityMax
@@ -314,7 +434,7 @@ ContentPage {
         ConfigSlider {
             text: `${Translation.tr("Scroll factor")} (${root.rounded(Config.options.peripherals.mouse.scrollFactor)})`
             buttonIcon: "swap_vert"
-            textWidth: 170
+            textWidth: 200
             value: Config.options.peripherals.mouse.scrollFactor
             from: 0.25
             to: 3
@@ -323,64 +443,50 @@ ContentPage {
             onValueChanged: Config.options.peripherals.mouse.scrollFactor = value
         }
 
-        ConfigRow {
-            uniform: true
+        ContentSubsection {
+            title: Translation.tr("Acceleration")
 
-            ContentSubsection {
-                title: Translation.tr("Acceleration")
-
-                ConfigSelectionArray {
-                    currentValue: Config.options.peripherals.mouse.accelProfile || "default"
-                    onSelected: newValue => Config.options.peripherals.mouse.accelProfile = newValue === "default" ? "" : newValue
-                    options: root.accelProfileOptions
-                }
-            }
-
-            ContentSubsection {
-                title: Translation.tr("Focus")
-
-                ConfigSelectionArray {
-                    currentValue: Config.options.peripherals.mouse.followMouse
-                    onSelected: newValue => Config.options.peripherals.mouse.followMouse = newValue
-                    options: root.followMouseOptions
-                }
+            ConfigSelectionArray {
+                currentValue: Config.options.peripherals.mouse.accelProfile || "default"
+                onSelected: newValue => Config.options.peripherals.mouse.accelProfile = newValue === "default" ? "" : newValue
+                options: root.accelProfileOptions
             }
         }
 
-        ConfigRow {
-            uniform: true
+        ContentSubsection {
+            title: Translation.tr("Pointer focus")
 
-            ConfigSwitch {
-                buttonIcon: "left_click"
-                text: Translation.tr("Left-handed mouse")
-                checked: Config.options.peripherals.mouse.leftHanded
-                onCheckedChanged: Config.options.peripherals.mouse.leftHanded = checked
-            }
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "restart_alt"
-                mainText: Translation.tr("Reset mouse")
-                onClicked: PeripheralSettings.resetMouse()
+            ConfigSelectionArray {
+                currentValue: Config.options.peripherals.mouse.followMouse
+                onSelected: newValue => Config.options.peripherals.mouse.followMouse = newValue
+                options: root.followMouseOptions
             }
         }
 
-        RippleButtonWithIcon {
-            Layout.fillWidth: true
-            materialIcon: "save"
-            mainText: Translation.tr("Apply mouse settings")
-            onClicked: PeripheralSettings.applyMouse()
+        ConfigSwitch {
+            buttonIcon: "left_click"
+            text: Translation.tr("Left-handed mouse")
+            checked: Config.options.peripherals.mouse.leftHanded
+            onCheckedChanged: Config.options.peripherals.mouse.leftHanded = checked
+        }
+
+        SettingsActionBar {
+            pending: root.mouseDirty
+            applyText: Translation.tr("Apply mouse")
+            onApplyRequested: root.applyMouseDraft()
+            onResetRequested: root.resetMouseDraft()
         }
     }
 
     ContentSection {
         icon: "touchpad_mouse"
         title: Translation.tr("Touchpad")
+        description: Translation.tr("Gestures, scrolling and typing protection")
 
         ConfigSlider {
             text: `${Translation.tr("Scroll factor")} (${root.rounded(Config.options.peripherals.touchpad.scrollFactor)})`
             buttonIcon: "swap_vert"
-            textWidth: 170
+            textWidth: 200
             value: Config.options.peripherals.touchpad.scrollFactor
             from: 0.25
             to: 3
@@ -425,65 +531,45 @@ ContentPage {
             }
         }
 
-        ConfigRow {
-            uniform: true
-
-            ConfigSwitch {
-                buttonIcon: "lock"
-                text: Translation.tr("Drag lock")
-                checked: Config.options.peripherals.touchpad.dragLock
-                onCheckedChanged: Config.options.peripherals.touchpad.dragLock = checked
-            }
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "restart_alt"
-                mainText: Translation.tr("Reset touchpad")
-                onClicked: PeripheralSettings.resetTouchpad()
-            }
+        ConfigSwitch {
+            buttonIcon: "lock"
+            text: Translation.tr("Drag lock")
+            checked: Config.options.peripherals.touchpad.dragLock
+            onCheckedChanged: Config.options.peripherals.touchpad.dragLock = checked
         }
 
-        RippleButtonWithIcon {
-            Layout.fillWidth: true
-            materialIcon: "save"
-            mainText: Translation.tr("Apply touchpad settings")
-            onClicked: PeripheralSettings.applyTouchpad()
+        SettingsActionBar {
+            pending: root.touchpadDirty
+            applyText: Translation.tr("Apply touchpad")
+            onApplyRequested: root.applyTouchpadDraft()
+            onResetRequested: root.resetTouchpadDraft()
         }
     }
 
     ContentSection {
         icon: "keyboard"
         title: Translation.tr("Keyboard")
+        description: Translation.tr("Default behavior for standard keyboards")
 
-        ConfigRow {
-            uniform: true
-
-            ConfigSwitch {
-                buttonIcon: "looks_one"
-                text: Translation.tr("Numlock by default")
-                checked: Config.options.peripherals.keyboard.numlockByDefault
-                onCheckedChanged: Config.options.peripherals.keyboard.numlockByDefault = checked
-            }
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "restart_alt"
-                mainText: Translation.tr("Reset keyboard")
-                onClicked: PeripheralSettings.resetKeyboard()
-            }
+        ConfigSwitch {
+            buttonIcon: "looks_one"
+            text: Translation.tr("Numlock by default")
+            checked: Config.options.peripherals.keyboard.numlockByDefault
+            onCheckedChanged: Config.options.peripherals.keyboard.numlockByDefault = checked
         }
 
-        RippleButtonWithIcon {
-            Layout.fillWidth: true
-            materialIcon: "save"
-            mainText: Translation.tr("Apply keyboard settings")
-            onClicked: PeripheralSettings.applyKeyboard()
+        SettingsActionBar {
+            pending: root.keyboardDirty
+            applyText: Translation.tr("Apply keyboard")
+            onApplyRequested: root.applyKeyboardDraft()
+            onResetRequested: root.resetKeyboardDraft()
         }
     }
 
     ContentSection {
         icon: "keyboard"
         title: Translation.tr("MechLands M75")
+        description: Translation.tr("Hardware profile, lighting and magnetic switches")
 
         DeviceChip {
             icon: MechlandsM75.connected ? "keyboard" : "keyboard_off"
@@ -763,6 +849,7 @@ ContentPage {
     ContentSection {
         icon: "mouse"
         title: Translation.tr("Logitech G502 X Plus")
+        description: Translation.tr("Onboard profile, DPI and scroll wheel")
 
         DeviceChip {
             icon: LogitechG502.connected ? "mouse" : "mouse_lock"
@@ -939,6 +1026,7 @@ ContentPage {
     ContentSection {
         icon: "tune"
         title: Translation.tr("Quickshell scrolling")
+        description: Translation.tr("Scroll handling inside the shell interface")
 
         ConfigSwitch {
             buttonIcon: "touchpad_mouse"
@@ -983,6 +1071,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: false
         icon: "devices"
         title: Translation.tr("Detected devices")
 

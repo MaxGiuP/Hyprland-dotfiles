@@ -27,19 +27,19 @@ ApplicationWindow {
     property string requestedSectionId: ""
 
     property var pages: [
-        { displayName: Translation.tr("Home"), icon: "home", component: "modules/settings/HomeConfig.qml" },
-        { displayName: Translation.tr("Connectivity"), icon: "language", component: "modules/settings/ConnectivityConfig.qml" },
-        { displayName: Translation.tr("Peripherals"), icon: "mouse", component: "modules/settings/PeripheralsConfig.qml" },
-        { displayName: Translation.tr("Display"), icon: "desktop_windows", component: "modules/settings/DisplayPowerConfig.qml" },
-        { displayName: Translation.tr("Audio"), icon: "volume_up", component: "modules/settings/AudioControlConfig.qml" },
-        { displayName: Translation.tr("Personalisation"), icon: "palette", component: "modules/settings/PersonalisationConfig.qml" },
-        { displayName: Translation.tr("Account"), icon: "person", component: "modules/settings/AccountsConfig.qml" },
-        { displayName: Translation.tr("Date, time & language"), icon: "schedule", component: "modules/settings/DateTimeLanguageConfig.qml" },
-        { displayName: Translation.tr("Accessibility"), icon: "accessibility_new", component: "modules/settings/AccessibilityConfig.qml" },
-        { displayName: Translation.tr("Security & privacy"), icon: "shield_lock", component: "modules/settings/PrivacySecurityConfig.qml" },
-        { displayName: Translation.tr("System info & update"), icon: "system_update", component: "modules/settings/SystemInfoUpdateConfig.qml" },
-        { displayName: Translation.tr("Services"), icon: "widgets", component: "modules/settings/ServicesConfig.qml" },
-        { displayName: Translation.tr("Hyprland"), icon: "deployed_code", component: "modules/settings/HyprConfig.qml" }
+        { displayName: Translation.tr("Home"), description: Translation.tr("Overview and shortcuts"), icon: "home", component: "modules/settings/HomeConfig.qml" },
+        { displayName: Translation.tr("Connectivity"), description: Translation.tr("Wi-Fi, Ethernet and Bluetooth"), icon: "language", component: "modules/settings/ConnectivityConfig.qml" },
+        { displayName: Translation.tr("Peripherals"), description: Translation.tr("Mouse, touchpad and keyboard"), icon: "mouse", component: "modules/settings/PeripheralsConfig.qml" },
+        { displayName: Translation.tr("Display"), description: Translation.tr("Monitors, brightness and power"), icon: "desktop_windows", component: "modules/settings/DisplayPowerConfig.qml" },
+        { displayName: Translation.tr("Audio"), description: Translation.tr("Devices, streams and volume"), icon: "volume_up", component: "modules/settings/AudioControlConfig.qml" },
+        { displayName: Translation.tr("Personalisation"), description: Translation.tr("Theme, wallpaper and interface"), icon: "palette", component: "modules/settings/PersonalisationConfig.qml" },
+        { displayName: Translation.tr("Account"), description: Translation.tr("Users and authentication"), icon: "person", component: "modules/settings/AccountsConfig.qml" },
+        { displayName: Translation.tr("Date, time & language"), description: Translation.tr("Locale, clock and translation"), icon: "schedule", component: "modules/settings/DateTimeLanguageConfig.qml" },
+        { displayName: Translation.tr("Accessibility"), description: Translation.tr("Sizing, readability and motion"), icon: "accessibility_new", component: "modules/settings/AccessibilityConfig.qml" },
+        { displayName: Translation.tr("Security & privacy"), description: Translation.tr("Local data and permissions"), icon: "shield_lock", component: "modules/settings/PrivacySecurityConfig.qml" },
+        { displayName: Translation.tr("System info & update"), description: Translation.tr("Hardware, software and updates"), icon: "system_update", component: "modules/settings/SystemInfoUpdateConfig.qml" },
+        { displayName: Translation.tr("Services"), description: Translation.tr("Integrations and default tools"), icon: "widgets", component: "modules/settings/ServicesConfig.qml" },
+        { displayName: Translation.tr("Hyprland"), description: Translation.tr("Keybinds, rules and configuration"), icon: "deployed_code", component: "modules/settings/HyprConfig.qml" }
     ]
 
     function copyConfigPath() {
@@ -163,8 +163,8 @@ ApplicationWindow {
             Item {
                 id: navRailWrapper
                 Layout.fillHeight: true
-                Layout.margins: 5
-                implicitWidth: navRail.expanded ? 180 : fab.baseSize
+                Layout.margins: 2
+                implicitWidth: navRail.expanded ? 252 : 56
 
                 Behavior on implicitWidth {
                     animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -181,24 +181,11 @@ ApplicationWindow {
                     NavigationRail {
                         id: navRail
                         width: navRailFlickable.width
-                        spacing: 10
-                        expanded: root.width > 900
+                        spacing: 2
+                        expanded: root.width > 960
 
                         NavigationRailExpandButton {
                             focus: root.visible
-                        }
-
-                        FloatingActionButton {
-                            id: fab
-                            iconText: root.configPathCopied ? "check" : "edit"
-                            buttonText: root.configPathCopied ? Translation.tr("Copied") : Translation.tr("Config file")
-                            expanded: navRail.expanded
-                            downAction: () => root.openConfigFile()
-                            altAction: () => root.copyConfigPath()
-
-                            StyledToolTip {
-                                text: Translation.tr("Open config file\nRight-click to copy path")
-                            }
                         }
 
                         NavigationRailTabArray {
@@ -214,9 +201,11 @@ ApplicationWindow {
                                     toggled: root.currentPage === index
                                     onPressed: root.currentPage = index
                                     expanded: navRail.expanded
+                                    showCollapsedText: false
                                     buttonIcon: modelData.icon
                                     buttonText: modelData.displayName
-                                    showToggledHighlight: false
+                                    baseSize: 44
+                                    baseHighlightHeight: 34
                                 }
                             }
                         }
@@ -236,50 +225,124 @@ ApplicationWindow {
                 radius: Appearance.rounding.windowRounding - root.contentPadding
                 clip: true
 
-                Item {
-                    id: pageStack
+                ColumnLayout {
                     anchors.fill: parent
+                    spacing: 0
 
-                    Repeater {
-                        model: root.pages
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 64
 
-                        Loader {
-                            required property int index
-                            required property var modelData
-
-                            property bool loadedOnce: false
-                            readonly property bool current: root.currentPage === index
-
+                        RowLayout {
                             anchors.fill: parent
-                            active: Config.ready && (current || loadedOnce)
-                            asynchronous: !current
-                            source: modelData.component
-                            visible: active && (current || opacity > 0.001)
-                            enabled: current
-                            opacity: current && status === Loader.Ready ? 1 : 0
-                            z: current ? 1 : 0
+                            anchors.leftMargin: 20
+                            anchors.rightMargin: 14
+                            spacing: 12
 
-                            onLoaded: {
-                                loadedOnce = true
-                                root.prepareLoadedPage(item)
-                                applyRequestedNavigation()
+                            Rectangle {
+                                Layout.preferredWidth: 36
+                                Layout.preferredHeight: 36
+                                radius: Appearance.rounding.small
+                                color: Appearance.colors.colSecondaryContainer
+
+                                MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: root.pages[root.currentPage]?.icon ?? "settings"
+                                    iconSize: 21
+                                    fill: 1
+                                    color: Appearance.colors.colOnSecondaryContainer
+                                }
                             }
 
-                            onCurrentChanged: {
-                                if (current)
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: root.pages[root.currentPage]?.displayName ?? ""
+                                    color: Appearance.colors.colOnLayer1
+                                    font.pixelSize: Appearance.font.pixelSize.large
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                }
+
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: root.pages[root.currentPage]?.description ?? ""
+                                    color: Appearance.colors.colSubtext
+                                    font.pixelSize: Appearance.font.pixelSize.smaller
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            IconToolbarButton {
+                                Layout.preferredWidth: 38
+                                Layout.preferredHeight: 38
+                                text: root.configPathCopied ? "check" : "code"
+                                downAction: () => root.openConfigFile()
+                                altAction: () => root.copyConfigPath()
+
+                                StyledToolTip {
+                                    text: Translation.tr("Open config file\nRight-click to copy path")
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: Appearance.colors.colOutlineVariant
+                        opacity: 0.45
+                    }
+
+                    Item {
+                        id: pageStack
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+
+                        Repeater {
+                            model: root.pages
+
+                            Loader {
+                                required property int index
+                                required property var modelData
+
+                                property bool loadedOnce: false
+                                readonly property bool current: root.currentPage === index
+
+                                anchors.fill: parent
+                                active: Config.ready && (current || loadedOnce)
+                                asynchronous: !current
+                                source: modelData.component
+                                visible: active && (current || opacity > 0.001)
+                                enabled: current
+                                opacity: current && status === Loader.Ready ? 1 : 0
+                                z: current ? 1 : 0
+
+                                onLoaded: {
+                                    loadedOnce = true
+                                    root.prepareLoadedPage(item)
                                     applyRequestedNavigation()
-                            }
+                                }
 
-                            function applyRequestedNavigation() {
-                                if (current && status === Loader.Ready)
-                                    root.applyRequestedNavigationTo(item)
-                            }
+                                onCurrentChanged: {
+                                    if (current)
+                                        applyRequestedNavigation()
+                                }
 
-                            Behavior on opacity {
-                                NumberAnimation {
-                                    duration: current ? 200 : 100
-                                    easing.type: current ? Appearance.animation.elementMoveEnter.type : Appearance.animation.elementMoveExit.type
-                                    easing.bezierCurve: current ? Appearance.animationCurves.emphasizedDecel : Appearance.animationCurves.emphasizedAccel
+                                function applyRequestedNavigation() {
+                                    if (current && status === Loader.Ready)
+                                        root.applyRequestedNavigationTo(item)
+                                }
+
+                                Behavior on opacity {
+                                    NumberAnimation {
+                                        duration: current ? 200 : 100
+                                        easing.type: current ? Appearance.animation.elementMoveEnter.type : Appearance.animation.elementMoveExit.type
+                                        easing.bezierCurve: current ? Appearance.animationCurves.emphasizedDecel : Appearance.animationCurves.emphasizedAccel
+                                    }
                                 }
                             }
                         }

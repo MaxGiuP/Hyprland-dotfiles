@@ -13,6 +13,7 @@ TabButton {
     property real buttonIconRotation: 0
     property string buttonText
     property bool expanded: false
+    property bool showCollapsedText: true
     property bool showToggledHighlight: true
     readonly property real visualWidth: root.expanded ? root.baseSize + 20 + itemText.implicitWidth : root.baseSize
 
@@ -41,7 +42,9 @@ TabButton {
         }
         
         implicitWidth: root.visualWidth
-        implicitHeight: root.expanded ? itemIconBackground.implicitHeight : itemIconBackground.implicitHeight + itemText.implicitHeight 
+        implicitHeight: root.expanded || !root.showCollapsedText
+            ? itemIconBackground.implicitHeight
+            : itemIconBackground.implicitHeight + itemText.implicitHeight
 
         Rectangle {
             id: itemBackground
@@ -116,6 +119,7 @@ TabButton {
 
         StyledText {
             id: itemText
+            visible: root.expanded || root.showCollapsedText
             anchors {
                 top: itemIconBackground.bottom
                 topMargin: 2
@@ -145,6 +149,11 @@ TabButton {
             font.pixelSize: 14
             color: Appearance.colors.colOnLayer1
         }
+
     }
 
+    StyledToolTip {
+        text: root.buttonText
+        extraVisibleCondition: !root.expanded && !root.showCollapsedText
+    }
 }

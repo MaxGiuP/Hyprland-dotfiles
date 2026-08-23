@@ -13,14 +13,18 @@ RowLayout {
     property real from: 0
     property real to: 100
     property bool spinBoxReady: false
-    spacing: 10
-    Layout.leftMargin: 8
-    Layout.rightMargin: 8
+    Layout.fillWidth: true
+    implicitHeight: 40
+    spacing: 12
+    Layout.leftMargin: 4
+    Layout.rightMargin: 4
 
     RowLayout {
-        spacing: 10
+        Layout.fillWidth: true
+        spacing: 8
         OptionalMaterialSymbol {
             icon: root.icon
+            iconSize: 19
             opacity: root.enabled ? 1 : 0.4
         }
         StyledText {
@@ -29,6 +33,7 @@ RowLayout {
             text: root.text
             color: Appearance.colors.colOnSecondaryContainer
             opacity: root.enabled ? 1 : 0.4
+            elide: Text.ElideRight
         }
     }
 

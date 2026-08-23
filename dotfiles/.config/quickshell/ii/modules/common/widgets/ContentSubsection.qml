@@ -10,8 +10,8 @@ ColumnLayout {
     override default property alias contentChildren: sectionContent.children
 
     Layout.fillWidth: true
-    Layout.topMargin: 4
-    spacing: 2
+    Layout.topMargin: 6
+    spacing: 6
 
     RowLayout {
         ContentSubsectionLabel {
@@ -21,7 +21,7 @@ ColumnLayout {
         MaterialSymbol {
             visible: root.tooltip && root.tooltip.length > 0
             text: "info"
-            iconSize: Appearance.font.pixelSize.large
+            iconSize: Appearance.font.pixelSize.normal
             
             color: Appearance.colors.colSubtext
             MouseArea {
@@ -41,6 +41,6 @@ ColumnLayout {
     ColumnLayout {
         id: sectionContent
         Layout.fillWidth: true
-        spacing: 2
+        spacing: 6
     }
 }
