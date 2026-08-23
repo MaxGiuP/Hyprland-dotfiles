@@ -3,15 +3,28 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 
-MaterialSymbol {
+Item {
     id: root
     readonly property bool showUnreadCount: Config.options.bar.indicators.notifications.showUnreadCount
     readonly property int badgeHeight: 14
     readonly property int badgeHorizontalPadding: 4
+    readonly property int badgeOverlap: showUnreadCount ? 5 : 4
     readonly property string badgeTextValue: Notifications.unread > 999 ? "999+" : String(Notifications.unread)
-    text: Notifications.silent ? "notifications_paused" : "notifications"
-    iconSize: Appearance.font.pixelSize.larger
-    color: rightSidebarButton.colText
+
+    // Include the complete badge in this item's layout bounds. This prevents the
+    // surrounding Revealer from clipping it while leaving the bell visible.
+    implicitWidth: notificationIcon.implicitWidth
+        + (notifPing.visible ? Math.max(0, notifPing.implicitWidth - badgeOverlap) : 0)
+    implicitHeight: Math.max(notificationIcon.implicitHeight, notifPing.visible ? notifPing.implicitHeight : 0) + 4
+
+    MaterialSymbol {
+        id: notificationIcon
+        anchors.left: parent.left
+        anchors.verticalCenter: parent.verticalCenter
+        text: Notifications.silent ? "notifications_paused" : "notifications"
+        iconSize: Appearance.font.pixelSize.larger
+        color: rightSidebarButton.colText
+    }
 
     Rectangle {
         id: notifPing
@@ -19,7 +32,6 @@ MaterialSymbol {
         anchors {
             right: parent.right
             verticalCenter: parent.verticalCenter
-            rightMargin: root.showUnreadCount ? -10 : 1
             verticalCenterOffset: root.showUnreadCount ? -4 : 0
         }
         radius: Appearance.rounding.full
