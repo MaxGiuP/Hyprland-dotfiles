@@ -27,7 +27,7 @@ FocusScope {
     property string currentProvider: ""
     property string currentModelBaseUrl: ""
     property string currentToolsets: ""
-    property string selectedRouteId: ""
+    property string selectedRouteId: Persistent.states.ai.harnessRoute || "codex-cli"
     property bool codexAvailable: false
     property bool geminiAvailable: false
     property bool claudeAvailable: false
@@ -264,6 +264,7 @@ FocusScope {
         if (!route)
             return;
         root.selectedRouteId = route.id ?? "";
+        Persistent.states.ai.harnessRoute = root.selectedRouteId;
         root.currentModel = root.trimmed(route.model);
         root.currentProvider = root.trimmed(route.provider);
         root.currentModelBaseUrl = root.normalizedBaseUrl(route.baseUrl);
@@ -625,7 +626,8 @@ FocusScope {
                     root.currentProvider = data.provider ?? "";
                     root.currentModelBaseUrl = data.base_url ?? "";
                     root.currentToolsets = data.toolsets ?? "";
-                    root.selectedRouteId = root.routeIdForConfig(root.currentProvider, root.currentModel, root.currentModelBaseUrl);
+                    if (root.selectedRouteId.length === 0)
+                        root.selectedRouteId = root.routeIdForConfig(root.currentProvider, root.currentModel, root.currentModelBaseUrl);
                 } catch (e) {
                     console.log("[AiHarness] Could not parse Hermes config summary:", e);
                 }

@@ -62,6 +62,7 @@ Singleton {
 
             property JsonObject ai: JsonObject {
                 property string model: "gemini-flash-latest"
+                property string harnessRoute: "codex-cli"
                 property real temperature: 0.5
                 property string lastAutoFreeGeminiModelId: ""
                 property bool modelNotificationsInitialized: false
