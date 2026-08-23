@@ -29,10 +29,24 @@ Item {
         })
     }
 
-    // Build a flat row model: [{type:"header", letter:"A"}, {type:"apps", apps:[...]}, ...]
-    function buildRowModel(apps) {
+    readonly property var recentApps: {
+        const appsById = new Map(AppSearch.list.map(app => [String(app?.id ?? ""), app]))
+        return Array.from(Persistent.states.drawer.recentAppIds ?? [])
+            .map(id => appsById.get(id))
+            .filter(app => app !== undefined)
+            .slice(0, root.columns)
+    }
+
+    // Build recent apps first, followed by the complete A-Z application list.
+    function buildRowModel(apps, recentApps) {
         const COLS = root.columns
-        const rows = []
+        const rows = [
+            { type: "section", label: Translation.tr("Recently used") },
+            recentApps.length > 0
+                ? { type: "apps", apps: recentApps.slice(0, COLS) }
+                : { type: "emptyRecent" },
+            { type: "section", label: Translation.tr("All applications") }
+        ]
         let currentLetter = null
         let currentRow = []
 
@@ -230,18 +244,20 @@ Item {
         clip: true
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        model: root.buildRowModel(root.sortedApps)
+        model: root.buildRowModel(root.sortedApps, root.recentApps)
 
         delegate: Item {
             id: rowItem
             required property var modelData
             required property int index
             width: appList.width
-            height: rowItem.modelData.type === "header" ? 48 : root.cellHeight
+            height: rowItem.modelData.type === "header" || rowItem.modelData.type === "section"
+                ? 48
+                : rowItem.modelData.type === "emptyRecent" ? 56 : root.cellHeight
 
             // Section header — pill badge + horizontal rule
             RowLayout {
-                visible: rowItem.modelData.type === "header"
+                visible: rowItem.modelData.type === "header" || rowItem.modelData.type === "section"
                 anchors {
                     left: parent.left
                     right: parent.right
@@ -260,7 +276,9 @@ Item {
                     Text {
                         id: headerLabel
                         anchors.centerIn: parent
-                        text: rowItem.modelData.type === "header" ? (rowItem.modelData.letter ?? "") : ""
+                        text: rowItem.modelData.type === "header"
+                            ? (rowItem.modelData.letter ?? "")
+                            : (rowItem.modelData.label ?? "")
                         color: Appearance.colors.colOnPrimaryContainer
                         font.pixelSize: Appearance.font.pixelSize.small + 2
                         font.weight: Font.Bold
@@ -273,6 +291,15 @@ Item {
                     color: Appearance.colors.colOnSurfaceVariant
                     opacity: 0.2
                 }
+            }
+
+            Text {
+                visible: rowItem.modelData.type === "emptyRecent"
+                anchors.centerIn: parent
+                text: Translation.tr("Applications you launch will appear here")
+                color: Appearance.colors.colOnSurfaceVariant
+                font.pixelSize: Appearance.font.pixelSize.small
+                opacity: 0.75
             }
 
             // Apps row

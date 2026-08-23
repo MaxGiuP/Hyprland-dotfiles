@@ -74,6 +74,10 @@ Singleton {
                 property int tabIndex: 0
             }
 
+            property JsonObject drawer: JsonObject {
+                property list<string> recentAppIds: []
+            }
+
             property JsonObject sidebar: JsonObject {
                 property JsonObject bottomGroup: JsonObject {
                     property bool collapsed: false

@@ -47,17 +47,37 @@ Singleton {
         return false;
     }
 
+    function recordDesktopEntryLaunch(entry) {
+        if (!Persistent.ready || !entry)
+            return;
+
+        const appId = String(entry.id ?? "").trim();
+        if (appId.length === 0)
+            return;
+
+        const previousIds = Array.from(Persistent.states.drawer.recentAppIds ?? []);
+        Persistent.states.drawer.recentAppIds = [
+            appId,
+            ...previousIds.filter(id => id !== appId)
+        ].slice(0, 32);
+    }
+
     function launchDesktopEntry(entry) {
         if (!entry)
             return false;
 
+        let launched = false;
         if (!entry.runInTerminal && launchCommand(entry.command))
-            return true;
+            launched = true;
+        else if (entry.runInTerminal && launchCommand(terminalWrapperCommand(entry.command)))
+            launched = true;
+        else
+            launched = fallbackLaunch(entry);
 
-        if (entry.runInTerminal && launchCommand(terminalWrapperCommand(entry.command)))
-            return true;
+        if (launched)
+            recordDesktopEntryLaunch(entry);
 
-        return fallbackLaunch(entry);
+        return launched;
     }
 
     function launchDesktopAction(action) {
