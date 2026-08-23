@@ -30,18 +30,25 @@ Item {
         ...(root.tabButtonList.length === 0 ? [placeholder] : []),
     ]
     property int tabCount: tabPageComponents.length
+    property bool tabStateRestored: false
 
     function restorePersistedTab() {
         if (root.tabButtonList.length === 0)
             return;
 
+        // A newly-created SwipeView briefly selects index 0. Do not let that
+        // initialization overwrite the tab saved before the sidebar closed.
+        root.tabStateRestored = false;
         const savedTabId = Persistent.states.sidebar.leftTab;
         const savedIndex = root.tabButtonList.findIndex(tab => tab.id === savedTabId);
         tabBar.setCurrentIndex(savedIndex >= 0 ? savedIndex : 0);
+        root.tabStateRestored = true;
+        root.persistTab(tabBar.currentIndex);
     }
 
     function persistTab(index) {
-        if (!Persistent.ready || index < 0 || index >= root.tabButtonList.length)
+        if (!root.tabStateRestored || !Persistent.ready
+                || index < 0 || index >= root.tabButtonList.length)
             return;
 
         Persistent.states.sidebar.leftTab = root.tabButtonList[index].id;
