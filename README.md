@@ -43,6 +43,20 @@ bash install.sh -n
 
 Log out and back into Hyprland after installing.
 
+### KDE Wallet auto-unlock
+
+KIO accounts such as Google Drive use KDE Wallet for credentials. On Arch,
+install the PAM integration so SDDM can unlock the `kdewallet` wallet with the
+login password instead of prompting when Dolphin starts:
+
+```bash
+sudo pacman -S --needed kwallet-pam
+```
+
+The wallet password must match the login password. SDDM's standard PAM config
+unlocks the wallet during a password-based login, and Hyprland starts
+`/usr/lib/pam_kwallet_init` to connect the desktop session to that wallet.
+
 ## Update (system → repo)
 
 Captures your current live configs back into the repo so you can commit them:
