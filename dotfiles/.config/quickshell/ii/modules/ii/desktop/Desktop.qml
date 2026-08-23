@@ -30,6 +30,27 @@ Scope {
     property bool positionsReady: false
 
     property var _slotCounters: ({})
+    property string contextMenuScreen: ""
+
+    function openDesktopContextMenu(screenName) {
+        root.contextMenuScreen = screenName || ""
+    }
+
+    function closeDesktopContextMenu() {
+        root.contextMenuScreen = ""
+    }
+
+    function screenForGlobalPoint(globalX, globalY) {
+        const x = Number(globalX ?? -1)
+        const y = Number(globalY ?? -1)
+        return HyprlandData.monitors.find(m => {
+            const left = Number(m?.x ?? 0)
+            const top = Number(m?.y ?? 0)
+            const width = Number(m?.width ?? 0)
+            const height = Number(m?.height ?? 0)
+            return x >= left && x < left + width && y >= top && y < top + height
+        })?.name ?? ""
+    }
 
     FileView {
         id: positionsFile
@@ -317,6 +338,43 @@ Scope {
         sortField: FolderListModel.Name
     }
 
+    // A context menu belongs to the monitor where it was opened. Poll only
+    // while one is visible so crossing a layer-shell boundary dismisses it
+    // even when the destination surface consumes pointer hover events.
+    Timer {
+        id: contextMenuMonitorTimer
+        interval: 100
+        repeat: true
+        running: root.contextMenuScreen.length > 0
+        onTriggered: {
+            if (!Quickshell.screens.some(screen => screen.name === root.contextMenuScreen)) {
+                root.closeDesktopContextMenu()
+                return
+            }
+            if (!contextMenuCursorProcess.running)
+                contextMenuCursorProcess.running = true
+        }
+    }
+
+    Process {
+        id: contextMenuCursorProcess
+        command: ["hyprctl", "cursorpos", "-j"]
+        stdout: StdioCollector {
+            id: contextMenuCursorCollector
+            onStreamFinished: {
+                if (root.contextMenuScreen.length === 0)
+                    return
+                try {
+                    const position = JSON.parse(contextMenuCursorCollector.text)
+                    const pointerScreen = root.screenForGlobalPoint(position?.x, position?.y)
+                    if (pointerScreen.length > 0 && pointerScreen !== root.contextMenuScreen)
+                        root.closeDesktopContextMenu()
+                } catch (e) {
+                }
+            }
+        }
+    }
+
     // When the global shortcut fires (LMB released anywhere), we can't trust the
     // current desktopDragScreen: a stale polling result from just before the cursor
     // crossed to another monitor may have overwritten the correct screen.  Query the
@@ -415,7 +473,7 @@ Scope {
                 anchors { top: true; bottom: true; left: true; right: true }
                 color: "transparent"
 
-                property bool menuVisible: false
+                readonly property bool menuVisible: root.contextMenuScreen === screenScope.modelData.name
                 property real menuX: 0
                 property real menuY: 0
                 readonly property var hyprMonitor: HyprlandData.monitors.find(m => m.name === screenScope.modelData.name)
@@ -564,10 +622,10 @@ Scope {
                             ctxMenu.selectedCount = screenScope.selectedFileNames.length
                             desktopWindow.menuX = mouse.x
                             desktopWindow.menuY = mouse.y
-                            desktopWindow.menuVisible = true
+                            root.openDesktopContextMenu(desktopWindow.screen.name)
                         } else {
                             screenScope.selectedFileNames = []
-                            desktopWindow.menuVisible = false
+                            root.closeDesktopContextMenu()
                         }
                     }
                 }
@@ -788,7 +846,7 @@ Scope {
                             }
 
                             onLeftClicked: (ctrlHeld, shiftHeld) => {
-                                desktopWindow.menuVisible = false
+                                root.closeDesktopContextMenu()
                                 if (ctrlHeld || shiftHeld)
                                     screenScope.toggleSelect(modelData.fileName)
                                 else
@@ -905,7 +963,7 @@ Scope {
                                 ctxMenu.selectedCount = screenScope.selectedFileNames.length
                                 desktopWindow.menuX = mx
                                 desktopWindow.menuY = my
-                                desktopWindow.menuVisible = true
+                                root.openDesktopContextMenu(desktopWindow.screen.name)
                             }
                         }
                     }
@@ -941,7 +999,7 @@ Scope {
                         const f = folderModel.folder
                         folderModel.folder = ""
                         folderModel.folder = f
-                        desktopWindow.menuVisible = false
+                        root.closeDesktopContextMenu()
                     }
                     onDeleteRequested: (fpath) => {
                         Quickshell.execDetached(["gio", "trash", fpath])
@@ -954,7 +1012,7 @@ Scope {
                         GlobalStates.openOverlayWidget("settingsMenu")
                     }
                     onCloseRequested: {
-                        desktopWindow.menuVisible = false
+                        root.closeDesktopContextMenu()
                     }
                 }
             }

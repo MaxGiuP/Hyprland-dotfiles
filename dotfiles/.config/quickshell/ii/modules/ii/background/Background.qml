@@ -352,6 +352,7 @@ Variants {
                 }
 
                 FadeLoader {
+                    id: weatherWidgetLoader
                     shown: Config.options.background.widgets.weather.enable
                     sourceComponent: WeatherWidget {
                         screenWidth: bgRoot.screenWidth
@@ -371,6 +372,13 @@ Variants {
                         scaledScreenHeight: bgRoot.screenHeight / bgRoot.effectiveWallpaperScale
                         wallpaperScale: bgRoot.effectiveWallpaperScale
                         wallpaperSafetyTriggered: bgRoot.wallpaperSafetyTriggered
+                        avoidanceActive: weatherWidgetLoader.shown
+                            && weatherWidgetLoader.item !== null
+                            && weatherWidgetLoader.item.visible
+                        avoidanceX: weatherWidgetLoader.item?.x ?? 0
+                        avoidanceY: weatherWidgetLoader.item?.y ?? 0
+                        avoidanceWidth: weatherWidgetLoader.item?.width ?? 0
+                        avoidanceHeight: weatherWidgetLoader.item?.height ?? 0
                     }
                 }
             }

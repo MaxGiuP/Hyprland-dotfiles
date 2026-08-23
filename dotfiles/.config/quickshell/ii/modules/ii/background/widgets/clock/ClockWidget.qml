@@ -22,10 +22,58 @@ AbstractBackgroundWidget {
     readonly property bool forceCenter: (GlobalStates.screenLocked && Config.options.lock.centerClock)
     readonly property bool shouldShow: (!Config.options.background.widgets.clock.showOnlyWhenLocked || GlobalStates.screenLocked)
     property bool wallpaperSafetyTriggered: false
+    property bool avoidanceActive: false
+    property real avoidanceX: 0
+    property real avoidanceY: 0
+    property real avoidanceWidth: 0
+    property real avoidanceHeight: 0
+    property real avoidanceGap: 24
+    readonly property var collisionAdjustedPosition: resolveCollision(targetX, targetY)
     needsColText: clockStyle === "digital"
-    x: forceCenter ? ((root.screenWidth - root.width) / 2) : targetX
-    y: forceCenter ? ((root.screenHeight - root.height) / 2) : targetY
+    x: forceCenter ? ((root.screenWidth - root.width) / 2) : collisionAdjustedPosition.x
+    y: forceCenter ? ((root.screenHeight - root.height) / 2) : collisionAdjustedPosition.y
     visibleWhenLocked: true
+
+    function overlapsAvoidanceRect(candidateX, candidateY) {
+        const gap = root.avoidanceGap
+        return candidateX < root.avoidanceX + root.avoidanceWidth + gap
+            && candidateX + root.effectiveWidgetWidth + gap > root.avoidanceX
+            && candidateY < root.avoidanceY + root.avoidanceHeight + gap
+            && candidateY + root.effectiveWidgetHeight + gap > root.avoidanceY
+    }
+
+    function resolveCollision(preferredX, preferredY) {
+        const maxX = Math.max(0, root.scaledScreenWidth - root.effectiveWidgetWidth)
+        const maxY = Math.max(0, root.scaledScreenHeight - root.effectiveWidgetHeight)
+        const startX = Math.max(0, Math.min(maxX, preferredX))
+        const startY = Math.max(0, Math.min(maxY, preferredY))
+
+        if (!root.avoidanceActive || root.avoidanceWidth <= 0 || root.avoidanceHeight <= 0
+                || !root.overlapsAvoidanceRect(startX, startY))
+            return { x: startX, y: startY }
+
+        const candidates = []
+        function addCandidate(candidateX, candidateY) {
+            const x = Math.max(0, Math.min(maxX, candidateX))
+            const y = Math.max(0, Math.min(maxY, candidateY))
+            if (root.overlapsAvoidanceRect(x, y))
+                return
+            const dx = x - startX
+            const dy = y - startY
+            candidates.push({ x: x, y: y, distance: dx * dx + dy * dy })
+        }
+
+        addCandidate(root.avoidanceX - root.avoidanceGap - root.effectiveWidgetWidth, startY)
+        addCandidate(root.avoidanceX + root.avoidanceWidth + root.avoidanceGap, startY)
+        addCandidate(startX, root.avoidanceY - root.avoidanceGap - root.effectiveWidgetHeight)
+        addCandidate(startX, root.avoidanceY + root.avoidanceHeight + root.avoidanceGap)
+
+        if (candidates.length === 0)
+            return { x: startX, y: startY }
+
+        candidates.sort((a, b) => a.distance - b.distance)
+        return candidates[0]
+    }
 
     property var textHorizontalAlignment: {
         if (!Config.options.background.widgets.clock.digital.adaptiveAlignment || root.forceCenter || Config.options.background.widgets.clock.digital.vertical) 
