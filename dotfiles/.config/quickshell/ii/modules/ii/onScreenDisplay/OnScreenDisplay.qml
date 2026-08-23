@@ -14,6 +14,9 @@ Scope {
     id: root
     property string protectionMessage: ""
     property var focusedScreen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name)
+    property var indicatorScreen: root.currentIndicator === "brightness"
+        ? (Brightness.lastChangedMonitor?.screen ?? root.focusedScreen)
+        : root.focusedScreen
 
     property string currentIndicator: "volume"
     property var indicators: [
@@ -81,14 +84,8 @@ Scope {
 
         sourceComponent: PanelWindow {
             id: osdRoot
+            screen: root.indicatorScreen
             color: "transparent"
-
-            Connections {
-                target: root
-                function onFocusedScreenChanged() {
-                    osdRoot.screen = root.focusedScreen;
-                }
-            }
 
             WlrLayershell.namespace: "quickshell:onScreenDisplay"
             WlrLayershell.layer: WlrLayer.Overlay
