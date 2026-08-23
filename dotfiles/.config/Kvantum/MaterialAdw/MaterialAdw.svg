@@ -42,16 +42,16 @@
     <style
        type="text/css"
        id="current-color-scheme">.ColorScheme-Highlight {
-        color:#19120c;
-        stop-color:#19120c;
+        color:#71361c;
+        stop-color:#71361c;
       }
       .ColorScheme-Background {
         color:#19120c;
         stop-color:#19120c;
       }
       .ColorScheme-Highlight {
-        color:#ffb878;
-        stop-color:#ffb878;
+        color:#71361c;
+        stop-color:#71361c;
       }
       .ColorScheme-ViewText {
         color:#19120c;
@@ -88,7 +88,7 @@
     <linearGradient
        id="color-primary">
       <stop
-         stop-color="#ffb878"
+         stop-color="#c3c6d6"
          offset="1"
          id="stop22" />
     </linearGradient>
@@ -349,7 +349,7 @@
   <path
      id="expand-progress-pattern-normal"
      d="m 0,170 v 10 h 10 v -10 z"
-     style="fill:#ffb878;fill-opacity:1" />
+     style="fill:#c3c6d6;fill-opacity:1" />
   <path
      id="expand-progress-normal"
      d="m 0,180 v 10 h 10 v -10 z"
@@ -6180,15 +6180,15 @@
   </g>
   <path
      id="menu-checkbox-checked-normal"
-     style="fill:#ffb878;fill-opacity:1"
+     style="fill:#c3c6d6;fill-opacity:1"
      d="m 348.44338,107 a 8,8 0 0 0 -8,8 8,8 0 0 0 8,8 8,8 0 0 0 8,-8 8,8 0 0 0 -8,-8 z m 3.89062,5.02539 c 0.12781,0 0.25364,0.0486 0.35157,0.14649 0.19587,0.19587 0.19587,0.51116 0,0.70703 l -4.94922,4.94921 c -0.19587,0.19588 -0.51116,0.19588 -0.70703,0 L 344.20119,115 c -0.19587,-0.19587 -0.19586,-0.51116 0,-0.70703 0.19587,-0.19587 0.51116,-0.19587 0.70703,0 l 2.47461,2.47461 4.59571,-4.5957 c 0.0979,-0.0979 0.22766,-0.14649 0.35546,-0.14649 z" />
   <path
      id="menu-radio-checked-normal"
-     style="fill:#ffb878;fill-opacity:1"
+     style="fill:#c3c6d6;fill-opacity:1"
      d="m 348.44338,137 a 8,8 0 0 0 -8,8 8,8 0 0 0 8,8 8,8 0 0 0 8,-8 8,8 0 0 0 -8,-8 z m 0,6 c 1.10457,0 2,0.89543 2,2 0,1.10457 -0.89543,2 -2,2 -1.10457,0 -2,-0.89543 -2,-2 0,-1.10457 0.89543,-2 2,-2 z" />
   <path
      id="menu-checkbox-tristate-normal"
-     style="fill:#ffb878;fill-opacity:1"
+     style="fill:#c3c6d6;fill-opacity:1"
      d="m 403,107 a 8,8 0 0 0 -8,8 8,8 0 0 0 8,8 8,8 0 0 0 8,-8 8,8 0 0 0 -8,-8 z m -3.5,8 h 7 c 0.277,0 0.5,0.223 0.5,0.5 0,0.277 -0.223,0.5 -0.5,0.5 h -7 c -0.277,0 -0.5,-0.223 -0.5,-0.5 0,-0.277 0.223,-0.5 0.5,-0.5 z" />
   <path
      d="m 285,137 c -4.416,0 -8,3.584 -8,8 0,4.416 3.584,8 8,8 4.416,0 8,-3.584 8,-8 0,-4.416 -3.584,-8 -8,-8 z"
@@ -6208,15 +6208,15 @@
      style="opacity:0.2;fill:#FFFFFF;stroke-width:0.8" />
   <path
      id="menu-checkbox-checked-focused"
-     style="fill:#ffb878;fill-opacity:1"
+     style="fill:#c3c6d6;fill-opacity:1"
      d="m 374.10938,107 a 8,8 0 0 0 -8,8 8,8 0 0 0 8,8 8,8 0 0 0 8,-8 8,8 0 0 0 -8,-8 z M 378,112.02539 c 0.12781,0 0.25364,0.0486 0.35157,0.14649 0.19587,0.19587 0.19587,0.51116 0,0.70703 l -4.94922,4.94921 c -0.19587,0.19588 -0.51116,0.19588 -0.70703,0 L 369.86719,115 c -0.19587,-0.19587 -0.19586,-0.51116 0,-0.70703 0.19587,-0.19587 0.51116,-0.19587 0.70703,0 l 2.47461,2.47461 4.59571,-4.5957 c 0.0979,-0.0979 0.22766,-0.14649 0.35546,-0.14649 z" />
   <path
      id="menu-radio-checked-focused"
-     style="fill:#ffb878;fill-opacity:1"
+     style="fill:#c3c6d6;fill-opacity:1"
      d="m 374.10938,137 a 8,8 0 0 0 -8,8 8,8 0 0 0 8,8 8,8 0 0 0 8,-8 8,8 0 0 0 -8,-8 z m 0,6 c 1.10457,0 2,0.89543 2,2 0,1.10457 -0.89543,2 -2,2 -1.10457,0 -2,-0.89543 -2,-2 0,-1.10457 0.89543,-2 2,-2 z" />
   <path
      id="menu-checkbox-tristate-focused"
-     style="fill:#ffb878;fill-opacity:1"
+     style="fill:#c3c6d6;fill-opacity:1"
      d="m 428.666,107 a 8,8 0 0 0 -8,8 8,8 0 0 0 8,8 8,8 0 0 0 8,-8 8,8 0 0 0 -8,-8 z m -3.5,8 h 7 c 0.277,0 0.5,0.223 0.5,0.5 0,0.277 -0.223,0.5 -0.5,0.5 h -7 c -0.277,0 -0.5,-0.223 -0.5,-0.5 0,-0.277 0.223,-0.5 0.5,-0.5 z" />
   <path
      id="mask"

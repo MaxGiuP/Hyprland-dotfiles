@@ -41,13 +41,34 @@ def rgb_triplet(hex_color: str) -> str:
     return ",".join(str(int(hex_color[i : i + 2], 16)) for i in (0, 2, 4))
 
 
+def relative_luminance(hex_color: str) -> float:
+    channels = [int(hex_color.lstrip("#")[i : i + 2], 16) / 255 for i in (0, 2, 4)]
+    linear = [value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4 for value in channels]
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+
+def contrast_ratio(first: str, second: str) -> float:
+    lighter, darker = sorted((relative_luminance(first), relative_luminance(second)), reverse=True)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
 def contrast_text(hex_color: str, dark: str = "#1b1b1b", light: str = "#f5f5f5") -> str:
-    hex_color = hex_color.lstrip("#")
-    r = int(hex_color[0:2], 16)
-    g = int(hex_color[2:4], 16)
-    b = int(hex_color[4:6], 16)
-    brightness = (r * 299 + g * 587 + b * 114) / 1000
-    return dark if brightness > 128 else light
+    return dark if contrast_ratio(hex_color, dark) >= contrast_ratio(hex_color, light) else light
+
+
+def accessible_foreground(background: str, preferred: str, minimum: float = 4.5) -> str:
+    """Keep Material's semantic foreground unless it misses normal-text contrast."""
+    if contrast_ratio(background, preferred) >= minimum:
+        return preferred
+    fallback = contrast_text(background)
+    if contrast_ratio(background, fallback) >= minimum:
+        return fallback
+    return contrast_text(background, dark="#000000", light="#ffffff")
+
+
+def is_dark_mode(colors: dict[str, str]) -> bool:
+    value = colors.get("darkmode", False)
+    return value is True or str(value).lower() == "true"
 
 
 def ensure_section(cfg: configparser.RawConfigParser, name: str) -> None:
@@ -100,11 +121,17 @@ def update_kdeglobals(colors: dict[str, str]) -> None:
     low = get(colors, "surface_container_low", "#221a14")
     container = get(colors, "surface_container", "#261e18")
     high = get(colors, "surface_container_high", "#312822")
-    text = contrast_text(surface)
+    text = accessible_foreground(surface, get(colors, "on_surface", contrast_text(surface)))
     muted = get(colors, "on_surface_variant", contrast_text(container))
     primary = get(colors, "primary", "#ffb878")
-    on_primary = contrast_text(primary)
+    on_primary = accessible_foreground(primary, get(colors, "on_primary", contrast_text(primary)))
     primary_container = get(colors, "primary_container", "#6b3b03")
+    on_primary_container = accessible_foreground(
+        primary_container,
+        get(colors, "on_primary_container", contrast_text(primary_container)),
+    )
+    selection_bg = primary_container if is_dark_mode(colors) else primary
+    selection_fg = on_primary_container if is_dark_mode(colors) else on_primary
     secondary = get(colors, "secondary", "#e2c0a5")
     secondary_container = get(colors, "secondary_container", "#5a422d")
     tertiary = get(colors, "tertiary", "#c2cb98")
@@ -174,18 +201,18 @@ def update_kdeglobals(colors: dict[str, str]) -> None:
                 **section_foregrounds(container),
             },
             "Colors:Selection": {
-                "BackgroundAlternate": primary,
-                "BackgroundNormal": primary,
+                "BackgroundAlternate": selection_bg,
+                "BackgroundNormal": selection_bg,
                 "DecorationFocus": primary,
                 "DecorationHover": primary_container,
-                "ForegroundActive": on_primary,
-                "ForegroundInactive": on_primary,
-                "ForegroundLink": on_primary,
-                "ForegroundNegative": on_primary,
-                "ForegroundNeutral": on_primary,
-                "ForegroundNormal": on_primary,
-                "ForegroundPositive": on_primary,
-                "ForegroundVisited": on_primary,
+                "ForegroundActive": selection_fg,
+                "ForegroundInactive": selection_fg,
+                "ForegroundLink": selection_fg,
+                "ForegroundNegative": selection_fg,
+                "ForegroundNeutral": selection_fg,
+                "ForegroundNormal": selection_fg,
+                "ForegroundPositive": selection_fg,
+                "ForegroundVisited": selection_fg,
             },
             "Colors:Tooltip": {
                 "BackgroundAlternate": container,
@@ -217,7 +244,9 @@ def update_kdeglobals(colors: dict[str, str]) -> None:
 
         ensure_section(cfg, "General")
         cfg.set("General", "ColorScheme", SCHEME_NAME)
+        cfg.set("General", "AccentColor", rgb_triplet(primary))
         cfg.set("General", "LastUsedCustomAccentColor", rgb_triplet(primary))
+        cfg.set("General", "accentColorFromWallpaper", "false")
         if cfg.has_option("General", "ColorSchemeHash"):
             cfg.remove_option("General", "ColorSchemeHash")
         if cfg.has_section("KDE") and cfg.has_option("KDE", "widgetStyle"):
@@ -292,7 +321,14 @@ def update_kvantum_config(colors: dict[str, str]) -> None:
     if not KVANTUM_CONFIG.exists():
         return
 
-    on_surface = contrast_text(get(colors, "surface", "#19120c"))
+    svg_path = KVANTUM_CONFIG.with_suffix(".svg")
+    old_text = KVANTUM_CONFIG.read_text(errors="ignore")
+    previous_accents = set(re.findall(r"^\s*link\.color=(#[0-9a-fA-F]{6})", old_text, flags=re.MULTILINE))
+
+    on_surface = accessible_foreground(
+        get(colors, "surface", "#19120c"),
+        get(colors, "on_surface", contrast_text(get(colors, "surface", "#19120c"))),
+    )
     on_surface_variant = get(colors, "on_surface_variant", "#d6c3b6")
     container = get(colors, "surface_container", "#261e18")
     surface = get(colors, "surface", "#19120c")
@@ -300,10 +336,17 @@ def update_kvantum_config(colors: dict[str, str]) -> None:
     high = get(colors, "surface_container_high", "#312822")
     highest = get(colors, "surface_container_highest", "#3c332c")
     primary = get(colors, "primary", "#ffb878")
-    on_primary = contrast_text(primary)
-    button_fg = contrast_text(high)
+    on_primary = accessible_foreground(primary, get(colors, "on_primary", contrast_text(primary)))
+    primary_container = get(colors, "primary_container", "#6b3b03")
+    on_primary_container = accessible_foreground(
+        primary_container,
+        get(colors, "on_primary_container", contrast_text(primary_container)),
+    )
+    selection_bg = primary_container if is_dark_mode(colors) else primary
+    selection_fg = on_primary_container if is_dark_mode(colors) else on_primary
+    button_fg = accessible_foreground(high, get(colors, "on_surface", contrast_text(high)))
     secondary_container = get(colors, "secondary_container", "#5a422d")
-    text = KVANTUM_CONFIG.read_text()
+    text = old_text
 
     replacements = {
         "window.color": container,
@@ -313,7 +356,8 @@ def update_kvantum_config(colors: dict[str, str]) -> None:
         "light.color": high,
         "mid.light.color": highest,
         "mid.color": low,
-        "highlight.text.color": on_primary,
+        "highlight.color": selection_bg,
+        "highlight.text.color": selection_fg,
         "link.color": primary,
         "link.visited.color": secondary_container,
         "transparent_dolphin_view": "false",
@@ -370,24 +414,37 @@ def update_kvantum_config(colors: dict[str, str]) -> None:
             "text.press.color": button_fg,
             "text.toggle.color": button_fg,
         },
+        "LineEdit": {
+            "text.normal.color": on_surface,
+            "text.focus.color": on_surface,
+            "text.press.color": on_surface,
+            "text.toggle.color": on_surface,
+        },
+        "ToolbarLineEdit": {
+            "text.normal.color": on_surface,
+            "text.focus.color": on_surface,
+            "text.press.color": on_surface,
+            "text.toggle.color": on_surface,
+        },
+        "Focus": {},
         "Menu": {"text.normal.color": on_surface},
         "MenuItem": {
             "text.normal.color": on_surface,
-            "text.focus.color": on_primary,
-            "text.press.color": on_primary,
-            "text.toggle.color": on_primary,
+            "text.focus.color": selection_fg,
+            "text.press.color": selection_fg,
+            "text.toggle.color": selection_fg,
         },
         "MenuBar": {
             "text.normal.color": on_surface,
-            "text.focus.color": on_primary,
-            "text.press.color": on_primary,
-            "text.toggle.color": on_primary,
+            "text.focus.color": selection_fg,
+            "text.press.color": selection_fg,
+            "text.toggle.color": selection_fg,
         },
         "MenuBarItem": {
             "text.normal.color": on_surface,
-            "text.focus.color": on_primary,
-            "text.press.color": on_primary,
-            "text.toggle.color": on_primary,
+            "text.focus.color": selection_fg,
+            "text.press.color": selection_fg,
+            "text.toggle.color": selection_fg,
         },
         "ComboBox": {
             "text.normal.color": button_fg,
@@ -421,7 +478,22 @@ def update_kvantum_config(colors: dict[str, str]) -> None:
                 block += f"{key}={value}\n"
         text = text[: match.start(2)] + block + text[match.end(2) :]
 
-    KVANTUM_CONFIG.write_text(text)
+    KVANTUM_CONFIG.write_text(text.rstrip() + "\n")
+
+    if svg_path.exists():
+        svg = svg_path.read_text(errors="ignore")
+        stale_accents = previous_accents | {
+            "#ffb878", "#FFB878", "#f6bc70", "#F6BC70", "#e9873a", "#E9873A",
+            "#d5bbfc", "#D5BBFC", "#95cdf7", "#95CDF7",
+        }
+        for accent in stale_accents:
+            if accent.lower() != primary.lower():
+                svg = re.sub(re.escape(accent), primary, svg, flags=re.IGNORECASE)
+        svg = re.sub(r"(\.ColorScheme-Highlight\s*\{[^}]*?color:)#[0-9a-fA-F]{6}", rf"\g<1>{selection_bg}", svg, flags=re.DOTALL)
+        svg = re.sub(r"(\.ColorScheme-Highlight\s*\{[^}]*?stop-color:)#[0-9a-fA-F]{6}", rf"\g<1>{selection_bg}", svg, flags=re.DOTALL)
+        svg = re.sub(r"(\.ColorScheme-HighlightedText\s*\{[^}]*?color:)#[0-9a-fA-F]{6}", rf"\g<1>{selection_fg}", svg, flags=re.DOTALL)
+        svg = re.sub(r"(\.ColorScheme-HighlightedText\s*\{[^}]*?stop-color:)#[0-9a-fA-F]{6}", rf"\g<1>{selection_fg}", svg, flags=re.DOTALL)
+        svg_path.write_text(svg)
 
 
 def main() -> None:

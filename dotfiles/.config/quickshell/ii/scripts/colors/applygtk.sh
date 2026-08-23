@@ -13,6 +13,8 @@ fi
 gtk3_dir="$XDG_CONFIG_HOME/gtk-3.0"
 gtk4_dir="$XDG_CONFIG_HOME/gtk-4.0"
 materialyou_dir="$HOME/.themes/MaterialYou"
+whitesur_theme_dir="${WHITESUR_THEME_DIR:-/usr/share/themes/WhiteSur-Dark}"
+[ -d "$whitesur_theme_dir" ] || whitesur_theme_dir="$HOME/.themes/WhiteSur-Dark-matcolor"
 mkdir -p "$gtk3_dir" "$gtk4_dir"
 mkdir -p "$gtk3_dir/quickshell" "$gtk4_dir/quickshell"
 
@@ -91,21 +93,27 @@ on_warning=$on_secondary
 warning_container=$secondary_container
 on_warning_container=$on_secondary_container
 
-# ── Compute selection text color (contrast-aware) ─────────────────────────────
-# Returns #ffffff for dark backgrounds, #1c1b1f for light backgrounds
-get_contrast_text_color() {
-  local hex="${1#\#}"
-  local r=$((16#${hex:0:2}))
-  local g=$((16#${hex:2:2}))
-  local b=$((16#${hex:4:2}))
-  local brightness=$(( (r * 299 + g * 587 + b * 114) / 1000 ))
-  if [ "$brightness" -gt 128 ]; then
-    printf '#1c1b1f'
-  else
-    printf '#ffffff'
-  fi
-}
-selection_fg=$(get_contrast_text_color "$primary")
+# ── Accent and selection fills ────────────────────────────────────────────────
+# Material You's dark-mode primary is intentionally light for small accents, but
+# full-row selections need container tones so large highlighted areas do not
+# flash as a pale light-mode strip.
+darkmode=$(jq -r '.darkmode // false' "$COLORS_JSON")
+if [ "$darkmode" = "true" ]; then
+  accent_bg=$primary_container
+  accent_fg=$on_primary_container
+  selected_bg=$primary_container
+  selected_fg=$on_primary_container
+  unfocused_selected_bg=$secondary_container
+  unfocused_selected_fg=$on_secondary_container
+else
+  accent_bg=$primary
+  accent_fg=$on_primary
+  selected_bg=$primary
+  selected_fg=$on_primary
+  unfocused_selected_bg=$secondary_container
+  unfocused_selected_fg=$on_secondary_container
+fi
+selection_fg=$selected_fg
 
 # ── Generate CSS ──────────────────────────────────────────────────────────────
 colors_css=$(cat <<CSS
@@ -157,8 +165,8 @@ colors_css=$(cat <<CSS
 
   /* ── Accent ────────────────────────────────────────────────────────────── */
   --accent-color:                    ${primary};
-  --accent-bg-color:                 ${primary};
-  --accent-fg-color:                 ${on_primary};
+  --accent-bg-color:                 ${accent_bg};
+  --accent-fg-color:                 ${accent_fg};
 
   /* ── Status ────────────────────────────────────────────────────────────── */
   --destructive-color:               ${error};
@@ -191,8 +199,8 @@ colors_css=$(cat <<CSS
 
 /* Accent */
 @define-color accent_color           ${primary};
-@define-color accent_bg_color        ${primary};
-@define-color accent_fg_color        ${on_primary};
+@define-color accent_bg_color        ${accent_bg};
+@define-color accent_fg_color        ${accent_fg};
 
 /* Destructive */
 @define-color destructive_color      ${error};
@@ -254,14 +262,14 @@ colors_css=$(cat <<CSS
 @define-color theme_fg_color         ${on_bg};
 @define-color theme_base_color       ${surface};
 @define-color theme_text_color       ${on_surface};
-@define-color theme_selected_bg_color      ${primary};
-@define-color theme_selected_fg_color      ${on_primary};
+@define-color theme_selected_bg_color      ${selected_bg};
+@define-color theme_selected_fg_color      ${selected_fg};
 @define-color theme_unfocused_bg_color     ${container_low};
 @define-color theme_unfocused_base_color   ${surface};
 @define-color theme_unfocused_fg_color     ${on_bg};
 @define-color theme_unfocused_text_color   ${on_surface};
-@define-color theme_unfocused_selected_bg_color  ${secondary_container};
-@define-color theme_unfocused_selected_fg_color  ${on_secondary_container};
+@define-color theme_unfocused_selected_bg_color  ${unfocused_selected_bg};
+@define-color theme_unfocused_selected_fg_color  ${unfocused_selected_fg};
 @define-color insensitive_bg_color   ${container_low};
 @define-color insensitive_fg_color   ${on_surface_variant};
 @define-color insensitive_base_color ${surface};
@@ -336,8 +344,8 @@ window.background,
   --popover-bg-color:   ${container_highest};
   --popover-fg-color:   ${on_surface};
   --accent-color:       ${primary};
-  --accent-bg-color:    ${primary};
-  --accent-fg-color:    ${on_primary};
+  --accent-bg-color:    ${accent_bg};
+  --accent-fg-color:    ${accent_fg};
 }
 
 window,
@@ -419,14 +427,14 @@ treeview > row:selected,
 iconview:selected,
 iconview > cell:selected,
 row:selected {
-  background-color: ${primary} !important;
-  color: ${on_primary} !important;
+  background-color: ${selected_bg} !important;
+  color: ${selected_fg} !important;
 }
 treeview:selected:focus,
 iconview:selected:focus,
 row:selected:focus-within {
-  background-color: ${primary} !important;
-  color: ${on_primary} !important;
+  background-color: ${selected_bg} !important;
+  color: ${selected_fg} !important;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -638,15 +646,15 @@ placessidebar row:hover {
 .sidebar row:selected,
 .navigation-sidebar row:selected,
 placessidebar row:selected {
-  background-color: alpha(@accent_bg_color, 0.18);
-  color: @accent_bg_color;
+  background-color: @secondary_container_color;
+  color: @on_secondary_container_color;
 }
 
 .sidebar row:selected:focus,
 .navigation-sidebar row:selected:focus,
 placessidebar row:selected:focus {
-  background-color: @primary_container_color;
-  color: @on_primary_container_color;
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -685,19 +693,19 @@ button:disabled {
 /* Suggested action — primary filled */
 button.suggested-action,
 .suggested-action {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${accent_bg};
+  color: ${accent_fg};
   border-color: transparent;
   font-weight: 600;
 }
 button.suggested-action:hover,
 .suggested-action:hover {
-  background-color: mix(${primary}, white, 0.08);
-  box-shadow: 0 2px 6px alpha(${primary}, 0.35);
+  background-color: mix(${accent_bg}, white, 0.08);
+  box-shadow: 0 2px 6px alpha(${accent_bg}, 0.35);
 }
 button.suggested-action:active,
 .suggested-action:active {
-  background-color: mix(${primary}, ${outline_variant}, 0.08);
+  background-color: mix(${accent_bg}, ${outline_variant}, 0.08);
   box-shadow: none;
 }
 
@@ -985,7 +993,7 @@ entry > text > selection,
 spinbutton > text > selection,
 label selection,
 searchentry > text > selection {
-  background-color: ${primary};
+  background-color: ${selected_bg};
   color: ${selection_fg};
 }
 
@@ -1096,7 +1104,7 @@ scrollbar > contents > trough > slider:hover {
 scrollbar slider:active,
 scrollbar trough > slider:active,
 scrollbar > contents > trough > slider:active {
-  background-color: ${primary} !important;
+  background-color: ${accent_bg} !important;
   min-width: 8px !important;
   min-height: 8px !important;
   margin: 2px !important;
@@ -1378,10 +1386,10 @@ path-bar > button:checked,
 path-bar > button:active,
 pathbar > button:checked,
 pathbar > button:active {
-  background-color: ${primary} !important;
+  background-color: ${accent_bg} !important;
   background-image: none !important;
   border-image: none !important;
-  color: ${on_primary} !important;
+  color: ${accent_fg} !important;
   box-shadow: none !important;
 }
 
@@ -1394,14 +1402,14 @@ columnview > listview > row:hover {
 treeview.view:selected,
 listview > row:selected,
 columnview > listview > row:selected {
-  background-color: alpha(@accent_bg_color, 0.16);
-  color: @on_surface;
+  background-color: @secondary_container_color;
+  color: @on_secondary_container_color;
 }
 treeview.view:selected:focus,
 listview > row:selected:focus,
 columnview > listview > row:selected:focus {
   background-color: @accent_bg_color;
-  color: ${selection_fg};
+  color: @accent_fg_color;
 }
 
 /* Alternating row colors (subtle) */
@@ -1423,21 +1431,21 @@ treeview.view arrow:hover {
 
 :selected {
   background-color: @accent_bg_color;
-  color: ${selection_fg};
+  color: @accent_fg_color;
 }
 /* Unfocused selection — tonal, less dominant */
 :selected:not(:focus-within) {
-  background-color: @secondary_container_color;
-  color: @on_secondary_container_color;
+  background-color: ${unfocused_selected_bg};
+  color: ${unfocused_selected_fg};
 }
 
 row:selected {
-  background-color: alpha(@accent_bg_color, 0.16);
-  color: @on_surface;
+  background-color: @secondary_container_color;
+  color: @on_secondary_container_color;
 }
 row:selected:focus-within {
   background-color: @accent_bg_color;
-  color: ${selection_fg};
+  color: @accent_fg_color;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -1493,13 +1501,17 @@ menuitem {
 }
 menuitem:hover,
 modelbutton:hover {
-  background-color: alpha(@accent_bg_color, 0.30);
-  color: ${selection_fg};
+  /* A translucent accent must keep the surface foreground.  Switching to the
+   * on-accent foreground here can lose contrast before the fill is opaque. */
+  background-color: alpha(@accent_color, 0.14);
+  color: @on_surface;
 }
+menuitem:selected,
+modelbutton:selected,
 menuitem:active,
 modelbutton:active {
-  background-color: alpha(@accent_bg_color, 0.45);
-  color: ${selection_fg};
+  background-color: alpha(@accent_color, 0.22);
+  color: @on_surface;
 }
 menuitem:disabled {
   color: alpha(@on_surface, 0.45);
@@ -1516,7 +1528,7 @@ menuitem radio {
 }
 menuitem check:checked,
 menuitem radio:checked {
-  color: @accent_bg_color;
+  color: @accent_color;
 }
 
 menu > arrow,
@@ -1854,12 +1866,12 @@ window.nautilus-window navigationsplitview > .sidebar-bin {
   box-shadow: 3px 0 14px -4px alpha(${outline_variant}, 0.35) !important;
 }
 window.nautilus-window row:selected {
-  background-color: ${primary} !important;
+  background-color: ${selected_bg} !important;
   color: ${selection_fg} !important;
 }
 window.nautilus-window row:selected:not(:focus-within) {
-  background-color: alpha(@accent_bg_color, 0.16) !important;
-  color: @on_surface !important;
+  background-color: ${unfocused_selected_bg} !important;
+  color: ${unfocused_selected_fg} !important;
 }
 /* Subtle row dividers in Nautilus list view */
 window.nautilus-window listview > row {
@@ -2002,8 +2014,8 @@ iconview:selected,
 iconview > cell:selected,
 layout:selected,
 listview > row:selected {
-  background-color: ${primary} !important;
-  color: ${on_primary} !important;
+  background-color: ${selected_bg} !important;
+  color: ${selected_fg} !important;
 }
 
 /* ── Nemo-specific CSS nodes (registered via gtk_widget_class_set_css_name) ─
@@ -2197,8 +2209,8 @@ entry, text, textview > text, searchentry, spinbutton {
 
 /* Selection highlight — fully opaque so it's readable on any background */
 selection {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${selected_bg};
+  color: ${selected_fg};
 }
 /* Entry / search selection — explicit to prevent libadwaita overriding colour */
 entry text selection,
@@ -2206,22 +2218,22 @@ entry > text > selection,
 searchentry text selection,
 searchentry > text > selection,
 text selection {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${selected_bg};
+  color: ${selected_fg};
 }
 
 /* Selection-mode titlebar (Materia sets background to #8ab4f8) */
 .titlebar.selection-mode {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${selected_bg};
+  color: ${selected_fg};
 }
-.titlebar.selection-mode button { color: ${on_primary}; }
+.titlebar.selection-mode button { color: ${selected_fg}; }
 
 /* Suggested-action — Materia hardcodes #8ab4f8 */
 button.suggested-action,
 .suggested-action > button {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${accent_bg};
+  color: ${accent_fg};
 }
 
 /* Nautilus/headerbar controls — stop libadwaita/Materia blue-gray fallbacks */
@@ -2632,20 +2644,20 @@ gtk3_colors_css=$(cat <<GTK3CSS
 @define-color theme_bg_color            ${bg};
 @define-color theme_base_color          ${surface};
 @define-color theme_text_color          ${on_surface};
-@define-color theme_selected_bg_color   ${primary};
-@define-color theme_selected_fg_color   ${on_primary};
+@define-color theme_selected_bg_color   ${selected_bg};
+@define-color theme_selected_fg_color   ${selected_fg};
 @define-color theme_unfocused_fg_color  ${on_bg};
 @define-color theme_unfocused_bg_color  ${bg};
 @define-color theme_unfocused_base_color ${surface};
 @define-color theme_unfocused_text_color ${on_surface};
-@define-color theme_unfocused_selected_bg_color  ${container};
-@define-color theme_unfocused_selected_fg_color  ${on_surface};
+@define-color theme_unfocused_selected_bg_color  ${unfocused_selected_bg};
+@define-color theme_unfocused_selected_fg_color  ${unfocused_selected_fg};
 @define-color fg_color                  ${on_bg};
 @define-color bg_color                  ${bg};
 @define-color base_color                ${surface};
 @define-color text_color                ${on_surface};
-@define-color selected_bg_color         ${primary};
-@define-color selected_fg_color         ${on_primary};
+@define-color selected_bg_color         ${selected_bg};
+@define-color selected_fg_color         ${selected_fg};
 @define-color insensitive_bg_color      ${container_low};
 @define-color insensitive_fg_color      ${on_surface_variant};
 @define-color insensitive_base_color    ${surface};
@@ -2660,8 +2672,8 @@ gtk3_colors_css=$(cat <<GTK3CSS
 @define-color wm_bg_unfocused           ${container};
 
 @define-color accent_color              ${primary};
-@define-color accent_bg_color           ${primary};
-@define-color accent_fg_color           ${on_primary};
+@define-color accent_bg_color           ${accent_bg};
+@define-color accent_fg_color           ${accent_fg};
 @define-color destructive_color         ${error};
 @define-color destructive_bg_color      ${error};
 @define-color destructive_fg_color      ${on_error};
@@ -2922,7 +2934,7 @@ menubar {
 }
 menubar > menuitem:hover,
 menubar > menuitem:selected {
-  background-color: alpha(${primary}, 0.15);
+  background-color: alpha(${primary}, 0.14);
   color: ${on_surface};
 }
 
@@ -2940,10 +2952,14 @@ menuitem,
 .menuitem {
   color: ${on_surface};
 }
-menuitem:hover,
-menuitem:selected {
-  background-color: alpha(${primary}, 0.30);
-  color: ${selection_fg};
+menuitem:hover {
+  background-color: alpha(${primary}, 0.14);
+  color: ${on_surface};
+}
+menuitem:selected,
+menuitem:active {
+  background-color: alpha(${primary}, 0.22);
+  color: ${on_surface};
 }
 menuitem:disabled {
   color: ${on_surface_variant};
@@ -2991,12 +3007,12 @@ treeview.view:selected:focus,
 iconview:selected,
 iconview:selected:focus,
 iconview > cell:selected {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${selected_bg};
+  color: ${selected_fg};
 }
 treeview.view:selected:backdrop {
-  background-color: ${container};
-  color: ${on_surface};
+  background-color: ${unfocused_selected_bg};
+  color: ${unfocused_selected_fg};
 }
 
 /* Explicit Nemo/Thunar content views */
@@ -3068,13 +3084,13 @@ placessidebar row {
 .sidebar row:hover,
 .navigation-sidebar row:hover,
 placessidebar row:hover {
-  background-color: alpha(${primary}, 0.08);
+  background-color: alpha(${selected_bg}, 0.18);
 }
 .sidebar row:selected,
 .navigation-sidebar row:selected,
 placessidebar row:selected {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${selected_bg};
+  color: ${selected_fg};
 }
 
 /* Explicit Nemo/Thunar sidebars */
@@ -3117,9 +3133,9 @@ path-bar > button:hover {
 }
 path-bar > button:checked,
 path-bar > button:active {
-  background-color: ${primary};
+  background-color: ${accent_bg};
   background-image: none;
-  color: ${on_primary};
+  color: ${accent_fg};
 }
 
 .nemo-window path-bar,
@@ -3203,18 +3219,18 @@ button:hover {
 }
 button:active,
 button:checked {
-  background-color: ${primary};
-  color: ${on_primary};
-  border-color: ${primary};
+  background-color: ${accent_bg};
+  color: ${accent_fg};
+  border-color: ${accent_bg};
 }
 button:disabled {
   background-color: ${container_low};
   color: ${on_surface_variant};
 }
 button.suggested-action {
-  background-color: ${primary};
-  color: ${on_primary};
-  border-color: ${primary};
+  background-color: ${accent_bg};
+  color: ${accent_fg};
+  border-color: ${accent_bg};
 }
 button.destructive-action {
   background-color: ${error};
@@ -3235,8 +3251,8 @@ button.flat:hover {
 }
 button.flat:active,
 button.flat:checked {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${accent_bg};
+  color: ${accent_fg};
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -3336,8 +3352,8 @@ undershoot.right {
  * 15. SELECTION
  * ══════════════════════════════════════════════════════════════ */
 selection {
-  background-color: ${primary};
-  color: ${on_primary};
+  background-color: ${selected_bg};
+  color: ${selected_fg};
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -3441,55 +3457,82 @@ printf '%b\n' "$entry_css" > "$gtk3_dir/gtk.css"
 # override the WhiteSur theme rules (user !important > author !important > normal).
 
 # Write the MaterialYou GTK theme into ~/.themes/MaterialYou/.
-# GTK3: Materia-dark provides Material Design widget structure; we recolour it
-#        with our system palette by overriding its @define-color tokens.
-# GTK4: Materia-dark provides structure for non-libadwaita apps; our full
-#        colors_css overrides both Materia's tokens and libadwaita's custom
-#        properties so every GTK4 app gets system colours.
+# WhiteSur provides complete GTK resources and legacy theme components; the
+# generated Material You CSS overrides its named colors and libadwaita tokens.
 # This creates a nwg-look-visible theme entry that updates on every colour change.
 _write_materialyou_theme() {
   mkdir -p "$materialyou_dir/gtk-3.0" "$materialyou_dir/gtk-4.0"
+
+  copy_whitesur_component() {
+    local component="$1"
+    local source="$whitesur_theme_dir/$component"
+    local target="$materialyou_dir/$component"
+    [ -d "$source" ] || return 0
+    mkdir -p "$target"
+    cp -a "$source/." "$target/"
+  }
+
+  if [ -d "$whitesur_theme_dir" ]; then
+    for component in cinnamon gnome-shell gtk-2.0 gtk-3.0 gtk-4.0 metacity-1 plank unity xfwm4; do
+      copy_whitesur_component "$component"
+    done
+  fi
 
   cat > "$materialyou_dir/index.theme" << 'ITHEME'
 [Desktop Entry]
 Type=X-GNOME-Metatheme
 Name=MaterialYou
-Comment=Dynamic Material You colors extracted from wallpaper
+Comment=Dynamic Material You colors on WhiteSur theme resources
 Encoding=UTF-8
 
 [X-GNOME-Metatheme]
 GtkTheme=MaterialYou
 MetacityTheme=MaterialYou
+IconTheme=Papirus-Dark
+CursorTheme=Adwaita
 ButtonLayout=close,minimize,maximize:menu
 ITHEME
 
-  # GTK3: Materia-dark for widget structure, Material You palette on top.
-  # @define-color declarations after the @import override Materia's token values,
-  # so every widget that reads @theme_bg_color etc. gets our system colours.
+  # GTK3: WhiteSur widget structure and resources, Material You palette on top.
+  # @define-color declarations after the @import override WhiteSur token values.
   {
-    printf '@import url("/usr/share/themes/Materia-dark/gtk-3.0/gtk.css");\n\n'
-    printf '/* Material You colour tokens — override Materia-dark defaults */\n\n'
+    printf '@import url("resource:///org/gnome/theme/gtk.css");\n\n'
+    printf '/* Material You colour tokens — override WhiteSur defaults */\n\n'
     printf '%s\n' "$gtk3_colors_css" | sed 's/ !important//g'
-    # Extra Materia-specific tokens not covered by the shared gtk3_colors_css block
+    # Extra window-manager tokens not covered by the shared gtk3_colors_css block
     printf '@define-color wm_title              %s;\n' "$on_surface"
     printf '@define-color wm_unfocused_title     %s;\n' "$on_surface_variant"
     printf '@define-color wm_unfocused_bg        %s;\n' "$container"
     printf '@define-color xfwm4_title            %s;\n' "$on_surface"
     printf '@define-color xfwm4_unfocused_title  %s;\n' "$on_surface_variant"
   } > "$materialyou_dir/gtk-3.0/gtk.css"
+  {
+    printf '@import url("resource:///org/gnome/theme/gtk-dark.css");\n\n'
+    printf '/* Material You colour tokens — override WhiteSur dark defaults */\n\n'
+    printf '%s\n' "$gtk3_colors_css" | sed 's/ !important//g'
+    printf '@define-color wm_title              %s;\n' "$on_surface"
+    printf '@define-color wm_unfocused_title     %s;\n' "$on_surface_variant"
+    printf '@define-color wm_unfocused_bg        %s;\n' "$container"
+    printf '@define-color xfwm4_title            %s;\n' "$on_surface"
+    printf '@define-color xfwm4_unfocused_title  %s;\n' "$on_surface_variant"
+  } > "$materialyou_dir/gtk-3.0/gtk-dark.css"
 
-  # GTK4: Materia-dark structure for non-libadwaita apps; our colors_css covers
-  # both the @define-color token overrides and explicit libadwaita CSS custom
-  # property overrides so every GTK4 app (adw or plain) gets system colours.
+  # GTK4: WhiteSur structure for non-libadwaita apps; our colors_css covers both
+  # @define-color token overrides and explicit libadwaita CSS custom properties.
   # The file also doubles as the symlink target when GNOME's settings daemon
   # recreates ~/.config/gtk-4.0/gtk.css — so it must be self-contained.
   {
-    printf '@import url("/usr/share/themes/Materia-dark/gtk-4.0/gtk.css");\n\n'
+    printf '@import url("resource:///org/gnome/theme/gtk.css");\n\n'
     printf '/* Material You overrides — generated by applygtk.sh */\n\n'
     printf '%s\n' "$colors_css"   | sed 's/ !important//g'
     printf '\n%s\n' "$geometry_css" | sed 's/ !important//g'
   } > "$materialyou_dir/gtk-4.0/gtk.css"
-  cp "$materialyou_dir/gtk-4.0/gtk.css" "$materialyou_dir/gtk-4.0/gtk-dark.css"
+  {
+    printf '@import url("resource:///org/gnome/theme/gtk-dark.css");\n\n'
+    printf '/* Material You dark overrides — generated by applygtk.sh */\n\n'
+    printf '%s\n' "$colors_css"   | sed 's/ !important//g'
+    printf '\n%s\n' "$geometry_css" | sed 's/ !important//g'
+  } > "$materialyou_dir/gtk-4.0/gtk-dark.css"
 }
 
 write_gtk4_useronly() {
@@ -3653,8 +3696,8 @@ apply_qtct() {
   local a_bas=$(argb  "$surface")             # Base (view bg)
   local a_win=$(argb  "$container")           # Window bg
   local a_shd=$(argb  "$container_lowest")    # Shadow
-  local a_hl=$(argb   "$primary")             # Highlight (selection bg)
-  local a_hlt=$(argb  "$on_primary")          # HighlightedText
+  local a_hl=$(argb   "$selected_bg")         # Highlight (tonal in dark mode)
+  local a_hlt=$(argb  "$selected_fg")         # HighlightedText
   local a_lnk=$(argb  "$primary")             # Link
   local a_lnv=$(argb  "$secondary")           # LinkVisited
   local a_alt=$(argb  "$container_low")       # AlternateBase (alternate row)
@@ -3713,12 +3756,12 @@ apply_kvantum() {
     # Replace ColorScheme class color values (used by Kvantum engine)
     # Try to match the existing hex values and replace them
     sed -i \
-      -e "s|\.ColorScheme-Highlight[[:space:]]*{[^}]*}|.ColorScheme-Highlight { color:${primary}; stop-color:${primary}; }|" \
+      -e "s|\.ColorScheme-Highlight[[:space:]]*{[^}]*}|.ColorScheme-Highlight { color:${selected_bg}; stop-color:${selected_bg}; }|" \
       -e "s|\.ColorScheme-Background[[:space:]]*{[^}]*}|.ColorScheme-Background { color:${container}; stop-color:${container}; }|" \
       -e "s|\.ColorScheme-ButtonBackground[[:space:]]*{[^}]*}|.ColorScheme-ButtonBackground { color:${container_high}; stop-color:${container_high}; }|" \
       -e "s|\.ColorScheme-Text[[:space:]]*{[^}]*}|.ColorScheme-Text { color:${on_surface}; stop-color:${on_surface}; }|" \
       -e "s|\.ColorScheme-NormalText[[:space:]]*{[^}]*}|.ColorScheme-NormalText { color:${on_surface}; stop-color:${on_surface}; }|" \
-      -e "s|\.ColorScheme-HighlightedText[[:space:]]*{[^}]*}|.ColorScheme-HighlightedText { color:${on_primary}; stop-color:${on_primary}; }|" \
+      -e "s|\.ColorScheme-HighlightedText[[:space:]]*{[^}]*}|.ColorScheme-HighlightedText { color:${selected_fg}; stop-color:${selected_fg}; }|" \
       -e "s|\.ColorScheme-PositiveText[[:space:]]*{[^}]*}|.ColorScheme-PositiveText { color:${success_color}; stop-color:${success_color}; }|" \
       -e "s|\.ColorScheme-NeutralText[[:space:]]*{[^}]*}|.ColorScheme-NeutralText { color:${warning_color}; stop-color:${warning_color}; }|" \
       -e "s|\.ColorScheme-NegativeText[[:space:]]*{[^}]*}|.ColorScheme-NegativeText { color:${error}; stop-color:${error}; }|" \
@@ -3727,6 +3770,9 @@ apply_kvantum() {
     # Also do a broad hex replacement of known hardcoded originals
     sed -i \
       -e "s|#0F1416|${container}|gI" \
+      -e "s|#ffb878|${primary}|gI" \
+      -e "s|#f6bc70|${primary}|gI" \
+      -e "s|#e9873a|${primary}|gI" \
       -e "s|#84D2E7|${primary}|gI" \
       -e "s|#B2CBD2|${on_surface_variant}|gI" \
       -e "s|#CEE7EF|${secondary_container}|gI" \
@@ -3747,17 +3793,17 @@ apply_kvantum() {
     -e "s|^mid\.light\.color=.*|mid.light.color=${container_highest}|" \
     -e "s|^dark\.color=.*|dark.color=${container_lowest}|" \
     -e "s|^mid\.color=.*|mid.color=${container_low}|" \
-    -e "s|^highlight\.color=.*|highlight.color=${primary}|" \
+    -e "s|^highlight\.color=.*|highlight.color=${selected_bg}|" \
     -e "s|^inactive\.highlight\.color=.*|inactive.highlight.color=${secondary_container}|" \
     -e "s|^text\.color=.*|text.color=${on_surface}|" \
     -e "s|^window\.text\.color=.*|window.text.color=${on_bg}|" \
     -e "s|^button\.text\.color=.*|button.text.color=${on_surface}|" \
     -e "s|^disabled\.text\.color=.*|disabled.text.color=${on_surface_variant}|" \
     -e "s|^tooltip\.text\.color=.*|tooltip.text.color=${on_surface}|" \
-    -e "s|^highlight\.text\.color=.*|highlight.text.color=${on_primary}|" \
+    -e "s|^highlight\.text\.color=.*|highlight.text.color=${selected_fg}|" \
     -e "s|^link\.color=.*|link.color=${primary}|" \
     -e "s|^link\.visited\.color=.*|link.visited.color=${secondary}|" \
-    -e "s|^progress\.indicator\.text\.color=.*|progress.indicator.text.color=${on_primary}|" \
+    -e "s|^progress\.indicator\.text\.color=.*|progress.indicator.text.color=${selected_fg}|" \
     "$kvconfig"
 
   # Fix per-section text colors (previously hardcoded #DEE3E5)
@@ -3825,34 +3871,40 @@ sync_gtk_settings() {
   [ -z "$cursor_theme" ] && cursor_theme="Bibata-Modern-Classic"
   [ -z "$font_name" ]    && font_name="Sans 11"
 
+  set_gtk_setting() {
+    local file="$1" key="$2" value="$3"
+    mkdir -p "$(dirname "$file")"
+    if [ ! -f "$file" ]; then
+      printf '[Settings]\n' > "$file"
+    fi
+    if grep -q "^${key}=" "$file"; then
+      sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+    else
+      printf '%s=%s\n' "$key" "$value" >> "$file"
+    fi
+  }
+
   # Set GNOME accent colour from the wallpaper-derived primary
   local gnome_accent
   gnome_accent=$(pick_gnome_accent "$primary")
+  gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme" 2>/dev/null || true
   gsettings set org.gnome.desktop.interface accent-color "$gnome_accent" 2>/dev/null || true
 
   # ── ~/.config/gtk-3.0/settings.ini ─────────────────────────────────────────
   local s3="$gtk3_dir/settings.ini"
-  if [ -f "$s3" ]; then
-    sed -i \
-      -e "s|^gtk-theme-name=.*|gtk-theme-name=${gtk_theme}|" \
-      -e "s|^gtk-icon-theme-name=.*|gtk-icon-theme-name=${icon_theme}|" \
-      -e "s|^gtk-cursor-theme-name=.*|gtk-cursor-theme-name=${cursor_theme}|" \
-      -e "s|^gtk-font-name=.*|gtk-font-name=${font_name}|" \
-      -e "s|^gtk-application-prefer-dark-theme=.*|gtk-application-prefer-dark-theme=${prefer_dark}|" \
-      "$s3"
-  fi
+  set_gtk_setting "$s3" "gtk-theme-name" "$gtk_theme"
+  set_gtk_setting "$s3" "gtk-icon-theme-name" "$icon_theme"
+  set_gtk_setting "$s3" "gtk-cursor-theme-name" "$cursor_theme"
+  set_gtk_setting "$s3" "gtk-font-name" "$font_name"
+  set_gtk_setting "$s3" "gtk-application-prefer-dark-theme" "$prefer_dark"
 
   # ── ~/.config/gtk-4.0/settings.ini ─────────────────────────────────────────
   local s4="$gtk4_dir/settings.ini"
-  if [ -f "$s4" ]; then
-    sed -i \
-      -e "s|^gtk-theme-name=.*|gtk-theme-name=${gtk_theme}|" \
-      -e "s|^gtk-icon-theme-name=.*|gtk-icon-theme-name=${icon_theme}|" \
-      -e "s|^gtk-cursor-theme-name=.*|gtk-cursor-theme-name=${cursor_theme}|" \
-      -e "s|^gtk-font-name=.*|gtk-font-name=${font_name}|" \
-      -e "s|^gtk-application-prefer-dark-theme=.*|gtk-application-prefer-dark-theme=${prefer_dark}|" \
-      "$s4"
-  fi
+  set_gtk_setting "$s4" "gtk-theme-name" "$gtk_theme"
+  set_gtk_setting "$s4" "gtk-icon-theme-name" "$icon_theme"
+  set_gtk_setting "$s4" "gtk-cursor-theme-name" "$cursor_theme"
+  set_gtk_setting "$s4" "gtk-font-name" "$font_name"
+  set_gtk_setting "$s4" "gtk-application-prefer-dark-theme" "$prefer_dark"
 
   # ── ~/.gtkrc-2.0 ───────────────────────────────────────────────────────────
   local gtkrc2="$HOME/.gtkrc-2.0"
@@ -3982,9 +4034,9 @@ button.primary,
 .button.primary,
 button[is="button-link"].primary,
 .notification-button.primary {
-  background-color: ${primary} !important;
-  color: ${on_primary} !important;
-  border-color: ${primary} !important;
+  background-color: ${accent_bg} !important;
+  color: ${accent_fg} !important;
+  border-color: ${accent_bg} !important;
 }
 button.primary:hover,
 .button.primary:hover {
@@ -4011,8 +4063,6 @@ TBCSS
 }
 
 _apply_thunderbird_accent
-
-# WhiteSur integration intentionally disabled.
 
 
 # ── Notify running GTK apps to reload their CSS ────────────────────────────
