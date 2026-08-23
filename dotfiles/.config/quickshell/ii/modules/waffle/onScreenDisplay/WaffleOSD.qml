@@ -12,7 +12,11 @@ import qs.modules.waffle.looks
 Scope {
     id: root
 
-    property var focusedScreen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name)
+    readonly property string focusedMonitorName: HyprlandData.eventFocusedMonitorName
+        || HyprlandData.monitors.find(monitor => monitor.focused)?.name
+        || Hyprland.focusedMonitor?.name
+        || ""
+    property var focusedScreen: Quickshell.screens.find(screen => screen.name === root.focusedMonitorName)
     property var indicatorScreen: root.currentIndicator === "brightness"
         ? (Brightness.lastChangedMonitor?.screen ?? root.focusedScreen)
         : root.focusedScreen
@@ -61,33 +65,18 @@ Scope {
         }
     }
 
-    // Open when global state changes
-    Connections {
-        target: GlobalStates
-
-        function onOsdBrightnessOpenChanged() {
-            if (GlobalStates.osdBrightnessOpen)
-                panelLoader.active = true;
-        }
-        function onOsdVolumeOpenChanged() {
-            if (GlobalStates.osdVolumeOpen)
-                panelLoader.active = true;
-        }
-    }
-
     // The actual thing
-    Loader {
-        id: panelLoader
-        active: false
-        onActiveChanged: {
-            if (active) return;
-            root.indicators.forEach(i => {
-                GlobalStates[i.globalStateValue] = false;
-            });
-        }
-        sourceComponent: PanelWindow {
-            id: panelWindow
-            screen: root.indicatorScreen
+    Variants {
+        model: Quickshell.screens
+
+        Loader {
+            id: panelLoader
+            required property ShellScreen modelData
+            active: (GlobalStates.osdVolumeOpen || GlobalStates.osdBrightnessOpen)
+                && modelData.name === root.indicatorScreen?.name
+            sourceComponent: PanelWindow {
+                id: panelWindow
+                screen: panelLoader.modelData
 
             color: "transparent"
             exclusiveZone: 0
@@ -112,7 +101,6 @@ Scope {
                 Connections {
                     target: osdIndicatorLoader.item
                     function onClosed() {
-                        panelLoader.active = false;
                         GlobalStates[root.indicators.find(i => i.id === root.currentIndicator)?.globalStateValue] = false;
                     }
                 }
@@ -135,6 +123,7 @@ Scope {
                         PropertyAction {} // The source change happens here
                     }
                 }
+            }
             }
         }
     }

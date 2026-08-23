@@ -13,7 +13,11 @@ import Quickshell.Hyprland
 Scope {
     id: root
     property string protectionMessage: ""
-    property var focusedScreen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name)
+    readonly property string focusedMonitorName: HyprlandData.eventFocusedMonitorName
+        || HyprlandData.monitors.find(monitor => monitor.focused)?.name
+        || Hyprland.focusedMonitor?.name
+        || ""
+    property var focusedScreen: Quickshell.screens.find(screen => screen.name === root.focusedMonitorName)
     property var indicatorScreen: root.currentIndicator === "brightness"
         ? (Brightness.lastChangedMonitor?.screen ?? root.focusedScreen)
         : root.focusedScreen
@@ -78,101 +82,106 @@ Scope {
         }
     }
 
-    Loader {
-        id: osdLoader
-        active: GlobalStates.osdVolumeOpen
+    Variants {
+        model: Quickshell.screens
 
-        sourceComponent: PanelWindow {
-            id: osdRoot
-            screen: root.indicatorScreen
-            color: "transparent"
+        Loader {
+            id: osdLoader
+            required property ShellScreen modelData
+            active: GlobalStates.osdVolumeOpen && modelData.name === root.indicatorScreen?.name
 
-            WlrLayershell.namespace: "quickshell:onScreenDisplay"
-            WlrLayershell.layer: WlrLayer.Overlay
-            anchors {
-                top: !Config.options.bar.bottom
-                bottom: Config.options.bar.bottom
-            }
-            mask: Region {
-                item: osdValuesWrapper
-            }
+            sourceComponent: PanelWindow {
+                id: osdRoot
+                screen: osdLoader.modelData
+                color: "transparent"
 
-            exclusionMode: ExclusionMode.Ignore
-            exclusiveZone: 0
-            margins {
-                top: Appearance.sizes.barHeight
-                bottom: Appearance.sizes.barHeight
-            }
+                WlrLayershell.namespace: "quickshell:onScreenDisplay"
+                WlrLayershell.layer: WlrLayer.Overlay
+                anchors {
+                    top: !Config.options.bar.bottom
+                    bottom: Config.options.bar.bottom
+                }
+                mask: Region {
+                    item: osdValuesWrapper
+                }
 
-            implicitWidth: columnLayout.implicitWidth
-            implicitHeight: columnLayout.implicitHeight
-            visible: osdLoader.active
+                exclusionMode: ExclusionMode.Ignore
+                exclusiveZone: 0
+                margins {
+                    top: Appearance.sizes.barHeight
+                    bottom: Appearance.sizes.barHeight
+                }
 
-            ColumnLayout {
-                id: columnLayout
-                anchors.horizontalCenter: parent.horizontalCenter
+                implicitWidth: columnLayout.implicitWidth
+                implicitHeight: columnLayout.implicitHeight
+                visible: osdLoader.active
 
-                Item {
-                    id: osdValuesWrapper
-                    // Extra space for shadow
-                    implicitHeight: contentColumnLayout.implicitHeight
-                    implicitWidth: contentColumnLayout.implicitWidth
-                    clip: true
+                ColumnLayout {
+                    id: columnLayout
+                    anchors.horizontalCenter: parent.horizontalCenter
 
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onEntered: GlobalStates.osdVolumeOpen = false
-                    }
+                    Item {
+                        id: osdValuesWrapper
+                        // Extra space for shadow
+                        implicitHeight: contentColumnLayout.implicitHeight
+                        implicitWidth: contentColumnLayout.implicitWidth
+                        clip: true
 
-                    Column {
-                        id: contentColumnLayout
-                        anchors {
-                            top: parent.top
-                            left: parent.left
-                            right: parent.right
-                        }
-                        spacing: 0
-
-                        Loader {
-                            id: osdIndicatorLoader
-                            source: root.indicators.find(i => i.id === root.currentIndicator)?.sourceUrl
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onEntered: GlobalStates.osdVolumeOpen = false
                         }
 
-                        Item {
-                            id: protectionMessageWrapper
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            implicitHeight: protectionMessageBackground.implicitHeight
-                            implicitWidth: protectionMessageBackground.implicitWidth
-                            opacity: root.protectionMessage !== "" ? 1 : 0
-
-                            StyledRectangularShadow {
-                                target: protectionMessageBackground
+                        Column {
+                            id: contentColumnLayout
+                            anchors {
+                                top: parent.top
+                                left: parent.left
+                                right: parent.right
                             }
-                            Rectangle {
-                                id: protectionMessageBackground
-                                anchors.centerIn: parent
-                                color: Appearance.m3colors.m3error
-                                property real padding: 10
-                                implicitHeight: protectionMessageRowLayout.implicitHeight + padding * 2
-                                implicitWidth: protectionMessageRowLayout.implicitWidth + padding * 2
-                                radius: Appearance.rounding.normal
+                            spacing: 0
 
-                                RowLayout {
-                                    id: protectionMessageRowLayout
+                            Loader {
+                                id: osdIndicatorLoader
+                                source: root.indicators.find(i => i.id === root.currentIndicator)?.sourceUrl
+                            }
+
+                            Item {
+                                id: protectionMessageWrapper
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                implicitHeight: protectionMessageBackground.implicitHeight
+                                implicitWidth: protectionMessageBackground.implicitWidth
+                                opacity: root.protectionMessage !== "" ? 1 : 0
+
+                                StyledRectangularShadow {
+                                    target: protectionMessageBackground
+                                }
+                                Rectangle {
+                                    id: protectionMessageBackground
                                     anchors.centerIn: parent
-                                    MaterialSymbol {
-                                        id: protectionMessageIcon
-                                        text: "dangerous"
-                                        iconSize: Appearance.font.pixelSize.hugeass
-                                        color: Appearance.m3colors.m3onError
-                                    }
-                                    StyledText {
-                                        id: protectionMessageTextWidget
-                                        horizontalAlignment: Text.AlignHCenter
-                                        color: Appearance.m3colors.m3onError
-                                        wrapMode: Text.Wrap
-                                        text: root.protectionMessage
+                                    color: Appearance.m3colors.m3error
+                                    property real padding: 10
+                                    implicitHeight: protectionMessageRowLayout.implicitHeight + padding * 2
+                                    implicitWidth: protectionMessageRowLayout.implicitWidth + padding * 2
+                                    radius: Appearance.rounding.normal
+
+                                    RowLayout {
+                                        id: protectionMessageRowLayout
+                                        anchors.centerIn: parent
+                                        MaterialSymbol {
+                                            id: protectionMessageIcon
+                                            text: "dangerous"
+                                            iconSize: Appearance.font.pixelSize.hugeass
+                                            color: Appearance.m3colors.m3onError
+                                        }
+                                        StyledText {
+                                            id: protectionMessageTextWidget
+                                            horizontalAlignment: Text.AlignHCenter
+                                            color: Appearance.m3colors.m3onError
+                                            wrapMode: Text.Wrap
+                                            text: root.protectionMessage
+                                        }
                                     }
                                 }
                             }
@@ -187,6 +196,7 @@ Scope {
         target: "osdVolume"
 
         function trigger() {
+            root.currentIndicator = "volume";
             root.triggerOsd();
         }
 
@@ -195,6 +205,7 @@ Scope {
         }
 
         function toggle() {
+            root.currentIndicator = "volume";
             GlobalStates.osdVolumeOpen = !GlobalStates.osdVolumeOpen;
         }
     }
@@ -203,6 +214,7 @@ Scope {
         description: "Triggers volume OSD on press"
 
         onPressed: {
+            root.currentIndicator = "volume";
             root.triggerOsd();
         }
     }
