@@ -17,11 +17,15 @@ Item { // Window
     property var scale
     property bool restrictToWorkspace: true
     property real widthRatio: {
+        if (!widgetMonitor || !monitorData)
+            return 1;
         const widgetWidth = widgetMonitor.transform & 1 ? widgetMonitor.height : widgetMonitor.width;
         const monitorWidth = monitorData.transform & 1 ? monitorData.height : monitorData.width;
         return (widgetWidth * monitorData.scale) / (monitorWidth * widgetMonitor.scale);
     }
     property real heightRatio: {
+        if (!widgetMonitor || !monitorData)
+            return 1;
         const widgetHeight = widgetMonitor.transform & 1 ? widgetMonitor.width : widgetMonitor.height;
         const monitorHeight = monitorData.transform & 1 ? monitorData.width : monitorData.height;
         return (widgetHeight * monitorData.scale) / (monitorHeight * widgetMonitor.scale);
@@ -36,10 +40,10 @@ Item { // Window
     property real xOffset: 0
     property real yOffset: 0
     property var widgetMonitor
-    property int widgetMonitorId: widgetMonitor.id
+    property int widgetMonitorId: widgetMonitor?.id ?? -1
 
-    property var targetWindowWidth: windowData?.size[0] * scale * widthRatio
-    property var targetWindowHeight: windowData?.size[1] * scale * heightRatio
+    property var targetWindowWidth: (windowData?.size?.[0] ?? 0) * scale * widthRatio
+    property var targetWindowHeight: (windowData?.size?.[1] ?? 0) * scale * heightRatio
     property bool hovered: false
     property bool pressed: false
 
@@ -52,7 +56,9 @@ Item { // Window
     property bool compactMode: Appearance.font.pixelSize.smaller * 4 > targetWindowHeight || Appearance.font.pixelSize.smaller * 4 > targetWindowWidth
 
     property bool indicateXWayland: windowData?.xwayland ?? false
-    readonly property var previewSource: GlobalStates.overviewOpen ? HyprlandData.captureSourceForToplevel(root.toplevel) : null
+    // Retain an available snapshot while the warm overview is hidden instead
+    // of recapturing every window on the launcher's opening frame.
+    readonly property var previewSource: HyprlandData.captureSourceForToplevel(root.toplevel)
 
     x: initX
     y: initY
@@ -94,7 +100,7 @@ Item { // Window
         id: windowPreview
         anchors.fill: parent
         captureSource: root.previewSource
-        live: root.previewSource !== null
+        live: GlobalStates.overviewOpen && root.previewSource !== null
 
         // Color overlay for interactions
         Rectangle {

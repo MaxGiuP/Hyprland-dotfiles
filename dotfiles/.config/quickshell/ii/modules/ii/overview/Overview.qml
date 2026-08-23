@@ -26,7 +26,7 @@ Scope {
                                                ?? Quickshell.screens.find(screen => screen.name === Hyprland.focusedMonitor?.name)
                                                ?? Quickshell.screens[0]
                                                ?? null
-    readonly property int entranceDuration: 150
+    readonly property int entranceDuration: 100
     readonly property int exitDuration: 210
     signal searchRequested(string text, bool focusFirst)
 
@@ -103,8 +103,9 @@ Scope {
             }
         }
         Timer {
-            id: overviewContentDelay
-            interval: 30
+            id: overviewPrewarmTimer
+            interval: 750
+            running: true
             repeat: false
             onTriggered: panelWindow.overviewContentReady = true
         }
@@ -152,7 +153,6 @@ Scope {
         function handleOverviewClosed() {
             entranceDelay.stop();
             panelWindow.entranceShown = false;
-            overviewContentDelay.stop();
             searchWidget.disableExpandAnimation();
             overviewScope.dontAutoCancelSearch = false;
             GlobalFocusGrab.dismiss();
@@ -160,6 +160,8 @@ Scope {
         }
 
         function handleOverviewOpened() {
+            // Do not wait for the idle warm-up if the user opens immediately.
+            panelWindow.overviewContentReady = true;
             panelWindow.entranceShown = false;
             entranceDelay.restart();
             if (!overviewScope.dontAutoCancelSearch) {
@@ -171,7 +173,6 @@ Scope {
                 }
             }
             focusGrabDelay.restart();
-            overviewContentDelay.restart();
         }
 
         Component.onCompleted: {
@@ -245,13 +246,12 @@ Scope {
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: item?.implicitWidth ?? 0
                 height: item?.implicitHeight ?? 0
-                active: GlobalStates.overviewOpen
-                    && panelWindow.overviewContentReady
-                    && searchWidget.displayedText == ""
+                asynchronous: true
+                active: panelWindow.overviewContentReady
                     && (Config?.options.overview.enable ?? true)
                 sourceComponent: OverviewWidget {
                     screen: panelWindow.screen
-                    visible: (searchWidget.displayedText == "")
+                    visible: GlobalStates.overviewOpen && searchWidget.displayedText == ""
                 }
             }
         }

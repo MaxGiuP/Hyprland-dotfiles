@@ -17,8 +17,8 @@ Item {
     readonly property HyprlandMonitor monitor: Hyprland.monitorFor(screen)
     readonly property var toplevels: ToplevelManager.toplevels
     readonly property int workspacesShown: Config.options.overview.rows * Config.options.overview.columns
-    readonly property int workspaceGroup: Math.floor((monitor.activeWorkspace?.id - 1) / workspacesShown)
-    property bool monitorIsFocused: (Hyprland.focusedMonitor?.name == monitor.name)
+    readonly property int workspaceGroup: Math.floor(((monitor?.activeWorkspace?.id ?? 1) - 1) / workspacesShown)
+    property bool monitorIsFocused: monitor !== null && Hyprland.focusedMonitor?.name == monitor.name
     property var windows: HyprlandData.windowList
     property var windowByAddress: HyprlandData.windowByAddress
     property var windowAddresses: HyprlandData.addresses
@@ -26,12 +26,18 @@ Item {
     property real scale: Config.options.overview.scale
     property color activeBorderColor: Appearance.colors.colSecondary
 
-    property real workspaceImplicitWidth: (monitorData?.transform % 2 === 1) ? 
-        ((monitor.height - monitorData?.reserved[0] - monitorData?.reserved[2]) * root.scale / monitor.scale) :
-        ((monitor.width - monitorData?.reserved[0] - monitorData?.reserved[2]) * root.scale / monitor.scale)
-    property real workspaceImplicitHeight: (monitorData?.transform % 2 === 1) ? 
-        ((monitor.width - monitorData?.reserved[1] - monitorData?.reserved[3]) * root.scale / monitor.scale) :
-        ((monitor.height - monitorData?.reserved[1] - monitorData?.reserved[3]) * root.scale / monitor.scale)
+    property real workspaceImplicitWidth: {
+        if (!monitor || !monitorData) return 1
+        return (monitorData.transform % 2 === 1)
+            ? ((monitor.height - monitorData.reserved[0] - monitorData.reserved[2]) * root.scale / monitor.scale)
+            : ((monitor.width - monitorData.reserved[0] - monitorData.reserved[2]) * root.scale / monitor.scale)
+    }
+    property real workspaceImplicitHeight: {
+        if (!monitor || !monitorData) return 1
+        return (monitorData.transform % 2 === 1)
+            ? ((monitor.width - monitorData.reserved[1] - monitorData.reserved[3]) * root.scale / monitor.scale)
+            : ((monitor.height - monitorData.reserved[1] - monitorData.reserved[3]) * root.scale / monitor.scale)
+    }
     property real largeWorkspaceRadius: Appearance.rounding.large
     property real smallWorkspaceRadius: Appearance.rounding.verysmall
 
@@ -301,8 +307,8 @@ Item {
 
             Rectangle { // Focused workspace indicator
                 id: focusedWorkspaceIndicator
-                property int rowIndex: getWsRow(monitor.activeWorkspace?.id)
-                property int colIndex: getWsColumn(monitor.activeWorkspace?.id)
+                property int rowIndex: getWsRow(monitor?.activeWorkspace?.id ?? 1)
+                property int colIndex: getWsColumn(monitor?.activeWorkspace?.id ?? 1)
                 x: (root.workspaceImplicitWidth + workspaceSpacing) * colIndex
                 y: (root.workspaceImplicitHeight + workspaceSpacing) * rowIndex
                 z: root.windowZ

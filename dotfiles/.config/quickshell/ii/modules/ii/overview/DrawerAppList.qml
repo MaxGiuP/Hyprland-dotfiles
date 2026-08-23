@@ -242,6 +242,7 @@ Item {
             bottomMargin: 12
         }
         clip: true
+        reuseItems: true
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
         model: root.buildRowModel(root.sortedApps, root.recentApps)
@@ -338,7 +339,7 @@ Item {
 
                             IconImage {
                                 Layout.alignment: Qt.AlignHCenter
-                                source: Quickshell.iconPath(appCell.app?.icon ?? "", "image-missing")
+                                source: AppSearch.resolvedIconPath(appCell.app?.icon ?? "")
                                 implicitSize: root.iconSize
                                 scale: appArea.containsMouse ? 1.08 : 1.0
                                 Behavior on scale {
