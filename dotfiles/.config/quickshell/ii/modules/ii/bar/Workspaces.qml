@@ -27,8 +27,16 @@ Item {
     readonly property string specialWorkspaceLabel: specialWorkspaceRawName.replace(/^special:/, "")
     
     readonly property int workspacesShown: Math.max(Config.options.bar.workspaces.shown, 1)
-    readonly property int activeWorkspaceId: Math.max(monitorData?.activeWorkspace?.id ?? 1, 1)
-    readonly property int workspaceGroup: Math.floor((root.activeWorkspaceId - 1) / root.workspacesShown)
+    readonly property int nativeActiveWorkspaceId: validWorkspaceId(monitor?.activeWorkspace?.id)
+    readonly property int polledServiceActiveWorkspaceId: validWorkspaceId(monitorData?.activeWorkspace?.id)
+    readonly property int reportedActiveWorkspaceId: polledServiceActiveWorkspaceId
+    property int eventActiveWorkspaceId: 0
+    property int lastValidActiveWorkspaceId: 0
+    readonly property int activeWorkspaceId: eventActiveWorkspaceId > 0
+        ? eventActiveWorkspaceId
+        : (nativeActiveWorkspaceId > 0 ? nativeActiveWorkspaceId
+        : (reportedActiveWorkspaceId > 0 ? reportedActiveWorkspaceId : lastValidActiveWorkspaceId))
+    readonly property int workspaceGroup: activeWorkspaceId > 0 ? Math.floor((root.activeWorkspaceId - 1) / root.workspacesShown) : 0
     property list<bool> workspaceOccupied: []
     property int widgetPadding: 4
     property int workspaceButtonWidth: 26
@@ -37,7 +45,35 @@ Item {
     property real workspaceIconSizeShrinked: workspaceButtonWidth * 0.55
     property real workspaceIconOpacityShrinked: 1
     property real workspaceIconMarginShrinked: -4
-    property int workspaceIndexInGroup: (root.activeWorkspaceId - 1) % root.workspacesShown
+    property int workspaceIndexInGroup: root.activeWorkspaceId > 0 ? (root.activeWorkspaceId - 1) % root.workspacesShown : 0
+
+    function validWorkspaceId(value) {
+        const id = Number(value ?? 0);
+        return Number.isFinite(id) && id > 0 ? Math.round(id) : 0;
+    }
+
+    function rememberReportedWorkspace() {
+        const reportedId = root.nativeActiveWorkspaceId > 0
+            ? root.nativeActiveWorkspaceId
+            : root.reportedActiveWorkspaceId;
+        if (reportedId > 0 && root.lastValidActiveWorkspaceId !== reportedId)
+            root.lastValidActiveWorkspaceId = reportedId;
+
+        // Keep an event-derived value authoritative while stale process
+        // results drain, then return to the declarative monitor properties.
+        if (root.eventActiveWorkspaceId > 0 && reportedId === root.eventActiveWorkspaceId)
+            root.eventActiveWorkspaceId = 0;
+    }
+
+    onReportedActiveWorkspaceIdChanged: {
+        root.rememberReportedWorkspace();
+    }
+    onNativeActiveWorkspaceIdChanged: root.rememberReportedWorkspace()
+    onMonitorNameChanged: root.rememberReportedWorkspace()
+    Component.onCompleted: {
+        root.rememberReportedWorkspace();
+        updateWorkspaceOccupied();
+    }
 
     property bool showNumbers: false
     Timer {
@@ -71,7 +107,6 @@ Item {
     }
 
     // Occupied workspace updates
-    Component.onCompleted: updateWorkspaceOccupied()
     Connections {
         target: Hyprland.workspaces
         function onValuesChanged() {
@@ -81,6 +116,28 @@ Item {
     Connections {
         target: Hyprland
         function onFocusedWorkspaceChanged() {
+            root.rememberReportedWorkspace();
+            updateWorkspaceOccupied();
+        }
+        function onFocusedMonitorChanged() {
+            root.rememberReportedWorkspace();
+        }
+        function onRawEvent(event) {
+            if (event.name !== "workspacev2")
+                return;
+
+            const focusedMonitorName = Hyprland.focusedMonitor?.name ?? "";
+            if (focusedMonitorName !== root.monitorName)
+                return;
+
+            const workspaceId = root.validWorkspaceId(`${event.data ?? ""}`.split(",", 1)[0]);
+            if (workspaceId <= 0)
+                return;
+
+            // The socket event is the earliest authoritative notification;
+            // use it immediately rather than waiting for an IPC round trip.
+            root.eventActiveWorkspaceId = workspaceId;
+            root.lastValidActiveWorkspaceId = workspaceId;
             updateWorkspaceOccupied();
         }
     }
@@ -164,6 +221,7 @@ Item {
     Rectangle {
         z: 2
         // Make active ws indicator, which has a brighter color, smaller to look like it is of the same size as ws occupied highlight
+        visible: root.activeWorkspaceId > 0
         radius: Appearance.rounding.full
         color: Appearance.colors.colPrimary
 

@@ -331,11 +331,20 @@ Item { // Bar content region
                         active: Config.options.bar.weather.enable
 
                         sourceComponent: BarGroup {
-                            WeatherBar {}
-                            ClockWidget {
-                                showDate: (Config.options.bar.verbose && root.useShortenedForm < 2 && !root.hideLeftHeavy)
-                                Layout.alignment: Qt.AlignVCenter
-                                Layout.fillWidth: true
+                            RowLayout {
+                                spacing: 4
+
+                                WeatherBar {
+                                    Layout.alignment: Qt.AlignVCenter
+                                    Layout.minimumWidth: implicitWidth
+                                    Layout.preferredWidth: implicitWidth
+                                }
+                                ClockWidget {
+                                    showDate: (Config.options.bar.verbose && root.useShortenedForm < 2 && !root.hideLeftHeavy)
+                                    Layout.alignment: Qt.AlignVCenter
+                                    Layout.minimumWidth: implicitWidth
+                                    Layout.preferredWidth: implicitWidth
+                                }
                             }
                         }
                     }

@@ -22,6 +22,7 @@ Singleton {
     property var activeWorkspace: null
     property var monitors: []
     property var layers: ({})
+    property bool monitorRefreshPending: false
 
     // Convenient stuff
 
@@ -139,8 +140,14 @@ Singleton {
     }
 
     function updateMonitors() {
-        if (!getMonitors.running)
-            getMonitors.running = true;
+        if (getMonitors.running) {
+            // Do not lose a workspace/monitor event just because an older
+            // hyprctl request is still finishing. One trailing refresh is
+            // enough to converge on the compositor's newest state.
+            root.monitorRefreshPending = true;
+            return;
+        }
+        getMonitors.running = true;
     }
 
     function updateWorkspaces() {
@@ -220,6 +227,12 @@ Singleton {
         function onRawEvent(event) {
             // console.log("Hyprland raw event:", event.name);
             if (["openlayer", "closelayer", "screencast"].includes(event.name)) return;
+            if (["workspace", "workspacev2", "focusedmon", "activespecial"].includes(event.name)) {
+                // Keep Quickshell's native objects current as well as the
+                // richer hyprctl-backed data used elsewhere in the shell.
+                Hyprland.refreshWorkspaces();
+                Hyprland.refreshMonitors();
+            }
             updateAll()
         }
     }
@@ -267,6 +280,12 @@ Singleton {
     Process {
         id: getMonitors
         command: ["hyprctl", "monitors", "-j"]
+        onRunningChanged: {
+            if (!running && root.monitorRefreshPending) {
+                root.monitorRefreshPending = false;
+                running = true;
+            }
+        }
         stdout: StdioCollector {
             id: monitorsCollector
             onStreamFinished: {
