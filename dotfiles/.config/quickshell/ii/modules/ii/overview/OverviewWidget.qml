@@ -72,6 +72,25 @@ Item {
         return (Config.options.overview.orderBottomUp ? Config.options.overview.rows - ri - 1 : ri) * Config.options.overview.columns + (Config.options.overview.orderRightLeft ? Config.options.overview.columns - ci - 1 : ci) + 1
     }
 
+    // Resolve a drop from the pointer coordinates instead of relying on
+    // DropArea enter/exit events underneath the moving window preview.
+    function workspaceAtPoint(item, x, y) {
+        const point = item.mapToItem(workspaceColumnLayout, x, y)
+        const columnStride = root.workspaceImplicitWidth + root.workspaceSpacing
+        const rowStride = root.workspaceImplicitHeight + root.workspaceSpacing
+        const column = Math.floor(point.x / columnStride)
+        const row = Math.floor(point.y / rowStride)
+
+        if (column < 0 || column >= Config.options.overview.columns
+                || row < 0 || row >= Config.options.overview.rows)
+            return -1
+        if ((point.x - column * columnStride) > root.workspaceImplicitWidth
+                || (point.y - row * rowStride) > root.workspaceImplicitHeight)
+            return -1
+
+        return root.workspaceGroup * root.workspacesShown + root.getWsInCell(row, column)
+    }
+
     StyledRectangularShadow {
         target: overviewBackground
     }
@@ -110,7 +129,9 @@ Item {
                             property color defaultWorkspaceColor: Appearance.colors.colSurfaceContainerLow
                             property color hoveredWorkspaceColor: ColorUtils.mix(defaultWorkspaceColor, Appearance.colors.colLayer1Hover, 0.1)
                             property color hoveredBorderColor: Appearance.colors.colLayer2Hover
-                            property bool hoveredWhileDragging: false
+                            property bool hoveredWhileDragging: root.draggingFromWorkspace !== -1
+                                && root.draggingTargetWorkspace === workspace.workspaceValue
+                                && root.draggingFromWorkspace !== workspace.workspaceValue
 
                             implicitWidth: root.workspaceImplicitWidth
                             implicitHeight: root.workspaceImplicitHeight
@@ -151,19 +172,6 @@ Item {
                                 }
                             }
 
-                            DropArea {
-                                anchors.fill: parent
-                                onEntered: {
-                                    root.draggingTargetWorkspace = workspace.workspaceValue
-                                    if (root.draggingFromWorkspace == root.draggingTargetWorkspace) return;
-                                    hoveredWhileDragging = true
-                                }
-                                onExited: {
-                                    hoveredWhileDragging = false
-                                    if (root.draggingTargetWorkspace == workspace.workspaceValue) root.draggingTargetWorkspace = -1
-                                }
-                            }
-
                         }
                     }
                 }
@@ -194,6 +202,9 @@ Item {
                     property int monitorId: windowData?.monitor
                     property var monitor: HyprlandData.monitors.find(m => m.id == monitorId)
                     property var address: `0x${modelData.HyprlandToplevel.address}`
+                    property int pendingWorkspaceId: -1
+                    property int effectiveWorkspaceId: pendingWorkspaceId > 0
+                        ? pendingWorkspaceId : (windowData?.workspace?.id ?? 1)
                     toplevel: modelData
                     monitorData: this.monitor
                     scale: root.scale
@@ -201,10 +212,11 @@ Item {
                     windowData: windowByAddress[address]
 
                     property bool atInitPosition: (initX == x && initY == y)
+                    property bool didDrag: false
 
                     // Offset on the canvas
-                    property int workspaceColIndex: getWsColumn(windowData?.workspace.id)
-                    property int workspaceRowIndex: getWsRow(windowData?.workspace.id)
+                    property int workspaceColIndex: getWsColumn(effectiveWorkspaceId)
+                    property int workspaceRowIndex: getWsRow(effectiveWorkspaceId)
                     xOffset: (root.workspaceImplicitWidth + workspaceSpacing) * workspaceColIndex
                     yOffset: (root.workspaceImplicitHeight + workspaceSpacing) * workspaceRowIndex
                     property real xWithinWorkspaceWidget: Math.max((windowData?.at[0] - (monitor?.x ?? 0) - monitorData?.reserved[0]) * root.scale, 0)
@@ -239,9 +251,29 @@ Item {
                         repeat: false
                         running: false
                         onTriggered: {
-                            window.x = Math.round(xWithinWorkspaceWidget + xOffset)
-                            window.y = Math.round(yWithinWorkspaceWidget + yOffset)
+                            window.x = Qt.binding(() => Math.round(window.initX))
+                            window.y = Qt.binding(() => Math.round(window.initY))
                         }
+                    }
+
+                    Timer {
+                        id: pendingWorkspaceTimeout
+                        interval: 1500
+                        repeat: false
+                        onTriggered: {
+                            window.pendingWorkspaceId = -1
+                            HyprlandData.updateWindowList()
+                            updateWindowPosition.restart()
+                        }
+                    }
+
+                    onWindowDataChanged: {
+                        if (pendingWorkspaceId > 0 && windowData?.workspace?.id === pendingWorkspaceId) {
+                            pendingWorkspaceId = -1
+                            pendingWorkspaceTimeout.stop()
+                        }
+                        if (!window.Drag.active)
+                            updateWindowPosition.restart()
                     }
 
                     z: Drag.active ? root.windowDraggingZ : (root.windowZ + windowData?.floating)
@@ -257,41 +289,71 @@ Item {
                         drag.target: parent
                         onPressed: (mouse) => {
                             root.draggingFromWorkspace = windowData?.workspace.id
+                            root.draggingTargetWorkspace = root.draggingFromWorkspace
+                            window.didDrag = false
                             window.pressed = true
-                            window.Drag.active = true
                             window.Drag.source = window
                             window.Drag.hotSpot.x = mouse.x
                             window.Drag.hotSpot.y = mouse.y
-                            // console.log(`[OverviewWindow] Dragging window ${windowData?.address} from position (${window.x}, ${window.y})`)
                         }
-                        onReleased: {
-                            const targetWorkspace = root.draggingTargetWorkspace
+                        onPositionChanged: (mouse) => {
+                            if (!drag.active)
+                                return
+                            window.didDrag = true
+                            window.Drag.active = true
+                            root.draggingTargetWorkspace = root.workspaceAtPoint(dragArea, mouse.x, mouse.y)
+                        }
+                        onReleased: (mouse) => {
+                            const pointerWorkspace = root.workspaceAtPoint(dragArea, mouse.x, mouse.y)
+                            const targetWorkspace = pointerWorkspace !== -1
+                                ? pointerWorkspace : root.draggingTargetWorkspace
+                            const sourceWorkspace = Number(windowData?.workspace?.id ?? -1)
+                            const address = String(window.windowData?.address ?? "")
                             window.pressed = false
                             window.Drag.active = false
                             root.draggingFromWorkspace = -1
-                            if (targetWorkspace !== -1 && targetWorkspace !== windowData?.workspace.id) {
-                                Hyprland.dispatch(`movetoworkspacesilent ${targetWorkspace}, address:${window.windowData?.address}`)
+                            root.draggingTargetWorkspace = -1
+                            if (window.didDrag && targetWorkspace !== -1
+                                    && targetWorkspace !== sourceWorkspace
+                                    && /^0x[0-9a-f]+$/i.test(address)) {
+                                window.pendingWorkspaceId = targetWorkspace
+                                pendingWorkspaceTimeout.restart()
+                                HyprlandDispatch.dispatch(`movetoworkspacesilent ${targetWorkspace}, address:${address}`)
+                                HyprlandData.updateWindowList()
                                 updateWindowPosition.restart()
                             }
-                            else {
+                            else if (window.didDrag) {
                                 if (!window.windowData.floating) {
                                     updateWindowPosition.restart()
                                     return
                                 }
                                 const percentageX = Math.round((window.x - xOffset) / root.workspaceImplicitWidth * 100)
                                 const percentageY = Math.round((window.y - yOffset) / root.workspaceImplicitHeight * 100)
-                                Hyprland.dispatch(`movewindowpixel exact ${percentageX}% ${percentageY}%, address:${window.windowData?.address}`)
+                                HyprlandDispatch.dispatch(`movewindowpixel exact ${percentageX}% ${percentageY}%, address:${window.windowData?.address}`)
+                                updateWindowPosition.restart()
                             }
+                        }
+                        onCanceled: {
+                            window.pressed = false
+                            window.Drag.active = false
+                            root.draggingFromWorkspace = -1
+                            root.draggingTargetWorkspace = -1
+                            updateWindowPosition.restart()
                         }
                         onClicked: (event) => {
                             if (!windowData) return;
 
+                            if (window.didDrag) {
+                                event.accepted = true
+                                return
+                            }
+
                             if (event.button === Qt.LeftButton) {
                                 GlobalStates.overviewOpen = false
-                                Hyprland.dispatch(`focuswindow address:${windowData.address}`)
+                                HyprlandDispatch.dispatch(`focuswindow address:${windowData.address}`)
                                 event.accepted = true
                             } else if (event.button === Qt.MiddleButton) {
-                                Hyprland.dispatch(`closewindow address:${windowData.address}`)
+                                HyprlandDispatch.dispatch(`closewindow address:${windowData.address}`)
                                 event.accepted = true
                             }
                         }

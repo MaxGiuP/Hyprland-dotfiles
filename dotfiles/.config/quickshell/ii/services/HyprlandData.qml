@@ -22,6 +22,7 @@ Singleton {
     property var activeWorkspace: null
     property var monitors: []
     property var layers: ({})
+    property bool windowRefreshPending: false
     property bool monitorRefreshPending: false
     property var activeWorkspaceIdsByMonitor: ({})
     property var workspaceEventTimesByMonitor: ({})
@@ -217,8 +218,11 @@ Singleton {
     }
 
     function updateWindowList() {
-        if (!getClients.running)
-            getClients.running = true;
+        if (getClients.running) {
+            root.windowRefreshPending = true;
+            return;
+        }
+        getClients.running = true;
     }
 
     function updateLayers() {
@@ -420,6 +424,10 @@ Singleton {
     Process {
         id: getClients
         command: ["hyprctl", "clients", "-j"]
+        onRunningChanged: {
+            if (!running && root.windowRefreshPending)
+                windowRefreshRetry.restart();
+        }
         stdout: StdioCollector {
             id: clientsCollector
             onStreamFinished: {
@@ -434,6 +442,18 @@ Singleton {
                 root.windowByAddress = tempWinByAddress;
                 root.addresses = root.windowList.map(win => win.address);
             }
+        }
+    }
+
+    Timer {
+        id: windowRefreshRetry
+        interval: 0
+        repeat: false
+        onTriggered: {
+            if (getClients.running)
+                return;
+            root.windowRefreshPending = false;
+            getClients.running = true;
         }
     }
 
