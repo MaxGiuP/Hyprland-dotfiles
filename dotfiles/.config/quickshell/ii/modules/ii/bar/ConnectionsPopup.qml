@@ -17,9 +17,22 @@ StyledPopup {
     keepOpenOnPopupHover: true
     horizontalOffset: -8
     property real contentWidth: 390
-    property real maxListHeight: 180
+    property real maxListHeight: 150
+
+    function ethernetStateLabel(device) {
+        if (device?.connected)
+            return Translation.tr("Connected");
+        if (device?.connecting)
+            return Translation.tr("Connecting");
+        if (device?.state === "unmanaged")
+            return Translation.tr("Unmanaged");
+        if (device?.state === "unavailable")
+            return Translation.tr("Unavailable");
+        return Translation.tr("Disconnected");
+    }
 
     Component.onCompleted: {
+        Network.refreshEthernetDevices();
         if (Network.wifiEnabled && !Network.wifiScanning)
             Network.rescanWifi();
     }
@@ -98,7 +111,7 @@ StyledPopup {
             spacing: 0
 
             model: ScriptModel {
-                values: Network.friendlyWifiNetworks.slice(0, 5)
+                values: Network.friendlyWifiNetworks
             }
 
             delegate: WifiNetworkItem {
@@ -120,6 +133,162 @@ StyledPopup {
             text: Network.wifiEnabled
                 ? Translation.tr("No networks")
                 : Translation.tr("Wi-Fi off")
+            color: Appearance.colors.colSubtext
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 1
+            color: Appearance.colors.colOutlineVariant
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+
+            MaterialSymbol {
+                text: "lan"
+                iconSize: Appearance.font.pixelSize.larger
+                color: Appearance.colors.colPrimary
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+
+                StyledText {
+                    text: Translation.tr("Ethernet devices")
+                    font.weight: Font.DemiBold
+                    color: Appearance.colors.colOnSurface
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    text: {
+                        const activeDevice = Network.friendlyEthernetDevices.find(device => device.connected);
+                        if (activeDevice)
+                            return activeDevice.connection || activeDevice.device;
+                        const count = Network.friendlyEthernetDevices.filter(device => device.available).length;
+                        return count > 0
+                            ? Translation.tr("%1 available").arg(count)
+                            : Translation.tr("No Ethernet devices");
+                    }
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    elide: Text.ElideRight
+                }
+            }
+        }
+
+        ListView {
+            id: ethernetList
+            visible: count > 0
+            Layout.fillWidth: true
+            Layout.preferredHeight: visible ? Math.min(contentHeight, root.maxListHeight) : 0
+            clip: true
+            spacing: 0
+
+            model: ScriptModel {
+                values: Network.friendlyEthernetDevices
+            }
+
+            delegate: DialogListItem {
+                id: ethernetDeviceItem
+                required property var modelData
+                property bool expanded: false
+
+                width: ListView.view.width
+                active: modelData?.connected ?? false
+                enabled: modelData?.available ?? false
+                onClicked: expanded = !expanded
+
+                contentItem: ColumnLayout {
+                    anchors {
+                        fill: parent
+                        topMargin: ethernetDeviceItem.verticalPadding
+                        bottomMargin: ethernetDeviceItem.verticalPadding
+                        leftMargin: ethernetDeviceItem.horizontalPadding
+                        rightMargin: ethernetDeviceItem.horizontalPadding
+                    }
+                    spacing: 0
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 10
+
+                        MaterialSymbol {
+                            text: ethernetDeviceItem.modelData?.connected ? "lan" : "settings_ethernet"
+                            iconSize: Appearance.font.pixelSize.larger
+                            color: Appearance.colors.colOnSurfaceVariant
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: ethernetDeviceItem.modelData?.connection
+                                    || ethernetDeviceItem.modelData?.device
+                                    || Translation.tr("Ethernet")
+                                color: Appearance.colors.colOnSurfaceVariant
+                                elide: Text.ElideRight
+                            }
+
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: `${ethernetDeviceItem.modelData?.device ?? ""} • ${root.ethernetStateLabel(ethernetDeviceItem.modelData)}`
+                                color: Appearance.colors.colSubtext
+                                font.pixelSize: Appearance.font.pixelSize.smaller
+                                elide: Text.ElideRight
+                            }
+                        }
+
+                        MaterialSymbol {
+                            text: Network.ethernetActionRunning
+                                    && Network.ethernetActionDevice === (ethernetDeviceItem.modelData?.device ?? "")
+                                ? "progress_activity"
+                                : "keyboard_arrow_down"
+                            rotation: ethernetDeviceItem.expanded ? 180 : 0
+                            iconSize: Appearance.font.pixelSize.larger
+                            color: Appearance.colors.colOnSurfaceVariant
+                            Behavior on rotation {
+                                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        visible: ethernetDeviceItem.expanded
+                        Layout.fillWidth: true
+                        Layout.topMargin: 8
+
+                        Item {
+                            Layout.fillWidth: true
+                        }
+
+                        DialogButton {
+                            enabled: !Network.ethernetActionRunning
+                            buttonText: ethernetDeviceItem.modelData?.connected
+                                ? Translation.tr("Disconnect")
+                                : Translation.tr("Connect")
+                            onClicked: Network.toggleEthernetDevice(ethernetDeviceItem.modelData)
+                        }
+                    }
+                }
+            }
+
+            ScrollBar.vertical: ScrollBar {}
+        }
+
+        StyledText {
+            visible: ethernetList.count === 0
+            Layout.fillWidth: true
+            Layout.leftMargin: 10
+            Layout.rightMargin: 10
+            Layout.topMargin: 6
+            Layout.bottomMargin: 8
+            text: Translation.tr("No Ethernet devices")
             color: Appearance.colors.colSubtext
         }
 
@@ -199,7 +368,7 @@ StyledPopup {
             spacing: 0
 
             model: ScriptModel {
-                values: BluetoothStatus.friendlyDeviceList.slice(0, 5)
+                values: BluetoothStatus.friendlyDeviceList
             }
 
             delegate: BluetoothDeviceItem {
@@ -236,7 +405,7 @@ StyledPopup {
 
             DialogButton {
                 Layout.fillWidth: true
-                buttonText: Translation.tr("Wi-Fi")
+                buttonText: Translation.tr("Network")
                 onClicked: {
                     root.hoverHeld = false;
                     Quickshell.execDetached(["bash", "-lc", Config.options.apps.network]);

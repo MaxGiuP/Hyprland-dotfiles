@@ -21,6 +21,16 @@ Singleton {
     property bool wifiEnabled: false
     property bool wifiScanning: false
     property bool wifiConnecting: connectProc.running
+    property list<var> ethernetDevices: []
+    property string ethernetActionDevice: ""
+    readonly property bool ethernetActionRunning: ethernetActionProc.running
+    readonly property list<var> friendlyEthernetDevices: [...ethernetDevices].sort((a, b) => {
+        if (a.connected && !b.connected)
+            return -1;
+        if (!a.connected && b.connected)
+            return 1;
+        return a.device.localeCompare(b.device);
+    })
     property WifiAccessPoint wifiConnectTarget
     property WifiAccessPoint pendingWifiSwitchTarget
     readonly property list<WifiAccessPoint> wifiNetworks: []
@@ -63,6 +73,21 @@ Singleton {
 
     function toggleWifi(): void {
         enableWifi(!wifiEnabled);
+    }
+
+    function refreshEthernetDevices(): void {
+        if (!getEthernetDevices.running)
+            getEthernetDevices.running = true;
+    }
+
+    function toggleEthernetDevice(device): void {
+        if (!device || !device.available || ethernetActionProc.running)
+            return;
+
+        root.ethernetActionDevice = device.device;
+        ethernetActionProc.exec([
+            "nmcli", "device", device.connected ? "disconnect" : "connect", device.device
+        ]);
     }
 
     function rescanWifi(): void {
@@ -189,6 +214,7 @@ Singleton {
         if (root.settingsApp)
             return;
         updateConnectionType.startCheck();
+        root.refreshEthernetDevices();
         wifiStatusProcess.running = true
         updateNetworkName.running = true;
         updateNetworkStrength.running = true;
@@ -358,6 +384,70 @@ Singleton {
                     }
                 }
             }
+        }
+    }
+
+    Process {
+        id: getEthernetDevices
+        running: !root.settingsApp
+        command: ["nmcli", "-t", "-f", "DEVICE,TYPE,STATE,CONNECTION", "device", "status"]
+        environment: ({
+            LANG: "C",
+            LC_ALL: "C"
+        })
+        stdout: StdioCollector {
+            onStreamFinished: {
+                function splitEscapedFields(line) {
+                    const fields = [];
+                    let field = "";
+                    let escaped = false;
+                    for (let i = 0; i < line.length; i++) {
+                        const character = line[i];
+                        if (escaped) {
+                            field += character;
+                            escaped = false;
+                        } else if (character === "\\") {
+                            escaped = true;
+                        } else if (character === ":") {
+                            fields.push(field);
+                            field = "";
+                        } else {
+                            field += character;
+                        }
+                    }
+                    fields.push(field);
+                    return fields;
+                }
+
+                root.ethernetDevices = text.trim().split("\n")
+                    .filter(line => line.length > 0)
+                    .map(line => splitEscapedFields(line))
+                    .filter(fields => fields.length >= 3 && fields[1] === "ethernet")
+                    .map(fields => {
+                        const state = fields[2] ?? "unknown";
+                        return {
+                            device: fields[0] ?? "",
+                            state: state,
+                            connection: (fields[3] ?? "").replace(/^--$/, ""),
+                            connected: state === "connected",
+                            connecting: state === "connecting",
+                            available: state !== "unmanaged" && state !== "unavailable"
+                        };
+                    });
+            }
+        }
+    }
+
+    Process {
+        id: ethernetActionProc
+        environment: ({
+            LANG: "C",
+            LC_ALL: "C"
+        })
+        onExited: {
+            root.ethernetActionDevice = "";
+            root.refreshEthernetDevices();
+            root.update();
         }
     }
 

@@ -304,7 +304,7 @@ Item { // Bar content region
                 }
 
                 ConnectionsPopup {
-                    hoverTarget: rightSidebarButton
+                    hoverTarget: connectivityHoverArea
                 }
 
                 RowLayout {
@@ -377,18 +377,37 @@ Item { // Bar content region
                             }
                         }
                     }
-                    MaterialSymbol {
+                    Item {
                         Layout.leftMargin: indicatorsRowLayout.realSpacing
-                        visible: BluetoothStatus.available
-                        text: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
-                        iconSize: Appearance.font.pixelSize.larger
-                        color: rightSidebarButton.colText
-                    }
-                    MaterialSymbol {
-                        Layout.leftMargin: indicatorsRowLayout.realSpacing
-                        text: Network.materialSymbol
-                        iconSize: Appearance.font.pixelSize.larger
-                        color: rightSidebarButton.colText
+                        Layout.alignment: Qt.AlignVCenter
+                        implicitWidth: connectivityIndicators.implicitWidth
+                        implicitHeight: connectivityIndicators.implicitHeight
+
+                        MouseArea {
+                            id: connectivityHoverArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
+                        }
+
+                        RowLayout {
+                            id: connectivityIndicators
+                            anchors.fill: parent
+                            spacing: indicatorsRowLayout.realSpacing
+
+                            MaterialSymbol {
+                                visible: BluetoothStatus.available
+                                text: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
+                                iconSize: Appearance.font.pixelSize.larger
+                                color: rightSidebarButton.colText
+                            }
+
+                            MaterialSymbol {
+                                text: Network.materialSymbol
+                                iconSize: Appearance.font.pixelSize.larger
+                                color: rightSidebarButton.colText
+                            }
+                        }
                     }
                 }
             }
