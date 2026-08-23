@@ -71,8 +71,8 @@ Item {
                     // Keep the count inside the utility button and, therefore,
                     // inside the bar's rounded background.
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.verticalCenterOffset: 0
-                    anchors.rightMargin: -2
+                    anchors.verticalCenterOffset: -4
+                    anchors.rightMargin: -5
 
                     property int badgeH: 14
                     property int badgeHorizontalPadding: 4

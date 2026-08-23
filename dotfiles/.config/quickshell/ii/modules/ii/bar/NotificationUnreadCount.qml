@@ -19,8 +19,8 @@ MaterialSymbol {
         anchors {
             right: parent.right
             verticalCenter: parent.verticalCenter
-            rightMargin: root.showUnreadCount ? 0 : 1
-            verticalCenterOffset: 0
+            rightMargin: root.showUnreadCount ? -10 : 1
+            verticalCenterOffset: root.showUnreadCount ? -4 : 0
         }
         radius: Appearance.rounding.full
         color: Appearance.m3colors.darkmode ? "#FFFFFF" : Appearance.colors.colPrimary
