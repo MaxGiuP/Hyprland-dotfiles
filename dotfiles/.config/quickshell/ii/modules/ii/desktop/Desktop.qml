@@ -974,7 +974,11 @@ Scope {
                         screenScope.trashSelected()
                     }
                     onOpenSettingsRequested: {
-                        GlobalStates.openOverlayWidget("settingsMenu")
+                        const homeDir = Quickshell.env("HOME") || "/home/linmax"
+                        const configDir = Quickshell.env("XDG_CONFIG_HOME") || (homeDir + "/.config")
+                        Quickshell.execDetached([
+                            configDir + "/hypr/hyprland/scripts/launch_quickshell_settings.sh"
+                        ])
                     }
                     onCloseRequested: {
                         root.closeDesktopContextMenu()
