@@ -15,7 +15,7 @@ StyledPopup {
     id: root
 
     keepOpenOnPopupHover: true
-    horizontalOffset: -8
+    horizontalOffset: -190
     property real contentWidth: 390
     property real maxListHeight: 150
 
@@ -393,33 +393,5 @@ StyledPopup {
             color: Appearance.colors.colSubtext
         }
 
-        Rectangle {
-            Layout.fillWidth: true
-            implicitHeight: 1
-            color: Appearance.colors.colOutlineVariant
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-
-            DialogButton {
-                Layout.fillWidth: true
-                buttonText: Translation.tr("Network")
-                onClicked: {
-                    root.hoverHeld = false;
-                    Quickshell.execDetached(["bash", "-lc", Config.options.apps.network]);
-                }
-            }
-
-            DialogButton {
-                Layout.fillWidth: true
-                buttonText: Translation.tr("Bluetooth devices")
-                onClicked: {
-                    root.hoverHeld = false;
-                    Quickshell.execDetached(["bash", "-lc", Config.options.apps.bluetooth]);
-                }
-            }
-        }
     }
 }
