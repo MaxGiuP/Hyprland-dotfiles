@@ -243,8 +243,9 @@ Scope {
             Loader {
                 id: overviewLoader
                 anchors.horizontalCenter: parent.horizontalCenter
+                width: item?.implicitWidth ?? 0
+                height: item?.implicitHeight ?? 0
                 active: GlobalStates.overviewOpen
-                    && !GlobalStates.overviewDrawerMode
                     && panelWindow.overviewContentReady
                     && searchWidget.displayedText == ""
                     && (Config?.options.overview.enable ?? true)
