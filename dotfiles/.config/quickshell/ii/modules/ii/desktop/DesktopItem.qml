@@ -64,6 +64,20 @@ MouseArea {
         onTriggered: root._wasDragged = false
     }
 
+    Timer {
+        id: sameScreenDropTimer
+        interval: 50
+        repeat: false
+        onTriggered: {
+            if (!GlobalStates.desktopDragActive)
+                return
+
+            const dropScreen = GlobalStates.desktopDragScreen
+            if (dropScreen.length === 0 || dropScreen === root.currentScreenName)
+                root.dragReleaseRequested()
+        }
+    }
+
     function dragVisualData() {
         return {
             fileName: modelData.fileName,
@@ -123,6 +137,7 @@ MouseArea {
     onPressed: mouse => {
         _wasDragged = false
         dragClickResetTimer.stop()
+        sameScreenDropTimer.stop()
         _origX = x
         _origY = y
         _pressOffsetX = mouse.x
@@ -155,11 +170,9 @@ MouseArea {
             // This is a synthetic event — do NOT finalize the drop here or the item
             // will land on the wrong monitor.
             //
-            // The actual LMB-up is reliably delivered by the GlobalShortcut
-            // (bindrn , mouse:272 → quickshell:desktopDragMouseLeftRelease) regardless
-            // of which surface has pointer focus.  That shortcut queries hyprctl cursorpos
-            // for the live cursor position and owns all finalization via
-            // finalizePendingTransferFromGlobalRelease.
+            // Defer same-screen finalization very briefly so the global cursor poll can
+            // distinguish a real release from that synthetic boundary event. Cross-screen
+            // releases remain owned by the destination surface / GlobalShortcut fallback.
             //
             // Exception: same-screen trash drops are detected here so that the
             // per-screen selectedFileNames can be cleared (finalizePendingTransferFromGlobalRelease
@@ -171,14 +184,16 @@ MouseArea {
             if (releasedOverTrash() && dragUrls.length > 0) {
                 root.trashRequested(dragUrls)
                 GlobalStates.clearDesktopDragState()
+            } else {
+                sameScreenDropTimer.restart()
             }
-            // All other drops are handled by the GlobalShortcut / bgMouseArea.
 
             _dragActive = false
             dragClickResetTimer.restart()
         }
     }
     onCanceled: {
+        sameScreenDropTimer.stop()
         if (!_dragActive)
             return
 
