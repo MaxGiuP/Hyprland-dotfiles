@@ -937,7 +937,7 @@ Scope {
                 // ── Context menu ───────────────────────────────────────────
                 DesktopContextMenu {
                     id: ctxMenu
-                    visible: desktopWindow.menuVisible
+                    shown: desktopWindow.menuVisible
                     z: 10
                     x: Math.min(desktopWindow.menuX, desktopWindow.width  - implicitWidth  - 8)
                     y: Math.min(desktopWindow.menuY, desktopWindow.height - implicitHeight - 8)

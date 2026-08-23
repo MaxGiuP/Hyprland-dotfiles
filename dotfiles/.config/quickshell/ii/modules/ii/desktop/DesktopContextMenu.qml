@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import qs.services
@@ -16,6 +15,7 @@ Item {
     property bool targetIsDir: false
     property bool isFileMenu: false
     property int selectedCount: 0
+    property bool shown: false
 
     signal requestNameInput(string mode)
     signal renameRequested()
@@ -25,7 +25,15 @@ Item {
     signal trashSelectedRequested()
     signal openSettingsRequested()
 
-    visible: false
+    visible: shown || opacity > 0
+    enabled: shown
+    opacity: shown ? 1 : 0
+    Behavior on opacity {
+        NumberAnimation {
+            duration: 150
+            easing.type: Easing.OutCubic
+        }
+    }
     readonly property real contentWidth: Math.max(
         newTextFileButton.visible ? newTextFileButton.implicitWidth : 0,
         newFolderButton.visible ? newFolderButton.implicitWidth : 0,
@@ -40,6 +48,13 @@ Item {
     implicitWidth: menuRect.width
     implicitHeight: menuRect.height
 
+    // Keep the menu content in the window's native scenegraph resolution.
+    // Layering the whole rectangle rasterized its text and icons into a cached
+    // texture, which could look soft or incorrectly scaled between outputs.
+    StyledRectangularShadow {
+        target: menuRect
+    }
+
     Rectangle {
         id: menuRect
         width: root.contentWidth + 16
@@ -49,15 +64,6 @@ Item {
                        Appearance.colors.colLayer1.b, 1.0)
         border.color: Qt.rgba(1, 1, 1, 0.08)
         border.width: 1
-
-        layer.enabled: true
-        layer.effect: MultiEffect {
-            shadowEnabled: true
-            shadowColor: Qt.rgba(0, 0, 0, 0.45)
-            shadowBlur: 0.25
-            shadowVerticalOffset: 8
-            shadowHorizontalOffset: 0
-        }
 
         MouseArea {
             anchors.fill: parent
