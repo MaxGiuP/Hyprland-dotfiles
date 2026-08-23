@@ -165,15 +165,17 @@ Singleton {
         const pinnedApps = Config.options?.dock.pinnedApps ?? [];
         for (const appId of pinnedApps) {
             const key = root.canonicalAppId(appId);
+            const desktopEntry = root.resolveDesktopEntry(appId);
             if (!map.has(key)) map.set(key, ({
                 pinned: true,
+                desktopEntry: desktopEntry,
                 toplevels: []
             }));
         }
 
         // Separator
         if (pinnedApps.length > 0) {
-            map.set("SEPARATOR", { pinned: false, toplevels: [] });
+            map.set("SEPARATOR", { pinned: false, desktopEntry: null, toplevels: [] });
         }
 
         // Ignored apps
@@ -183,17 +185,26 @@ Singleton {
         for (const toplevel of ToplevelManager.toplevels.values) {
             if (ignoredRegexes.some(re => re.test(toplevel.appId))) continue;
             const key = root.canonicalAppId(toplevel.appId);
+            const desktopEntry = root.resolveDesktopEntry(toplevel.appId);
             if (!map.has(key)) map.set(key, ({
                 pinned: false,
+                desktopEntry: desktopEntry,
                 toplevels: []
             }));
+            else if (!map.get(key).desktopEntry && desktopEntry)
+                map.get(key).desktopEntry = desktopEntry;
             map.get(key).toplevels.push(toplevel);
         }
 
         var values = [];
 
         for (const [key, value] of map) {
-            values.push(appEntryComp.createObject(null, { appId: key, toplevels: value.toplevels, pinned: value.pinned }));
+            values.push(appEntryComp.createObject(null, {
+                appId: key,
+                desktopEntry: value.desktopEntry,
+                toplevels: value.toplevels,
+                pinned: value.pinned
+            }));
         }
 
         return values;
@@ -202,6 +213,7 @@ Singleton {
     component TaskbarAppEntry: QtObject {
         id: wrapper
         required property string appId
+        required property var desktopEntry
         required property list<var> toplevels
         required property bool pinned
     }

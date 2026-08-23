@@ -8,6 +8,7 @@ import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import Quickshell.Widgets
 
 DockButton {
@@ -28,7 +29,9 @@ DockButton {
 
     readonly property bool isSeparator: appToplevel.appId === "SEPARATOR"
     readonly property bool isPinnedApp: appToplevel.pinned && !isSeparator
-    readonly property var desktopEntry: TaskbarApps.resolveDesktopEntry(appToplevel.appId)
+    readonly property var desktopEntry: appToplevel?.desktopEntry ?? TaskbarApps.resolveDesktopEntry(appToplevel.appId)
+    property string pendingLaunchAppId: ""
+    property int pendingLaunchWindowCount: 0
     property real initialX: 0
     property real initialY: 0
     property bool didDrag: false
@@ -79,11 +82,39 @@ DockButton {
             .filter(toplevel => toplevel !== null && toplevel !== undefined).length
     }
 
+    function launchResolvedEntry(appId, initialWindowCount) {
+        if (AppLaunch.launchDesktopEntry(root.desktopEntry)) {
+            root.appListRoot.beginAppLaunch(appId, initialWindowCount)
+            return
+        }
+
+        Quickshell.execDetached([
+            "notify-send",
+            Translation.tr("Dock"),
+            Translation.tr("No launcher could be found for %1").arg(appId),
+            "-a", "Shell"
+        ])
+    }
+
     function launchNewInstance() {
         const appId = String(root.appToplevel?.appId ?? "")
         const initialWindowCount = root.appWindowCount()
-        if (AppLaunch.launchDesktopEntry(root.desktopEntry))
-            root.appListRoot.beginAppLaunch(appId, initialWindowCount)
+        if (!root.desktopEntry) {
+            root.launchResolvedEntry(appId, initialWindowCount)
+            return
+        }
+
+        const desktopId = String(root.desktopEntry?.id ?? appId).toLowerCase().replace(/\.desktop$/, "")
+        if (desktopId === "steam") {
+            if (steamLaunchPreflight.running)
+                return
+            root.pendingLaunchAppId = appId
+            root.pendingLaunchWindowCount = initialWindowCount
+            steamLaunchPreflight.running = true
+            return
+        }
+
+        root.launchResolvedEntry(appId, initialWindowCount)
     }
 
     function reportWindowCount() {
@@ -97,6 +128,32 @@ DockButton {
         target: root.appToplevel
         function onToplevelsChanged() {
             root.reportWindowCount()
+        }
+    }
+
+    Process {
+        id: steamLaunchPreflight
+        command: [Quickshell.shellPath("scripts/check_nvidia_runtime.sh")]
+
+        stderr: StdioCollector {
+            id: steamPreflightError
+        }
+
+        onExited: exitCode => {
+            if (exitCode === 0) {
+                root.launchResolvedEntry(root.pendingLaunchAppId, root.pendingLaunchWindowCount)
+            } else {
+                const message = steamPreflightError.text.trim()
+                Quickshell.execDetached([
+                    "notify-send",
+                    Translation.tr("Steam cannot start"),
+                    message.length > 0 ? message : Translation.tr("Steam failed its launch check."),
+                    "-a", "Shell",
+                    "-u", "critical"
+                ])
+            }
+            root.pendingLaunchAppId = ""
+            root.pendingLaunchWindowCount = 0
         }
     }
 
