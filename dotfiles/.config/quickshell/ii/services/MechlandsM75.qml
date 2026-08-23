@@ -10,7 +10,7 @@ import qs.modules.common.functions
 Singleton {
     id: root
 
-    readonly property string executable: `${FileUtils.trimFileProtocol(Directories.home)}/mechlands-m75-linux/bin/mechlandsctl`
+    readonly property string executable: `${Directories.scriptPath}/peripherals/mechlandsctl`
     property var status: ({})
     property var capabilities: ({})
     property var actionResult: ({})

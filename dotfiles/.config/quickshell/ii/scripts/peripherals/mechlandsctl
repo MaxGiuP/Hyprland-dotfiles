@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+installed="$HOME/.local/bin/mechlandsctl"
+checkout="$HOME/mechlands-m75-linux/bin/mechlandsctl"
+
+if [[ -x "$installed" ]]; then
+    exec "$installed" "$@"
+fi
+
+if [[ -x "$checkout" ]]; then
+    exec "$checkout" "$@"
+fi
+
+printf 'MechLands M75 driver not found. Run the driver install.sh first.\n' >&2
+exit 127
