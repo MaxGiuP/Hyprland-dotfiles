@@ -637,21 +637,12 @@ Scope {
                             fileModelData: dragProxy.dragVisual
                         }
 
-                        Text {
+                        DesktopFilenameLabel {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.fillWidth: true
                             Layout.leftMargin: 14
                             Layout.rightMargin: 14
                             text: String(dragProxy.dragVisual.fileName ?? "").replace(/(.{12})/g, "$1\n")
-                            color: "white"
-                            font.pixelSize: 13
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.WordWrap
-                            maximumLineCount: 2
-                            elide: Text.ElideRight
-                            style: Text.Outline
-                            // Keep the drag preview consistent with desktop labels.
-                            styleColor: Qt.rgba(0, 0, 0, 1)
                         }
                     }
                 }

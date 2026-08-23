@@ -253,22 +253,12 @@ MouseArea {
         }
 
         // Label
-        Text {
+        DesktopFilenameLabel {
             Layout.alignment: Qt.AlignHCenter
             Layout.fillWidth: true
             Layout.leftMargin: 14
             Layout.rightMargin: 14
             text: root.displayLabel
-            color: "white"
-            font.pixelSize: 13
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            maximumLineCount: 2
-            elide: Text.ElideRight
-            style: Text.Outline
-            // An opaque outline reads a touch thicker against bright wallpapers
-            // without adding a soft shadow around the label.
-            styleColor: Qt.rgba(0, 0, 0, 1)
         }
     }
 }
