@@ -36,6 +36,7 @@ STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "quicksh
 DEFAULT_DIR = HOME / "Pictures" / "Wallpapers" / "dynamic-system"
 PID_FILE = STATE / "dynamic-wallpaper.pid"
 LOG_FILE = STATE / "dynamic-wallpaper.log"
+ROTATION_STATE_FILE = STATE / "last-rotation.json"
 EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".bmp"}
 PERIODS = ("morning", "day", "evening", "night")
 DEFAULT_LATITUDE = 51.6714842
@@ -84,6 +85,45 @@ def current_wallpaper() -> str:
     return str(read_config().get("background", {}).get("wallpaperPath", ""))
 
 
+def canonical_path(value: str | Path) -> str:
+    try:
+        return str(Path(value).expanduser().resolve())
+    except Exception:
+        return str(Path(value).expanduser())
+
+
+def read_rotation_state() -> dict | None:
+    try:
+        state = json.loads(ROTATION_STATE_FILE.read_text(encoding="utf-8"))
+        if (
+            not isinstance(state, dict)
+            or not isinstance(state.get("path"), str)
+            or state.get("period") not in PERIODS
+            or not isinstance(state.get("applied_at"), (int, float))
+        ):
+            return None
+        return state
+    except Exception:
+        return None
+
+
+def write_rotation_state(path: str | Path, period: str, applied_at: float | None = None) -> dict:
+    STATE.mkdir(parents=True, exist_ok=True)
+    state = {
+        "path": canonical_path(path),
+        "period": period,
+        "applied_at": float(time.time() if applied_at is None else applied_at),
+    }
+    temporary = ROTATION_STATE_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(ROTATION_STATE_FILE)
+    return state
+
+
+def same_wallpaper(first: str | Path, second: str | Path) -> bool:
+    return bool(first) and bool(second) and canonical_path(first) == canonical_path(second)
+
+
 def normalize_base_directory(directory: Path) -> Path:
     """Accept either dynamic-system/ or an old dynamic-system/current path."""
     directory = directory.expanduser()
@@ -97,6 +137,20 @@ def normalize_base_directory(directory: Path) -> Path:
 def period_directory(base: Path, period: str) -> Path:
     candidate = base / period
     return candidate if candidate.is_dir() else base
+
+
+def wallpaper_matches_period(path: str, base: Path, period: str, prefer_time: bool) -> bool:
+    if not path:
+        return False
+    candidate = Path(path).expanduser()
+    if not candidate.is_file() or candidate.suffix.lower() not in EXTENSIONS:
+        return False
+    expected_directory = period_directory(base, period) if prefer_time else base
+    try:
+        candidate.resolve().relative_to(expected_directory.resolve())
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def wallpapers(directory: Path, recursive: bool = False) -> list[Path]:
@@ -310,6 +364,13 @@ def apply(path: Path, mode: str, period: str) -> int:
     return subprocess.call(cmd)
 
 
+def apply_and_record(path: Path, mode: str, period: str) -> int:
+    result = apply(path, mode, period)
+    if result == 0:
+        write_rotation_state(path, period)
+    return result
+
+
 def read_pid() -> int | None:
     try:
         return int(PID_FILE.read_text().strip())
@@ -368,15 +429,63 @@ def daemon(args: argparse.Namespace) -> None:
 
     base = normalize_base_directory(args.directory)
     log(f"started base={base} interval={args.interval}s schedule={schedule_mode_value(args.schedule_mode)} lat={args.latitude} lon={args.longitude}")
+    first_iteration = True
     try:
         while running:
             now = datetime.now()
             period = period_for_args(now, args)
-            selected = choose_wallpaper(base, current_wallpaper(), period, args.prefer_time)
-            apply(selected, desired_mode(period, args.auto_mode), period)
+            configured_wallpaper = current_wallpaper()
+            configured_is_valid = wallpaper_matches_period(
+                configured_wallpaper, base, period, args.prefer_time
+            )
+            rotation_state = read_rotation_state()
+
+            # Migrate an already-valid dynamic wallpaper into persistent state
+            # without changing it on the first daemon start after this update.
+            if rotation_state is None and configured_is_valid:
+                rotation_state = write_rotation_state(configured_wallpaper, period)
+                log(f"preserve period={period} {Path(configured_wallpaper).name} (initialized rotation timer)")
+            elif (
+                rotation_state is not None
+                and not same_wallpaper(rotation_state["path"], configured_wallpaper)
+                and configured_is_valid
+            ):
+                # A wallpaper selected outside this daemon becomes the new timer
+                # baseline instead of being overwritten on daemon recovery.
+                rotation_state = write_rotation_state(configured_wallpaper, period)
+                log(f"preserve period={period} {Path(configured_wallpaper).name} (adopted current wallpaper)")
+
+            interval_due_at = (
+                float(rotation_state["applied_at"]) + max(1, args.interval)
+                if rotation_state is not None else 0.0
+            )
+            rotation_due = (
+                rotation_state is None
+                or not configured_is_valid
+                or rotation_state["period"] != period
+                or time.time() >= interval_due_at
+            )
+
+            if rotation_due:
+                selected = choose_wallpaper(base, configured_wallpaper, period, args.prefer_time)
+                result = apply_and_record(selected, desired_mode(period, args.auto_mode), period)
+                rotation_state = read_rotation_state()
+                if result != 0:
+                    log(f"apply failed status={result}; retrying shortly")
+            elif first_iteration:
+                remaining = max(0, math.ceil(interval_due_at - time.time()))
+                log(f"resume period={period} {Path(configured_wallpaper).name} next rotation in {remaining}s")
+
+            first_iteration = False
             transition = next_transition_after_args(datetime.now(), args)
             seconds_to_transition = math.ceil((transition - datetime.now()).total_seconds())
-            sleep_seconds = max(1, min(max(1, args.interval), seconds_to_transition))
+            if rotation_state is not None:
+                seconds_to_interval = math.ceil(
+                    float(rotation_state["applied_at"]) + max(1, args.interval) - time.time()
+                )
+            else:
+                seconds_to_interval = 30
+            sleep_seconds = max(1, min(max(1, seconds_to_interval), seconds_to_transition))
             for _ in range(sleep_seconds):
                 if not running:
                     break
@@ -437,6 +546,13 @@ def main() -> int:
         for line in schedule_status_lines(now, args):
             print(line)
         print(f"next_transition={next_transition_after_args(now, args).strftime('%H:%M')}")
+        rotation_state = read_rotation_state()
+        if rotation_state is not None:
+            applied_at = datetime.fromtimestamp(float(rotation_state["applied_at"]))
+            interval_due = applied_at + timedelta(seconds=max(1, args.interval))
+            print(f"last_rotation={applied_at.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"last_wallpaper={rotation_state['path']}")
+            print(f"next_rotation={min(interval_due, next_transition_after_args(now, args)).strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"log={LOG_FILE}")
         return 0
     if args.command == "period":
@@ -450,7 +566,7 @@ def main() -> int:
         now = datetime.now()
         period = period_for_args(now, args)
         selected = choose_wallpaper(args.directory, current_wallpaper(), period, args.prefer_time)
-        return apply(selected, desired_mode(period, args.auto_mode), period)
+        return apply_and_record(selected, desired_mode(period, args.auto_mode), period)
     if args.command == "run":
         return daemon(args) or 0
     if args.command == "start":
