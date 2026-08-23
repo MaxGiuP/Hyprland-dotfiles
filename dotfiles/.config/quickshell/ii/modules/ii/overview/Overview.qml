@@ -20,6 +20,12 @@ Scope {
     // Keep the launcher surface warm. Recreating the PanelWindow, app model and
     // icon delegates on every open made the drawer feel unresponsive.
     property bool panelLoaded: true
+    property string targetScreenName: ""
+    property bool targetScreenPrepared: false
+    readonly property var targetScreenObject: Quickshell.screens.find(screen => screen.name === targetScreenName)
+                                               ?? Quickshell.screens.find(screen => screen.name === Hyprland.focusedMonitor?.name)
+                                               ?? Quickshell.screens[0]
+                                               ?? null
     readonly property int entranceDuration: 150
     readonly property int exitDuration: 210
     signal searchRequested(string text, bool focusFirst)
@@ -30,12 +36,24 @@ Scope {
         overviewScope.searchRequested(text, focusFirst);
     }
 
+    function prepareTargetScreen(preferredScreen = "") {
+        const preferred = Quickshell.screens.find(screen => screen.name === preferredScreen);
+        const focusedName = HyprlandData.monitors.find(monitor => monitor.focused)?.name
+                            ?? Hyprland.focusedMonitor?.name
+                            ?? "";
+        const focused = Quickshell.screens.find(screen => screen.name === focusedName);
+        const resolved = preferred ?? focused ?? Quickshell.screens[0] ?? null;
+        overviewScope.targetScreenName = resolved?.name ?? "";
+        overviewScope.targetScreenPrepared = true;
+    }
+
     LazyLoader {
         id: overviewPanelLoader
         active: overviewScope.panelLoaded
 
     PanelWindow {
         id: panelWindow
+        screen: overviewScope.targetScreenObject
         property string searchingText: ""
         property bool overviewContentReady: false
         property bool entranceShown: false
@@ -100,10 +118,15 @@ Scope {
         Connections {
             target: GlobalStates
             function onOverviewOpenChanged() {
-                if (!GlobalStates.overviewOpen)
+                if (!GlobalStates.overviewOpen) {
+                    overviewScope.targetScreenPrepared = false;
                     panelWindow.handleOverviewClosed();
-                else
+                } else {
+                    if (!overviewScope.targetScreenPrepared)
+                        overviewScope.prepareTargetScreen();
+                    overviewScope.targetScreenPrepared = false;
                     panelWindow.handleOverviewOpened();
+                }
             }
             function onOverviewDrawerModeChanged() {
                 if (GlobalStates.overviewDrawerMode && searchWidget.displayedText.length > 0) {
@@ -316,6 +339,8 @@ Scope {
             GlobalStates.superReleaseMightTrigger = true;
             return;
         }
+        if (!GlobalStates.overviewOpen)
+            overviewScope.prepareTargetScreen();
         GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
     }
 
@@ -323,15 +348,25 @@ Scope {
         target: "search"
 
         function toggle() {
+            if (!GlobalStates.overviewOpen)
+                overviewScope.prepareTargetScreen();
+            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+        }
+        function toggleOnScreen(screenName: string) {
+            if (!GlobalStates.overviewOpen)
+                overviewScope.prepareTargetScreen(screenName);
             GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
         }
         function workspacesToggle() {
+            if (!GlobalStates.overviewOpen)
+                overviewScope.prepareTargetScreen();
             GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
         }
         function close() {
             GlobalStates.overviewOpen = false;
         }
         function open() {
+            overviewScope.prepareTargetScreen();
             GlobalStates.overviewOpen = true;
         }
         function toggleReleaseInterrupt() {
@@ -347,6 +382,8 @@ Scope {
         description: "Toggles search on press"
 
         onPressed: {
+            if (!GlobalStates.overviewOpen)
+                overviewScope.prepareTargetScreen();
             GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
         }
     }
@@ -363,6 +400,8 @@ Scope {
         description: "Toggles overview on press"
 
         onPressed: {
+            if (!GlobalStates.overviewOpen)
+                overviewScope.prepareTargetScreen();
             GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
         }
     }
