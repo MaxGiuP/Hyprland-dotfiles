@@ -11,53 +11,32 @@ StyledPopup {
     property string formattedDate: DateTime.formatDate("dddd, MMMM dd, yyyy")
     property string formattedTime: DateTime.time
     property string formattedUptime: DateTime.uptime
-    property string todosSection: getUpcomingTodos()
-    property string thunderbirdSection: getThunderbirdSummary()
+    property string upcomingSection: getUpcomingSummary()
 
-    function getUpcomingTodos() {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const startOfTodayTs = startOfToday.getTime();
-        const endOfWindowTs = startOfTodayTs + 8 * 24 * 60 * 60 * 1000;
-
-        const unfinishedTodos = Todo.list.filter(function (item) {
-            if (item.done) return false;
-            const dueAt = item.dueAt ?? 0;
-            // Local todos have no due date (dueAt=0), always show them
-            if (dueAt <= 0) return true;
-            return dueAt >= startOfTodayTs && dueAt < endOfWindowTs;
-        });
-        if (unfinishedTodos.length === 0) {
-            return Translation.tr("No pending tasks");
-        }
-
-        // Limit to first 5 todos to keep popup manageable
-        const limitedTodos = unfinishedTodos.slice(0, 5);
-        let todoText = limitedTodos.map(function (item, index) {
-            return `  ${index + 1}. ${item.content}`;
-        }).join('\n');
-
-        if (unfinishedTodos.length > 5) {
-            todoText += `\n  ${Translation.tr("... and %1 more").arg(unfinishedTodos.length - 5)}`;
-        }
-
-        return todoText;
-    }
-
-    function getThunderbirdSummary() {
+    function getUpcomingSummary() {
         const maxTs = 9007199254740991;
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const startOfTodayTs = startOfToday.getTime();
-        const endOfWindowTs = startOfTodayTs + 8 * 24 * 60 * 60 * 1000; // today + 7 days
+        const nowTs = Date.now();
+        const endOfWindowTs = nowTs + 7 * 24 * 60 * 60 * 1000;
+
+        const localItems = Todo.list
+            .filter(item => {
+                if (item.done) return false;
+                const dueAt = item.dueAt ?? 0;
+                return dueAt <= 0 || (dueAt >= nowTs && dueAt < endOfWindowTs);
+            })
+            .map(item => ({
+                "ts": (item.dueAt ?? 0) > 0 ? item.dueAt : maxTs,
+                "title": item.content ?? item.title ?? "",
+                "allDay": false,
+            }));
 
         const eventItems = CalendarBridge.thunderbirdEvents
             .filter(item => {
                 const startAt = item.startAt ?? 0;
-                return startAt >= startOfTodayTs && startAt < endOfWindowTs;
+                const endAt = item.endAt ?? startAt;
+                return startAt < endOfWindowTs && endAt >= nowTs;
             })
             .map(item => ({
-                "kind": "event",
                 "ts": item.startAt ?? 0,
                 "title": item.title ?? "",
                 "allDay": !!item.allDay,
@@ -67,35 +46,40 @@ StyledPopup {
                 if (item.done) return false;
                 const ts = (item.dueAt ?? item.entryAt ?? 0);
                 if (ts <= 0) return false;
-                return ts >= startOfTodayTs && ts < endOfWindowTs;
+                return ts >= nowTs && ts < endOfWindowTs;
             })
             .map(item => {
                 const ts = (item.dueAt ?? item.entryAt ?? 0);
                 return {
-                    "kind": "task",
                     "ts": ts,
                     "title": item.content ?? "",
+                    "allDay": false,
                 };
             });
-        const merged = [...eventItems, ...taskItems]
-            .sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
-            .slice(0, 6);
 
-        if (merged.length === 0) {
-            return Translation.tr("No upcoming Thunderbird events/tasks");
+        const upcomingItems = [...localItems, ...eventItems, ...taskItems]
+            .sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0))
+            .filter(item => item.title.length > 0);
+
+        if (upcomingItems.length === 0) {
+            return Translation.tr("No upcoming events");
         }
 
-        return merged.map((item, index) => {
-            const isEvent = item.kind === "event";
+        const visibleItems = upcomingItems.slice(0, 8);
+        let summary = visibleItems.map((item, index) => {
             const ts = item.ts ?? 0;
             const datePart = ts > 0 && ts < maxTs ? new Date(ts).toLocaleString(Qt.locale(), "dd MMM") : "";
-            const timePart = isEvent
-                ? (item.allDay ? "--:--" : (ts > 0 ? new Date(ts).toLocaleString(Qt.locale(), "HH:mm") : "--:--"))
-                : (ts > 0 && ts < maxTs ? new Date(ts).toLocaleString(Qt.locale(), "HH:mm") : Translation.tr("No due date"));
-            const label = isEvent ? `E${index + 1}` : `T${index + 1}`;
-            const when = datePart.length > 0 ? `${datePart} ${timePart}` : timePart;
-            return `  ${label}. ${item.title} • ${when}`;
+            const timePart = item.allDay
+                ? Translation.tr("All day")
+                : (ts > 0 && ts < maxTs ? new Date(ts).toLocaleString(Qt.locale(), "HH:mm") : "");
+            const when = [datePart, timePart].filter(part => part.length > 0).join(" ");
+            return `  ${index + 1}. ${item.title}${when.length > 0 ? ` • ${when}` : ""}`;
         }).join("\n");
+
+        if (upcomingItems.length > visibleItems.length) {
+            summary += `\n  ${Translation.tr("... and %1 more").arg(upcomingItems.length - visibleItems.length)}`;
+        }
+        return summary;
     }
 
     ColumnLayout {
@@ -114,33 +98,13 @@ StyledPopup {
             value: root.formattedUptime
         }
 
-        // Tasks
-        Column {
-            spacing: 0
-            Layout.fillWidth: true
-
-            StyledPopupValueRow {
-                icon: "checklist"
-                label: Translation.tr("To Do:")
-                value: ""
-            }
-
-            StyledText {
-                width: root.contentWidth
-                horizontalAlignment: Text.AlignLeft
-                wrapMode: Text.Wrap
-                color: Appearance.colors.colOnSurfaceVariant
-                text: root.todosSection
-            }
-        }
-
         Column {
             spacing: 0
             Layout.fillWidth: true
 
             StyledPopupValueRow {
                 icon: "event"
-                label: Translation.tr("Thunderbird:")
+                label: Translation.tr("Upcoming events:")
                 value: ""
             }
 
@@ -149,7 +113,7 @@ StyledPopup {
                 horizontalAlignment: Text.AlignLeft
                 wrapMode: Text.Wrap
                 color: Appearance.colors.colOnSurfaceVariant
-                text: root.thunderbirdSection
+                text: root.upcomingSection
             }
         }
     }
