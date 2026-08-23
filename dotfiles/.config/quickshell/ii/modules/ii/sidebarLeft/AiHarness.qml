@@ -147,6 +147,8 @@ FocusScope {
     readonly property int selectedRouteIndex: root.indexForRouteId(root.selectedRouteId)
     readonly property int effectiveRouteIndex: root.selectedRouteIndex >= 0 ? root.selectedRouteIndex : (root.availableModelRoutes.length > 0 ? 0 : -1)
     readonly property var selectedRoute: root.effectiveRouteIndex >= 0 ? root.availableModelRoutes[root.effectiveRouteIndex] : null
+    readonly property string displayedModel: root.trimmed(root.selectedRoute?.model ?? root.currentModel)
+    readonly property string displayedProvider: root.trimmed(root.selectedRoute?.provider ?? root.currentProvider)
     readonly property var selectedFallbackRoutes: root.selectedRoute ? root.fallbackRoutesFor(root.selectedRoute) : []
     readonly property var selectedRouteChain: root.selectedRoute ? [root.selectedRoute].concat(root.selectedFallbackRoutes) : []
     readonly property var installedOllamaLabels: {
@@ -1374,15 +1376,15 @@ FocusScope {
 
                 ApiInputBoxIndicator {
                     icon: "api"
-                    text: root.currentModel.trim().length > 0 ? root.currentModel.trim() : Translation.tr("default")
-                    tooltipText: Translation.tr("Hermes model override")
+                    text: root.displayedModel.length > 0 ? root.displayedModel : Translation.tr("default")
+                    tooltipText: Translation.tr("Selected model")
                 }
 
                 ApiInputBoxIndicator {
-                    visible: root.currentProvider.trim().length > 0
+                    visible: root.displayedProvider.length > 0
                     icon: "hub"
-                    text: root.currentProvider.trim()
-                    tooltipText: Translation.tr("Hermes provider override")
+                    text: root.displayedProvider
+                    tooltipText: Translation.tr("Selected provider")
                 }
 
                 Item {
