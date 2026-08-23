@@ -28,6 +28,7 @@ ShellRoot {
         IdleLockConfig.load()
         FirstRunExperience.load()
         ConflictKiller.load()
+        PeripheralSettings.load()
         Cliphist.refresh()
         Wallpapers.load()
         Updates.load()

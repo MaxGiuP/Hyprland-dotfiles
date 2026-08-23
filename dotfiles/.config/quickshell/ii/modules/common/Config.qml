@@ -535,6 +535,27 @@ Singleton {
                 }
             }
 
+            property JsonObject peripherals: JsonObject {
+                property JsonObject mouse: JsonObject {
+                    property real sensitivity: 0
+                    property string accelProfile: ""
+                    property real scrollFactor: 1
+                    property int followMouse: 1
+                    property bool leftHanded: false
+                }
+                property JsonObject touchpad: JsonObject {
+                    property bool naturalScroll: true
+                    property bool tapToClick: true
+                    property bool tapAndDrag: true
+                    property bool disableWhileTyping: true
+                    property bool dragLock: false
+                    property real scrollFactor: 0.5
+                }
+                property JsonObject keyboard: JsonObject {
+                    property bool numlockByDefault: true
+                }
+            }
+
             property JsonObject language: JsonObject {
                 property string ui: "auto" // UI language. "auto" for system locale, or specific language code like "zh_CN", "en_US"
                 property JsonObject translator: JsonObject {
