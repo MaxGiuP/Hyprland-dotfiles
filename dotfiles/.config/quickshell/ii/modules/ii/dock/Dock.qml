@@ -92,7 +92,7 @@ Scope { // Scope
                     ? dockRoot.revealRegionHeight + dockRoot.hiddenDockOvershoot
                     : 0)
 
-            property bool reveal: (root.pinned || !launchpadOnThisScreen)
+            property bool reveal: !launchpadOnThisScreen
                 && (
                     root.pinned
                     || (Config.options?.dock.hoverToReveal && dockMouseArea.containsMouse)
