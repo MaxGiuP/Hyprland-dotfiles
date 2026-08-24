@@ -22,8 +22,10 @@ Scope {
     property bool panelLoaded: true
     property string targetScreenName: ""
     property bool targetScreenPrepared: false
+    // Keep the prewarmed, hidden surface on a stable output. Following the
+    // focused monitor here migrates the PanelWindow on every pointer crossing
+    // and briefly exposes the drawer transition on the newly focused output.
     readonly property var targetScreenObject: Quickshell.screens.find(screen => screen.name === targetScreenName)
-                                               ?? Quickshell.screens.find(screen => screen.name === Hyprland.focusedMonitor?.name)
                                                ?? Quickshell.screens[0]
                                                ?? null
     readonly property int entranceDuration: 100
@@ -44,6 +46,7 @@ Scope {
         const focused = Quickshell.screens.find(screen => screen.name === focusedName);
         const resolved = preferred ?? focused ?? Quickshell.screens[0] ?? null;
         overviewScope.targetScreenName = resolved?.name ?? "";
+        GlobalStates.overviewScreen = overviewScope.targetScreenName;
         overviewScope.targetScreenPrepared = true;
     }
 
@@ -124,7 +127,7 @@ Scope {
                     panelWindow.handleOverviewClosed();
                 } else {
                     if (!overviewScope.targetScreenPrepared)
-                        overviewScope.prepareTargetScreen();
+                        overviewScope.prepareTargetScreen(GlobalStates.overviewScreen);
                     overviewScope.targetScreenPrepared = false;
                     panelWindow.handleOverviewOpened();
                 }

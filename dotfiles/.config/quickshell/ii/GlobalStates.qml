@@ -27,6 +27,7 @@ Singleton {
     property string liveCaptionsScreen: ""
     property bool overviewDrawerMode: false
     property bool overviewOpen: false
+    property string overviewScreen: ""
     property bool regionSelectorOpen: false
     property bool searchOpen: false
     property bool screenLocked: false
@@ -390,13 +391,27 @@ Singleton {
         root.sidebarRightOpen = true
     }
 
-    function toggleOverviewDrawer() {
+    function resolvedOverviewScreen(preferredScreen = "") {
+        return preferredScreen
+            || HyprlandData.monitors.find(m => m.focused)?.name
+            || Hyprland.focusedMonitor?.name
+            || Quickshell.screens[0]?.name
+            || ""
+    }
+
+    function toggleOverviewDrawer(preferredScreen = "") {
         if (root.overviewOpen && root.overviewDrawerMode) {
             root.overviewOpen = false
         } else {
+            root.overviewScreen = root.resolvedOverviewScreen(preferredScreen)
             root.overviewDrawerMode = true
             root.overviewOpen = true
         }
+    }
+
+    onOverviewOpenChanged: {
+        if (!overviewOpen)
+            overviewScreen = ""
     }
 
     onSidebarRightOpenChanged: {

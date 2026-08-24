@@ -107,7 +107,9 @@ Scope { // Scope
                 right: true
             }
 
-            readonly property bool launchpadOnThisScreen: (GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode)
+            readonly property bool launchpadOnThisScreen: (GlobalStates.overviewOpen
+                    && GlobalStates.overviewDrawerMode
+                    && screenName === GlobalStates.overviewScreen)
                 || (GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen)
             exclusiveZone: (dockRoot.visible && root.pinned && !launchpadOnThisScreen)
                 ? Math.max(0, implicitHeight
@@ -123,13 +125,17 @@ Scope { // Scope
 
             Connections {
                 target: GlobalStates
-                function onOverviewDrawerModeChanged() {
-                    if (GlobalStates.overviewDrawerMode) {
+                function syncDrawerFocusGrab() {
+                    GlobalFocusGrab.removePersistent(dockRoot)
+                    if (GlobalStates.overviewOpen
+                            && GlobalStates.overviewDrawerMode
+                            && dockRoot.launchpadOnThisScreen) {
                         GlobalFocusGrab.addPersistent(dockRoot)
-                    } else {
-                        GlobalFocusGrab.removePersistent(dockRoot)
                     }
                 }
+                function onOverviewDrawerModeChanged() { syncDrawerFocusGrab() }
+                function onOverviewOpenChanged() { syncDrawerFocusGrab() }
+                function onOverviewScreenChanged() { syncDrawerFocusGrab() }
             }
 
             implicitHeight: (Config.options?.dock.height ?? 70) + Appearance.sizes.elevationMargin + Appearance.sizes.hyprlandGapsOut
@@ -512,7 +518,7 @@ Scope { // Scope
                                 visualSize: root.edgeButtonVisualSize
                                 Layout.fillHeight: true
                                 Layout.topMargin: Appearance.sizes.hyprlandGapsOut
-                                onClicked: GlobalStates.toggleOverviewDrawer()
+                                onClicked: GlobalStates.toggleOverviewDrawer(dockRoot.screenName)
                                 topInset: Appearance.sizes.hyprlandGapsOut + dockRow.padding
                                 bottomInset: Appearance.sizes.hyprlandGapsOut + dockRow.padding
 

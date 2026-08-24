@@ -118,8 +118,18 @@ DockButton {
         root.appListRoot.observeAppWindows(String(root.appToplevel?.appId ?? ""), root.appWindowCount())
     }
 
-    Component.onCompleted: Qt.callLater(root.reportWindowCount)
-    onAppToplevelChanged: Qt.callLater(root.reportWindowCount)
+    // Keep deferred model updates owned by the delegate. Qt.callLater can run
+    // after a repeater rebuild has destroyed this button, producing invalid
+    // context errors for every dock app during startup.
+    Timer {
+        id: reportWindowCountTimer
+        interval: 0
+        repeat: false
+        onTriggered: root.reportWindowCount()
+    }
+
+    Component.onCompleted: reportWindowCountTimer.start()
+    onAppToplevelChanged: reportWindowCountTimer.restart()
 
     Connections {
         target: root.appToplevel
