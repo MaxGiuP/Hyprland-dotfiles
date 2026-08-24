@@ -410,8 +410,10 @@ Singleton {
     }
 
     onOverviewOpenChanged: {
-        if (!overviewOpen)
+        if (!overviewOpen) {
+            overviewDrawerMode = false
             overviewScreen = ""
+        }
     }
 
     onSidebarRightOpenChanged: {

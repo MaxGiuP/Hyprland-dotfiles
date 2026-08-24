@@ -66,7 +66,11 @@ Scope {
 
         WlrLayershell.namespace: "quickshell:overview"
         WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: GlobalStates.overviewOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: !GlobalStates.overviewOpen
+            ? WlrKeyboardFocus.None
+            : GlobalStates.overviewDrawerMode
+                ? WlrKeyboardFocus.OnDemand
+                : WlrKeyboardFocus.Exclusive
         color: "transparent"
 
         mask: Region {
@@ -102,7 +106,7 @@ Scope {
             repeat: false
             onTriggered: {
                 searchWidget.focusSearchInput();
-                GlobalFocusGrab.addDismissable(panelWindow);
+                panelWindow.syncFocusGrab();
             }
         }
         Timer {
@@ -136,6 +140,7 @@ Scope {
                 if (GlobalStates.overviewDrawerMode && searchWidget.displayedText.length > 0) {
                     searchWidget.setSearchingText("");
                 }
+                panelWindow.syncFocusGrab();
             }
         }
 
@@ -151,6 +156,12 @@ Scope {
         function setSearchingText(text) {
             searchWidget.setSearchingText(text);
             searchWidget.focusFirstItem();
+        }
+
+        function syncFocusGrab() {
+            GlobalFocusGrab.removeDismissable(panelWindow);
+            if (GlobalStates.overviewOpen && !GlobalStates.overviewDrawerMode)
+                GlobalFocusGrab.addDismissable(panelWindow);
         }
 
         function handleOverviewClosed() {
@@ -299,11 +310,75 @@ Scope {
     }
     }
 
+    // The overview surface only exists on its target output. Give every other
+    // output a transparent click catcher while the drawer is open so an
+    // outside click dismisses it without making pointer focus changes do so.
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            id: outsideDismissWindow
+            required property ShellScreen modelData
+            readonly property string screenName: modelData?.name ?? ""
+            readonly property bool dismissActive: GlobalStates.overviewOpen
+                && GlobalStates.overviewDrawerMode
+                && screenName !== GlobalStates.overviewScreen
+
+            screen: modelData
+            visible: dismissActive
+            exclusiveZone: 0
+            color: "transparent"
+
+            WlrLayershell.namespace: "quickshell:overviewDismiss"
+            WlrLayershell.layer: WlrLayer.Top
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
+
+            anchors {
+                top: true
+                bottom: true
+                left: true
+                right: true
+            }
+
+            Rectangle {
+                id: outsideInputSurface
+                anchors.fill: parent
+                color: Qt.rgba(0, 0, 0, 0.001)
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.LeftButton
+                    onClicked: {
+                        GlobalStates.overviewOpen = false;
+                    }
+                }
+            }
+        }
+    }
+
+    function toggleNormalOverview(preferredScreen = "") {
+        if (GlobalStates.overviewOpen) {
+            GlobalStates.overviewOpen = false;
+            return;
+        }
+
+        GlobalStates.overviewDrawerMode = false;
+        overviewScope.prepareTargetScreen(preferredScreen);
+        GlobalStates.overviewOpen = true;
+    }
+
+    function openNormalOverview(preferredScreen = "") {
+        GlobalStates.overviewDrawerMode = false;
+        overviewScope.prepareTargetScreen(preferredScreen);
+        GlobalStates.overviewOpen = true;
+    }
+
     function toggleClipboard() {
         if (GlobalStates.overviewOpen && overviewScope.dontAutoCancelSearch) {
             GlobalStates.overviewOpen = false;
             return;
         }
+        GlobalStates.overviewDrawerMode = false;
         overviewScope.dontAutoCancelSearch = true;
         overviewScope.requestSearch(Config.options.search.prefix.clipboard);
         GlobalStates.overviewOpen = true;
@@ -314,6 +389,7 @@ Scope {
             GlobalStates.overviewOpen = false;
             return;
         }
+        GlobalStates.overviewDrawerMode = false;
         overviewScope.dontAutoCancelSearch = true;
         overviewScope.requestSearch(Config.options.search.prefix.emojis);
         GlobalStates.overviewOpen = true;
@@ -324,35 +400,26 @@ Scope {
             GlobalStates.superReleaseMightTrigger = true;
             return;
         }
-        if (!GlobalStates.overviewOpen)
-            overviewScope.prepareTargetScreen();
-        GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+        overviewScope.toggleNormalOverview();
     }
 
     IpcHandler {
         target: "search"
 
         function toggle() {
-            if (!GlobalStates.overviewOpen)
-                overviewScope.prepareTargetScreen();
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            overviewScope.toggleNormalOverview();
         }
         function toggleOnScreen(screenName: string) {
-            if (!GlobalStates.overviewOpen)
-                overviewScope.prepareTargetScreen(screenName);
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            overviewScope.toggleNormalOverview(screenName);
         }
         function workspacesToggle() {
-            if (!GlobalStates.overviewOpen)
-                overviewScope.prepareTargetScreen();
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
+            overviewScope.toggleNormalOverview();
         }
         function close() {
             GlobalStates.overviewOpen = false;
         }
         function open() {
-            overviewScope.prepareTargetScreen();
-            GlobalStates.overviewOpen = true;
+            overviewScope.openNormalOverview();
         }
         function toggleReleaseInterrupt() {
             GlobalStates.superReleaseMightTrigger = false;
@@ -366,11 +433,7 @@ Scope {
         name: "searchToggle"
         description: "Toggles search on press"
 
-        onPressed: {
-            if (!GlobalStates.overviewOpen)
-                overviewScope.prepareTargetScreen();
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
-        }
+        onPressed: overviewScope.toggleNormalOverview()
     }
     GlobalShortcut {
         name: "overviewWorkspacesClose"
@@ -384,11 +447,7 @@ Scope {
         name: "overviewWorkspacesToggle"
         description: "Toggles overview on press"
 
-        onPressed: {
-            if (!GlobalStates.overviewOpen)
-                overviewScope.prepareTargetScreen();
-            GlobalStates.overviewOpen = !GlobalStates.overviewOpen;
-        }
+        onPressed: overviewScope.toggleNormalOverview()
     }
     GlobalShortcut {
         name: "searchToggleRelease"
