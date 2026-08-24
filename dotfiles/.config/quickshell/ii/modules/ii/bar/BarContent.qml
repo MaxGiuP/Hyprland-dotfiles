@@ -126,10 +126,14 @@ Item { // Bar content region
                 preferredScreen: root.screen?.name ?? ""
                 Layout.alignment: Qt.AlignVCenter
                 Layout.leftMargin: Appearance.rounding.screenRounding
-                colBackground: barLeftSideMouseArea.hovered
-                    ? root.controlHoverColor
-                    : (Appearance.m3colors.darkmode ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1) : root.controlSurfaceColor)
-                colBackgroundHover: root.controlHoverColor
+                colBackground: Config.options?.bar.borderless
+                    ? "transparent"
+                    : (barLeftSideMouseArea.hovered
+                        ? root.controlHoverColor
+                        : (Appearance.m3colors.darkmode ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1) : root.controlSurfaceColor))
+                colBackgroundHover: Config.options?.bar.borderless ? "transparent" : root.controlHoverColor
+                colBackgroundToggled: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colSecondaryContainer
+                colBackgroundToggledHover: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colSecondaryContainerHover
             }
 
             BarGroup {
@@ -285,13 +289,15 @@ Item { // Bar content region
                 implicitHeight: Math.min(indicatorsRowLayout.implicitHeight + 5 * 2, Appearance.sizes.barHeight)
 
                 buttonRadius: Appearance.rounding.full
-                colBackground: barRightSideMouseArea.hovered
-                    ? root.controlHoverColor
-                    : (Appearance.m3colors.darkmode ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1) : root.controlSurfaceColor)
-                colBackgroundHover: root.controlHoverColor
+                colBackground: Config.options?.bar.borderless
+                    ? "transparent"
+                    : (barRightSideMouseArea.hovered
+                        ? root.controlHoverColor
+                        : (Appearance.m3colors.darkmode ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 1) : root.controlSurfaceColor))
+                colBackgroundHover: Config.options?.bar.borderless ? "transparent" : root.controlHoverColor
                 colRipple: Appearance.colors.colLayer1Active
-                colBackgroundToggled: Appearance.colors.colSecondaryContainer
-                colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
+                colBackgroundToggled: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colSecondaryContainer
+                colBackgroundToggledHover: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colSecondaryContainerHover
                 colRippleToggled: Appearance.colors.colSecondaryContainerActive
                 toggled: GlobalStates.sidebarRightOpen && GlobalStates.sidebarRightScreen === (root.screen?.name ?? "")
                 property color colText: toggled ? Appearance.m3colors.m3onSecondaryContainer : Appearance.colors.colOnLayer0

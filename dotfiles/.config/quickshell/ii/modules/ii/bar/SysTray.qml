@@ -80,8 +80,9 @@ Item {
             background.implicitWidth: 24
             background.implicitHeight: 24
             background.anchors.centerIn: this
-            colBackgroundToggled: Appearance.colors.colSecondaryContainer
-            colBackgroundToggledHover: Appearance.colors.colSecondaryContainerHover
+            colBackgroundHover: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colLayer1Hover
+            colBackgroundToggled: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colSecondaryContainer
+            colBackgroundToggledHover: Config.options?.bar.borderless ? "transparent" : Appearance.colors.colSecondaryContainerHover
             colRippleToggled: Appearance.colors.colSecondaryContainerActive
 
             contentItem: MaterialSymbol {

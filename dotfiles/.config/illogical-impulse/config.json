@@ -157,7 +157,7 @@
             }
         },
         "backgroundOpacity": 0,
-        "borderless": false,
+        "borderless": true,
         "bottom": false,
         "cornerStyle": 1,
         "floatStyleShadow": true,
