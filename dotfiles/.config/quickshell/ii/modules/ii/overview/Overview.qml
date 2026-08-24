@@ -248,14 +248,13 @@ Scope {
                 id: overviewLoader
                 anchors.horizontalCenter: parent.horizontalCenter
                 width: item?.implicitWidth ?? 0
-                height: GlobalStates.overviewDrawerMode ? 0 : (item?.implicitHeight ?? 0)
+                height: item?.implicitHeight ?? 0
                 asynchronous: true
                 active: panelWindow.overviewContentReady
                     && (Config?.options.overview.enable ?? true)
                 sourceComponent: OverviewWidget {
                     screen: panelWindow.screen
                     visible: GlobalStates.overviewOpen
-                        && !GlobalStates.overviewDrawerMode
                         && searchWidget.displayedText == ""
                 }
             }
