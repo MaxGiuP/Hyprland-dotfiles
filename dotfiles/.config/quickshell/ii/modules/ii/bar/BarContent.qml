@@ -16,6 +16,7 @@ Item { // Bar content region
     property var brightnessMonitor: Brightness.getMonitorForScreen(screen)
     property real useShortenedForm: (Appearance.sizes.barHellaShortenScreenWidthThreshold >= screen?.width) ? 2 : (Appearance.sizes.barShortenScreenWidthThreshold >= screen?.width) ? 1 : 0
     readonly property int centerSideModuleWidth: (useShortenedForm == 2) ? Appearance.sizes.barCenterSideModuleWidthHellaShortened : (useShortenedForm == 1) ? Appearance.sizes.barCenterSideModuleWidthShortened : Appearance.sizes.barCenterSideModuleWidth
+    readonly property real groupVerticalInset: 4 + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
 
     // Light palettes need more depth than the generated Material surfaces provide.
     // Keep the existing dark-mode colors, but make the bar and its controls clearly
@@ -174,8 +175,8 @@ Item { // Bar content region
         Rectangle {
             anchors {
                 fill: parent
-                topMargin: 4
-                bottomMargin: 4
+                topMargin: root.groupVerticalInset
+                bottomMargin: root.groupVerticalInset
             }
             color: Config.options?.bar.borderless ? "transparent" : root.controlSurfaceColor
             radius: Appearance.rounding.small

@@ -7,6 +7,7 @@ Item {
     id: root
     property bool vertical: false
     property real padding: 5
+    readonly property real floatingBarInset: Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0
     readonly property color backgroundColor: Appearance.m3colors.darkmode
         ? Appearance.colors.colLayer1
         : ColorUtils.mix(Appearance.colors.colLayer0Base, Appearance.colors.colOnLayer0, 0.88)
@@ -21,8 +22,8 @@ Item {
         id: background
         anchors {
             fill: parent
-            topMargin: root.vertical ? 0 : 4
-            bottomMargin: root.vertical ? 0 : 4
+            topMargin: root.vertical ? 0 : 4 + root.floatingBarInset
+            bottomMargin: root.vertical ? 0 : 4 + root.floatingBarInset
             leftMargin: root.vertical ? 4 : 0
             rightMargin: root.vertical ? 4 : 0
         }
