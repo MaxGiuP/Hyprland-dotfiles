@@ -20,6 +20,7 @@ Personal Hyprland desktop config — Quickshell bar, Illogical-Impulse theming, 
 | `Kvantum` | Qt theming |
 | `nwg-look` | GTK theme switcher settings |
 | `fish` | Fish shell config |
+| `wallpapers/dynamic-system` | Colour-calibrated morning/day/evening/night wallpaper set |
 
 ## Screenshots
 
@@ -42,6 +43,10 @@ bash install.sh -n
 ```
 
 Log out and back into Hyprland after installing.
+
+The installer also deploys the curated dynamic wallpaper set to
+`~/Pictures/Wallpapers/dynamic-system`. Existing active period wallpapers are
+moved into a timestamped archive before the new set is installed.
 
 ### KDE Wallet auto-unlock
 

@@ -17,6 +17,8 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$REPO_DIR/dotfiles/.config"
+WALLPAPER_SRC="$REPO_DIR/wallpapers/dynamic-system"
+WALLPAPER_DST="$HOME/Pictures/Wallpapers/dynamic-system"
 
 # ── Configs managed by this repo ─────────────────────────────────────────────
 MANAGED=(
@@ -158,6 +160,48 @@ for cfg in "${MANAGED[@]}"; do
     ok "$cfg installed"
     installed+=("$cfg")
 done
+
+# ── Curated dynamic wallpaper set ────────────────────────────────────────────
+if [[ -d "$WALLPAPER_SRC" ]]; then
+    hdr "  dynamic wallpapers"
+    echo -e "    ${WALLPAPER_SRC}  →  ${WALLPAPER_DST}"
+
+    wallpaper_changes=""
+    for period in morning day evening night; do
+        period_changes=$(rsync -rin --delete \
+            "$WALLPAPER_SRC/$period/" "$WALLPAPER_DST/$period/" 2>/dev/null || true)
+        [[ -n "$period_changes" ]] && wallpaper_changes+="${period}:\n${period_changes}\n"
+    done
+
+    if [[ -z "$wallpaper_changes" ]]; then
+        ok "dynamic wallpapers — already up to date"
+        installed+=("dynamic-wallpapers")
+    else
+        echo -e "    ${YLW}Changes that will be applied:${NC}"
+        echo -e "$wallpaper_changes" | sed '/^$/d; s/^/      /'
+
+        if [[ $DRY -eq 1 ]]; then
+            info "dynamic wallpapers — skipped (dry-run)"
+        elif [[ $YES -eq 1 ]] || confirm "Install curated dynamic wallpapers?"; then
+            stamp=$(date +%Y%m%d_%H%M%S)
+            archive_dir="$WALLPAPER_DST/archive-$stamp"
+            install -d "$archive_dir"
+
+            for period in morning day evening night; do
+                install -d "$WALLPAPER_DST/$period" "$archive_dir/$period"
+                find "$WALLPAPER_DST/$period" -maxdepth 1 -type f \
+                    -exec mv -t "$archive_dir/$period" -- {} +
+                rsync -a "$WALLPAPER_SRC/$period/" "$WALLPAPER_DST/$period/"
+            done
+
+            ok "dynamic wallpapers installed; previous active set archived at $archive_dir"
+            installed+=("dynamic-wallpapers")
+        else
+            warn "dynamic wallpapers — skipped by user"
+            skipped+=("dynamic-wallpapers")
+        fi
+    fi
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""

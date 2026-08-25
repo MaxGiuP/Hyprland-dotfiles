@@ -220,7 +220,9 @@ def schedule_for(now: datetime, latitude: float, longitude: float) -> dict[str, 
         "morning_start": sunrise - timedelta(minutes=30),
         "morning_end": morning_end,
         "evening_start": evening_start,
-        "evening_end": sunset + timedelta(minutes=90),
+        # Move to the genuinely dark wallpaper shortly after sunset. Ninety
+        # minutes kept bright evening artwork on screen well into dusk.
+        "evening_end": sunset + timedelta(minutes=35),
     }
 
 
