@@ -46,6 +46,22 @@ Variants {
         // Wallpaper
         property bool wallpaperIsVideo: Config.options.background.wallpaperPath.endsWith(".mp4") || Config.options.background.wallpaperPath.endsWith(".webm") || Config.options.background.wallpaperPath.endsWith(".mkv") || Config.options.background.wallpaperPath.endsWith(".avi") || Config.options.background.wallpaperPath.endsWith(".mov")
         property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath
+        property bool wallpaperAnimationArmed: false
+        property string displayedWallpaperPath: wallpaperPath
+        property string revealWallpaperPath: ""
+        property string queuedRevealWallpaperPath: ""
+        property bool wallpaperRevealActive: false
+        property bool wallpaperRevealPending: false
+        property bool wallpaperRevealWarming: false
+        property int wallpaperRevealWarmupFrames: 0
+        property bool wallpaperPreloadWarming: false
+        property int wallpaperPreloadWarmupFrames: 0
+        property real wallpaperRevealProgress: 1
+        readonly property real wallpaperRevealOriginX: screenWidth
+        readonly property real wallpaperRevealOriginY: 0
+        readonly property real wallpaperRevealEdge: Math.max(48, Math.min(screenWidth, screenHeight) * 0.075)
+        readonly property real wallpaperRevealMaxRadius: Math.sqrt(screenWidth * screenWidth + screenHeight * screenHeight) + wallpaperRevealEdge * 5
+        readonly property real wallpaperRevealRadius: wallpaperRevealMaxRadius * wallpaperRevealProgress
         property bool wallpaperSafetyTriggered: {
             const enabled = Config.options.workSafety.enable.wallpaper;
             const sensitiveWallpaper = (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.workSafety.triggerCondition.fileKeywords));
@@ -100,12 +116,98 @@ Variants {
         }
 
         onWallpaperPathChanged: {
-            bgRoot.updateZoomScale();
+            if (bgRoot.wallpaperAnimationArmed && bgRoot.wallpaperPath.length > 0 && !bgRoot.wallpaperIsVideo && !bgRoot.wallpaperSafetyTriggered && bgRoot.displayedWallpaperPath.length > 0 && bgRoot.displayedWallpaperPath !== bgRoot.wallpaperPath) {
+                if (bgRoot.wallpaperRevealActive)
+                    bgRoot.queuedRevealWallpaperPath = bgRoot.wallpaperPath;
+                else
+                    bgRoot.beginWallpaperReveal(bgRoot.wallpaperPath);
+            } else {
+                bgRoot.commitWallpaperPath(bgRoot.wallpaperPath);
+                bgRoot.updateZoomScale();
+            }
             // Clock position gets updated after zoom scale is updated
+        }
+        Component.onCompleted: {
+            displayedWallpaperPath = wallpaperPath
+            wallpaperAnimationArmed = true
+            updateZoomScale()
         }
         onPreferredWallpaperScaleChanged: bgRoot.updateZoomScale()
         onScreenWidthChanged: bgRoot.updateZoomScale()
         onScreenHeightChanged: bgRoot.updateZoomScale()
+
+        function commitWallpaperPath(path) {
+            wallpaperRevealAnimation.stop()
+            displayedWallpaperPath = path
+            revealWallpaperPath = ""
+            queuedRevealWallpaperPath = ""
+            wallpaperRevealActive = false
+            wallpaperRevealPending = false
+            wallpaperRevealWarming = false
+            wallpaperRevealWarmupFrames = 0
+            wallpaperRevealProgress = 1
+        }
+
+        function beginWallpaperReveal(path) {
+            wallpaperRevealAnimation.stop()
+            revealWallpaperPath = path
+            wallpaperRevealActive = true
+            wallpaperRevealPending = true
+            wallpaperRevealWarming = false
+            wallpaperRevealWarmupFrames = 0
+            wallpaperRevealProgress = 0
+            Qt.callLater(bgRoot.startWallpaperRevealIfReady)
+        }
+
+        function startWallpaperRevealIfReady() {
+            if (!wallpaperRevealPending)
+                return
+            if (wallpaperReveal.status === Image.Ready) {
+                wallpaperRevealPending = false
+                wallpaperRevealWarming = true
+                wallpaperRevealWarmupFrames = 0
+                wallpaperRevealTexture.scheduleUpdate()
+            } else if (wallpaperReveal.status === Image.Error) {
+                commitWallpaperPath(revealWallpaperPath)
+            }
+        }
+
+        function startWallpaperRevealAnimation() {
+            if (!wallpaperRevealActive || revealWallpaperPath.length === 0 || wallpaperReveal.status !== Image.Ready)
+                return
+            wallpaperRevealTexture.scheduleUpdate()
+            wallpaperRevealWarming = false
+            wallpaperRevealWarmupFrames = 0
+            wallpaperRevealProgress = 0
+            wallpaperRevealAnimation.restart()
+        }
+
+        function finishWallpaperReveal() {
+            const nextPath = queuedRevealWallpaperPath
+            displayedWallpaperPath = revealWallpaperPath
+            revealWallpaperPath = ""
+            queuedRevealWallpaperPath = ""
+            wallpaperRevealActive = false
+            wallpaperRevealPending = false
+            wallpaperRevealWarming = false
+            wallpaperRevealWarmupFrames = 0
+            wallpaperRevealProgress = 1
+            updateZoomScale()
+            if (nextPath.length > 0 && nextPath !== displayedWallpaperPath && nextPath === wallpaperPath && !wallpaperIsVideo && !wallpaperSafetyTriggered)
+                Qt.callLater(() => bgRoot.beginWallpaperReveal(nextPath))
+        }
+
+        function startWallpaperPreloadWarmupIfReady() {
+            if (!Wallpapers.preloadWallpaperPath || Wallpapers.preloadWallpaperPath.length === 0) {
+                wallpaperPreloadWarming = false
+                wallpaperPreloadWarmupFrames = 0
+                return
+            }
+            if (wallpaperPreload.status === Image.Ready) {
+                wallpaperPreloadWarmupFrames = 0
+                wallpaperPreloadWarming = true
+            }
+        }
 
         // Wallpaper zoom scale
         function updateZoomScale() {
@@ -124,7 +226,7 @@ Variants {
                     const output = wallpaperSizeOutputCollector.text;
                     const [width, height] = output.split(" ").map(Number);
                     const [screenWidth, screenHeight] = [bgRoot.screenWidth, bgRoot.screenHeight];
-                    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+                    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
                         bgRoot.wallpaperWidth = Math.max(1, screenWidth);
                         bgRoot.wallpaperHeight = Math.max(1, screenHeight);
                         bgRoot.effectiveWallpaperScale = bgRoot.preferredWallpaperScale;
@@ -144,16 +246,72 @@ Variants {
             }
         }
 
+        SequentialAnimation {
+            id: wallpaperRevealAnimation
+            NumberAnimation {
+                target: bgRoot
+                property: "wallpaperRevealProgress"
+                from: 0
+                to: 1
+                duration: 1150
+                easing.type: Easing.Linear
+            }
+            ScriptAction {
+                script: bgRoot.finishWallpaperReveal()
+            }
+        }
+
+        FrameAnimation {
+            running: bgRoot.wallpaperRevealWarming
+            onTriggered: {
+                wallpaperRevealTexture.scheduleUpdate()
+                bgRoot.wallpaperRevealWarmupFrames += 1
+                if (bgRoot.wallpaperRevealWarmupFrames >= 3)
+                    bgRoot.startWallpaperRevealAnimation()
+            }
+        }
+
+        FrameAnimation {
+            running: bgRoot.wallpaperPreloadWarming
+            onTriggered: {
+                bgRoot.wallpaperPreloadWarmupFrames += 1
+                if (bgRoot.wallpaperPreloadWarmupFrames >= 3) {
+                    bgRoot.wallpaperPreloadWarming = false
+                    Wallpapers.markPreloadReady(Wallpapers.preloadWallpaperPath, bgRoot.monitor?.name ?? screenScope.modelData?.name ?? "")
+                }
+            }
+        }
+
         Item {
             anchors.fill: parent
             clip: true
+
+            Image {
+                id: wallpaperPreload
+                readonly property bool shouldPreload: Wallpapers.preloadWallpaperPath.length > 0 && Wallpapers.preloadWallpaperPath !== bgRoot.displayedWallpaperPath
+                anchors.fill: parent
+                visible: false
+                asynchronous: true
+                cache: true
+                smooth: false
+                source: shouldPreload ? Wallpapers.preloadWallpaperPath : ""
+                fillMode: Image.PreserveAspectCrop
+                transformOrigin: Item.Center
+                scale: 1
+                sourceSize {
+                    width: bgRoot.screenWidth * bgRoot.monitorScale
+                    height: bgRoot.screenHeight * bgRoot.monitorScale
+                }
+                onSourceChanged: bgRoot.startWallpaperPreloadWarmupIfReady()
+                onStatusChanged: bgRoot.startWallpaperPreloadWarmupIfReady()
+            }
 
             // Wallpaper
             StyledImage {
                 id: wallpaper
                 visible: opacity > 0
                 opacity: (status === Image.Ready && !bgRoot.wallpaperIsVideo) ? 1 : 0
-                cache: false
+                cache: true
                 smooth: false
                 // Range = groups that workspaces span on
                 property int chunkSize: Config?.options.bar.workspaces.shown ?? 10
@@ -181,8 +339,10 @@ Variants {
                 property real effectiveValueY: Math.max(0, Math.min(1, valueY))
                 x: -(bgRoot.movableXSpace) - (effectiveValueX - 0.5) * 2 * bgRoot.movableXSpace
                 y: -(bgRoot.movableYSpace) - (effectiveValueY - 0.5) * 2 * bgRoot.movableYSpace
-                source: bgRoot.wallpaperSafetyTriggered ? "" : bgRoot.wallpaperPath
+                source: bgRoot.wallpaperSafetyTriggered ? "" : bgRoot.displayedWallpaperPath
                 fillMode: Image.PreserveAspectCrop
+                transformOrigin: Item.Center
+                scale: 1
                 Behavior on x {
                     NumberAnimation {
                         duration: 600
@@ -201,6 +361,54 @@ Variants {
                 }
                 width: bgRoot.wallpaperWidth / bgRoot.wallpaperToScreenRatio * bgRoot.effectiveWallpaperScale
                 height: bgRoot.wallpaperHeight / bgRoot.wallpaperToScreenRatio * bgRoot.effectiveWallpaperScale
+            }
+
+            Item {
+                id: wallpaperRevealSourceItem
+                anchors.fill: parent
+                visible: bgRoot.wallpaperRevealActive && bgRoot.revealWallpaperPath.length > 0
+
+                Image {
+                    id: wallpaperReveal
+                    anchors.fill: parent
+                    visible: true
+                    opacity: 1
+                    asynchronous: true
+                    cache: true
+                    smooth: false
+                    source: bgRoot.wallpaperSafetyTriggered ? "" : bgRoot.revealWallpaperPath
+                    fillMode: Image.PreserveAspectCrop
+                    transformOrigin: Item.Center
+                    scale: 1
+                    sourceSize {
+                        width: bgRoot.screenWidth * bgRoot.monitorScale
+                        height: bgRoot.screenHeight * bgRoot.monitorScale
+                    }
+                    onStatusChanged: bgRoot.startWallpaperRevealIfReady()
+                }
+            }
+
+            ShaderEffect {
+                id: wallpaperRevealShader
+                anchors.fill: parent
+                visible: bgRoot.wallpaperRevealActive && wallpaperReveal.status === Image.Ready
+                blending: true
+                property variant source: wallpaperRevealTexture
+                property vector2d screenSize: Qt.vector2d(width, height)
+                property vector2d origin: Qt.vector2d(bgRoot.wallpaperRevealOriginX, bgRoot.wallpaperRevealOriginY)
+                property real radius: bgRoot.wallpaperRevealRadius
+                property real edge: bgRoot.wallpaperRevealEdge
+                property real progress: bgRoot.wallpaperRevealProgress
+                fragmentShader: "shaders/wallpaper_reveal.frag.qsb"
+            }
+
+            ShaderEffectSource {
+                id: wallpaperRevealTexture
+                visible: false
+                sourceItem: wallpaperRevealSourceItem
+                live: bgRoot.wallpaperRevealWarming
+                hideSource: true
+                recursive: false
             }
 
             Rectangle {
@@ -355,6 +563,7 @@ Variants {
                     id: weatherWidgetLoader
                     shown: Config.options.background.widgets.weather.enable
                     sourceComponent: WeatherWidget {
+                        placementPaused: bgRoot.wallpaperRevealActive || bgRoot.wallpaperRevealPending || bgRoot.wallpaperRevealWarming
                         screenWidth: bgRoot.screenWidth
                         screenHeight: bgRoot.screenHeight
                         scaledScreenWidth: bgRoot.screenWidth / bgRoot.effectiveWallpaperScale
@@ -366,6 +575,7 @@ Variants {
                 FadeLoader {
                     shown: Config.options.background.widgets.clock.enable && !GlobalStates.screenLocked
                     sourceComponent: ClockWidget {
+                        placementPaused: bgRoot.wallpaperRevealActive || bgRoot.wallpaperRevealPending || bgRoot.wallpaperRevealWarming
                         screenWidth: bgRoot.screenWidth
                         screenHeight: bgRoot.screenHeight
                         scaledScreenWidth: bgRoot.screenWidth / bgRoot.effectiveWallpaperScale

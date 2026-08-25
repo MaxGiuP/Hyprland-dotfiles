@@ -30,7 +30,7 @@ if [[ -z "$address" ]]; then
     exit 0
 fi
 
-hyprctl dispatch closewindow "address:${address}" >/dev/null 2>&1 || true
+/home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh closewindow "address:${address}" >/dev/null 2>&1 || true
 
 for _ in $(seq 1 30); do
     clients_json="$(tv_clients_json || true)"

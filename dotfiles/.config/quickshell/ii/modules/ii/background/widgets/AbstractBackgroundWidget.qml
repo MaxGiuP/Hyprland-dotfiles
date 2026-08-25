@@ -24,6 +24,8 @@ AbstractWidget {
     readonly property real effectiveWidgetHeight: Math.max(implicitHeight, 1)
     property real targetX: Math.max(0, Math.min(configEntry.x, scaledScreenWidth - effectiveWidgetWidth))
     property real targetY : Math.max(0, Math.min(configEntry.y, scaledScreenHeight - effectiveWidgetHeight))
+    property bool placementPaused: false
+    property bool placementRefreshPending: false
     x: targetX
     y: targetY
     visible: opacity > 0
@@ -67,19 +69,34 @@ AbstractWidget {
         target: Config
         function onReadyChanged() { refreshPlacementIfNeeded() }
     }
+    onPlacementPausedChanged: {
+        if (!placementPaused && placementRefreshPending) {
+            placementRefreshPending = false;
+            refreshPlacementIfNeeded();
+        }
+    }
     Component.onCompleted: Qt.callLater(root.refreshPlacementIfNeeded)
     function refreshPlacementIfNeeded() {
         if (!Config.ready) return;
         if (root.scaledScreenWidth <= 0 || root.scaledScreenHeight <= 0) return;
         if (root.effectiveWidgetWidth <= 0 || root.effectiveWidgetHeight <= 0) return;
         if (root.placementStrategy === "free" && !root.needsColText) return;
+        if (root.placementPaused) {
+            placementRefreshPending = true;
+            return;
+        }
+        placementRefreshPending = false;
         placementRefreshDebounce.restart();
     }
     Timer {
         id: placementRefreshDebounce
-        interval: 80
+        interval: 1250
         repeat: false
         onTriggered: {
+            if (root.placementPaused) {
+                root.placementRefreshPending = true;
+                return;
+            }
             leastBusyRegionProc.wallpaperPath = root.wallpaperPath;
             leastBusyRegionProc.running = false;
             leastBusyRegionProc.running = true;

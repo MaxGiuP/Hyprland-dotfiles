@@ -6,6 +6,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
+import qs.modules.common
 
 /**
  * Provides access to some Hyprland data not available in Quickshell.Hyprland.
@@ -47,7 +48,9 @@ Singleton {
         return root.windowHasValidSize(root.clientForToplevel(toplevel));
     }
 
-    function captureSourceForToplevel(toplevel) {
+    function captureSourceForToplevel(toplevel, requireLivePreviewSetting = true) {
+        if (requireLivePreviewSetting && !(Config.options?.overview?.livePreviews ?? false))
+            return null;
         return root.toplevelHasValidSize(toplevel) ? toplevel : null;
     }
 
@@ -85,7 +88,7 @@ Singleton {
         Quickshell.execDetached([
             "hyprctl",
             "--batch",
-            `dispatch focuswindow address:${address}; dispatch fullscreenstate ${normalizedState} ${normalizedState} set`
+            `dispatch hl.dsp.focus({ window = "address:${address}" }); dispatch hl.dsp.window.fullscreen_state({ internal = ${normalizedState}, client = ${normalizedState}, action = "set" })`
         ]);
     }
 
@@ -303,6 +306,16 @@ Singleton {
         return specialName === "special:tv" || specialName === "special:tv-app";
     }
 
+    function monitorShowsTvModeWorkspace(monitorName) {
+        if (!monitorName)
+            return false;
+
+        const monitor = root.monitors.find(m => m.name === monitorName);
+        const activeWorkspaceName = `${monitor?.activeWorkspace?.name ?? ""}`;
+        return root.monitorShowsTvSpecialWorkspace(monitorName)
+            || (monitorName === "HDMI-A-2" && activeWorkspaceName === "21");
+    }
+
     Component.onCompleted: {
         updateAll();
     }
@@ -403,7 +416,7 @@ Singleton {
 
     // Fallback polling for cases where the Hyprland event stream stalls for this shell instance.
     Timer {
-        interval: 400
+        interval: 1500
         running: true
         repeat: true
         onTriggered: {
@@ -413,7 +426,7 @@ Singleton {
     }
 
     Timer {
-        interval: 900
+        interval: 3000
         running: true
         repeat: true
         onTriggered: {

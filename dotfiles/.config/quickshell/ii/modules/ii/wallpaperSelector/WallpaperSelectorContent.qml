@@ -272,6 +272,8 @@ MouseArea {
                         function moveSelection(delta) {
                             currentIndex = Math.max(0, Math.min(grid.model.count - 1, currentIndex + delta));
                             positionViewAtIndex(currentIndex, GridView.Contain);
+                            const filePath = grid.model.get(currentIndex, "filePath");
+                            Wallpapers.preload(filePath);
                         }
 
                         function activateCurrent() {
@@ -292,6 +294,7 @@ MouseArea {
 
                             onEntered: {
                                 grid.currentIndex = index;
+                                Wallpapers.preload(fileModelData.filePath);
                             }
                             
                             onActivated: {

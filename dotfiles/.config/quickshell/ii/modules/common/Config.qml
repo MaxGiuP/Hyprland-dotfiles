@@ -616,6 +616,8 @@ Singleton {
 
             property JsonObject notifications: JsonObject {
                 property int timeout: 7000
+                property int maxHistory: 40
+                property int progressUpdateInterval: 125
             }
 
             property JsonObject osd: JsonObject {
@@ -639,6 +641,7 @@ Singleton {
 
             property JsonObject overview: JsonObject {
                 property bool enable: true
+                property bool livePreviews: false
                 property real scale: 0.18 // Relative to screen size
                 property real rows: 2
                 property real columns: 5
@@ -709,7 +712,7 @@ Singleton {
             }
 
             property JsonObject sidebar: JsonObject {
-                property bool keepRightSidebarLoaded: true
+                property bool keepRightSidebarLoaded: false
                 property JsonObject translator: JsonObject {
                     property bool enable: false
                     property int delay: 300 // Delay before sending request. Reduces (potential) rate limits and lag.

@@ -5,6 +5,7 @@ set -eu
 QS_BIN="${QS_BIN:-}"
 QS_CONFIG="${1:-${QS_CONFIG:-ii}}"
 WAIT_FOR_HYPR_TENTHS="${WAIT_FOR_HYPR_TENTHS:-100}"
+WAIT_FOR_WIREPLUMBER_TENTHS="${WAIT_FOR_WIREPLUMBER_TENTHS:-10}"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 EVENT_LOG="$SCRIPT_DIR/quickshell_event_log.sh"
 
@@ -26,6 +27,7 @@ if [ -z "$QS_BIN" ]; then
 fi
 
 "$EVENT_LOG" start-bin-resolved "config=$QS_CONFIG" "bin=$QS_BIN" || true
+"$SCRIPT_DIR/quickshell_compat_check.sh" "$QS_BIN" "$QS_CONFIG" || exit $?
 
 wait_for_hypr() {
   i=0
@@ -46,7 +48,7 @@ wait_for_hypr || true
 # resulting in an empty audio device list in the sidebar.
 wait_for_wireplumber() {
   i=0
-  while [ "$i" -lt 50 ]; do
+  while [ "$i" -lt "$WAIT_FOR_WIREPLUMBER_TENTHS" ]; do
     status="$(wpctl status -n 2>/dev/null || true)"
     if printf '%s\n' "$status" | grep -qE "^[[:space:]│]*[* ]?[[:space:]]*[0-9]+\.[[:space:]]+.+(\[vol:|\[Audio/Sink\])"; then
       return 0

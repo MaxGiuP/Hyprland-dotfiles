@@ -17,6 +17,7 @@ Scope {
     property var loadedLockSurface: null
     property bool lockContentActive: false
     property bool sessionLockActive: false
+    property bool releaseInProgress: false
 
     // Keep lock surface visible until lockpad unlock animation finishes.
     property int unlockReleaseDelayMs: 1500
@@ -25,7 +26,10 @@ Scope {
     property int unlockBlurOutDelayMs: 0
     property int unlockBlurOutDurationMs: 0
     property int unlockSurfaceDetachDelayMs: 250
-    property int unlockUiRestoreDelayMs: 250
+    // Keep the QML contents alive briefly after releasing ext-session-lock.
+    // Destroying the lock surface in the same frame can make Hyprland reject
+    // the client with an "Invalid size" protocol error on unlock.
+    property int unlockUiRestoreDelayMs: 500
 
     property Component sessionLockSurface: WlSessionLockSurface {
         id: sessionLockSurface
@@ -40,12 +44,15 @@ Scope {
                 if (!item || !("captureScreen" in item))
                     return;
 
+                if (("releasePrepared" in item) && item.releasePrepared)
+                    return;
+
                 item.captureScreen = sessionLockSurface.screen;
             }
 
-            function prepareForRelease() {
+            function prepareForRelease(immediate) {
                 if (item && ("prepareForRelease" in item))
-                    item.prepareForRelease();
+                    item.prepareForRelease(!!immediate);
             }
 
             function suspendScreenCapture() {
@@ -136,9 +143,9 @@ Scope {
         root.scheduleBlurAnimation(0, root.unlockBlurOutDelayMs, root.unlockBlurOutDurationMs, Easing.InCubic);
     }
 
-    function prepareLockSurfaceForRelease() {
+    function prepareLockSurfaceForRelease(immediate) {
         if (root.loadedLockSurface && ("prepareForRelease" in root.loadedLockSurface))
-            root.loadedLockSurface.prepareForRelease();
+            root.loadedLockSurface.prepareForRelease(!!immediate);
     }
 
     function logLockRelease(stage) {
@@ -150,27 +157,25 @@ Scope {
         unlockReleaseTimer.stop();
         unlockSurfaceDetachTimer.stop();
         unlockUiRestoreTimer.stop();
+        const alsoInhibitIdle = lockContext.alsoInhibitIdle;
+        root.prepareLockSurfaceForRelease(true);
+        root.releaseInProgress = false;
+        GlobalStates.screenLocked = false;
         root.lockContentActive = false;
         root.sessionLockActive = false;
-        GlobalStates.screenLocked = false;
         lockContext.reset();
         root.stopBlurAnimation();
         GlobalStates.screenLockBlurProgress = 0;
         GlobalStates.screenLockHideBar = false;
-        if (lockContext.alsoInhibitIdle) {
+        if (alsoInhibitIdle) {
             lockContext.alsoInhibitIdle = false;
             Idle.toggleInhibit(true);
         }
     }
 
-    function detachLockContentForRelease() {
-        root.logLockRelease("content-detach");
-        root.prepareLockSurfaceForRelease();
-        root.lockContentActive = false;
-    }
-
     function releaseSessionLock() {
         root.logLockRelease("session-release");
+        root.prepareLockSurfaceForRelease(true);
         root.sessionLockActive = false;
         if (root.unlockUiRestoreDelayMs <= 0)
             Qt.callLater(root.finishReleaseLock);
@@ -180,7 +185,8 @@ Scope {
 
     function completeReleaseLock() {
         root.logLockRelease("complete-release");
-        root.detachLockContentForRelease();
+        root.releaseInProgress = true;
+        root.prepareLockSurfaceForRelease(false);
         if (root.unlockSurfaceDetachDelayMs <= 0)
             Qt.callLater(root.releaseSessionLock);
         else
@@ -189,6 +195,9 @@ Scope {
 
     function releaseLock() {
         root.logLockRelease("release-request");
+        if (root.releaseInProgress)
+            return;
+
         root.completeReleaseLock();
     }
 
@@ -230,6 +239,7 @@ Scope {
             target: GlobalStates
             function onScreenLockedChanged() {
                 if (GlobalStates.screenLocked) {
+                    root.releaseInProgress = false;
                     root.lockContentActive = true;
                     root.sessionLockActive = true;
                     unlockSurfaceDetachTimer.stop();
@@ -240,6 +250,7 @@ Scope {
                     lockContext.tryFingerUnlock();
                     root.startLockBlurIntro();
                 } else {
+                    root.releaseInProgress = false;
                     root.lockContentActive = false;
                     root.sessionLockActive = false;
                     root.stopBlurAnimation();
@@ -305,6 +316,7 @@ Scope {
         unlockReleaseTimer.stop();
         root.lockContentActive = true;
         root.sessionLockActive = true;
+        root.releaseInProgress = false;
         GlobalStates.screenLocked = true;
     }
 

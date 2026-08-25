@@ -254,7 +254,7 @@ Scope { // Scope
                                 height: screenScope.modelData?.height ?? dockRoot.height
                                 source: root.dockWallpaperSource
                                 fillMode: Image.PreserveAspectCrop
-                                cache: false
+                                cache: true
                                 asynchronous: true
                                 smooth: true
                                 antialiasing: true

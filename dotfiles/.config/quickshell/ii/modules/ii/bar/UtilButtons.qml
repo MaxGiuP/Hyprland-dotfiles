@@ -192,12 +192,10 @@ Item {
             sourceComponent: CircleUtilButton {
                 Layout.alignment: Qt.AlignVCenter
                 onClicked: event => {
-                    const Dash = "-"
-                    const DD = Dash + Dash
                     if (Appearance.m3colors.darkmode) {
-                        Hyprland.dispatch(`exec ${Directories.wallpaperSwitchScriptPath} ${DD}mode light ${DD}noswitch`)
+                        Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--mode", "light", "--noswitch"])
                     } else {
-                        Hyprland.dispatch(`exec ${Directories.wallpaperSwitchScriptPath} ${DD}mode dark ${DD}noswitch`)
+                        Quickshell.execDetached([Directories.wallpaperSwitchScriptPath, "--mode", "dark", "--noswitch"])
                     }
                 }
                 MaterialSymbol {

@@ -51,6 +51,7 @@ Singleton {
     property var kdeColorSchemeOptions: []
     property var kdeLookAndFeelOptions: []
     property var kvantumThemeOptions: []
+    readonly property bool scanning: scannerRunning()
     readonly property var defaultFontFamilyValues: [
         "Sans Serif",
         "Serif",
@@ -139,6 +140,16 @@ Singleton {
     property bool kdeAutomaticLookAndFeel: false
     property bool kdeShowDeleteCommand: false
 
+    function scannerRunning() {
+        return gnomeRefresh.running
+            || themeScanner.running
+            || iconScanner.running
+            || colorSchemeScanner.running
+            || lookAndFeelScanner.running
+            || kvantumScanner.running
+            || fontScanner.running;
+    }
+
     function parseIniValue(content, section, key, fallback = "") {
         const lines = (content || "").replace(/\r/g, "").split("\n");
         let currentSection = "";
@@ -212,16 +223,14 @@ Singleton {
         kdeLookAndFeelOptions = [];
         kvantumThemeOptions = [];
         fontFamilyOptions = toOptionList(defaultFontFamilyValues);
-        if (root.settingsApp) {
-            themeScanner.running = true;
-            iconScanner.running = true;
-            colorSchemeScanner.running = true;
-            lookAndFeelScanner.running = true;
-            kvantumScanner.running = true;
-            fontScanner.running = true;
-            gnomeRefresh.running = false;
-            gnomeRefresh.running = true;
-        }
+        themeScanner.running = true;
+        iconScanner.running = true;
+        colorSchemeScanner.running = true;
+        lookAndFeelScanner.running = true;
+        kvantumScanner.running = true;
+        fontScanner.running = true;
+        gnomeRefresh.running = false;
+        gnomeRefresh.running = true;
     }
 
     function toOptionList(values) {
@@ -457,7 +466,7 @@ Singleton {
 
     Process {
         id: gnomeRefresh
-        running: root.settingsApp
+        running: false
         command: ["bash", "-lc",
             "printf 'gtk-theme:%s\n' \"$(gsettings get org.gnome.desktop.interface gtk-theme | tr -d \"'\\\"\")\"; " +
             "printf 'icon-theme:%s\n' \"$(gsettings get org.gnome.desktop.interface icon-theme | tr -d \"'\\\"\")\"; " +
@@ -496,7 +505,7 @@ Singleton {
 
     Process {
         id: themeScanner
-        running: root.settingsApp
+        running: false
         command: ["bash", "-lc", "find /usr/share/themes ~/.themes -maxdepth 1 -mindepth 1 -type d 2>/dev/null | xargs -r -n1 basename | sort -u"]
         stdout: SplitParser {
             onRead: data => {
@@ -508,7 +517,7 @@ Singleton {
 
     Process {
         id: iconScanner
-        running: root.settingsApp
+        running: false
         command: ["bash", "-lc", "find /usr/share/icons ~/.icons -maxdepth 1 -mindepth 1 -type d 2>/dev/null | xargs -r -n1 basename | sort -u"]
         stdout: SplitParser {
             onRead: data => {
@@ -522,7 +531,7 @@ Singleton {
 
     Process {
         id: colorSchemeScanner
-        running: root.settingsApp
+        running: false
         command: ["bash", "-lc", "find /usr/share/color-schemes ~/.local/share/color-schemes -maxdepth 1 -mindepth 1 \\( -name '*.colors' -o -type d \\) 2>/dev/null | sed 's#.*/##' | sed 's/\\.colors$//' | sort -u"]
         stdout: SplitParser {
             onRead: data => {
@@ -534,7 +543,7 @@ Singleton {
 
     Process {
         id: lookAndFeelScanner
-        running: root.settingsApp
+        running: false
         command: ["bash", "-lc", "find /usr/share/plasma/look-and-feel ~/.local/share/plasma/look-and-feel -maxdepth 1 -mindepth 1 -type d 2>/dev/null | xargs -r -n1 basename | sort -u"]
         stdout: SplitParser {
             onRead: data => {
@@ -546,7 +555,7 @@ Singleton {
 
     Process {
         id: kvantumScanner
-        running: root.settingsApp
+        running: false
         command: ["bash", "-lc", "find /usr/share/Kvantum ~/.config/Kvantum -maxdepth 1 -mindepth 1 -type d 2>/dev/null | xargs -r -n1 basename | sort -u"]
         stdout: SplitParser {
             onRead: data => {
@@ -558,7 +567,7 @@ Singleton {
 
     Process {
         id: fontScanner
-        running: root.settingsApp
+        running: false
         command: ["bash", "-lc", "fc-list : family | sed 's/,/\\n/g' | sed 's/^ *//;s/ *$//' | awk 'NF' | sort -u"]
         stdout: SplitParser {
             onRead: data => {

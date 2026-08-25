@@ -17,6 +17,7 @@ Item { // Notification item area
     property real fontSize: Appearance.font.pixelSize.small
     property real padding: onlyNotification ? 0 : 8
     property real summaryElideRatio: 0.85
+    readonly property real contentWidth: Math.max(0, root.width - (root.expanded ? root.padding * 2 : 0))
 
     property real dragConfirmThreshold: 70 // Drag further to discard notification
     property real dismissOvershoot: notificationIcon.implicitWidth + 20 // Account for gaps and bouncy animations
@@ -148,22 +149,19 @@ Item { // Notification item area
 
         ColumnLayout { // Content column
             id: contentColumn
-            anchors.fill: parent
-            anchors.margins: expanded ? root.padding : 0
+            x: root.expanded ? root.padding : 0
+            y: root.expanded ? root.padding : 0
+            width: root.contentWidth
             spacing: 3
-
-            Behavior on anchors.margins {
-                animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
-            }
 
             RowLayout { // Summary row
                 id: summaryRow
                 visible: !root.onlyNotification || !root.expanded
                 Layout.fillWidth: true
-                implicitHeight: summaryText.implicitHeight
+                implicitHeight: Math.max(summaryText.implicitHeight, collapsedBodyText.implicitHeight)
                 StyledText {
                     id: summaryText
-                    Layout.fillWidth: summaryTextMetrics.width >= summaryRow.implicitWidth * root.summaryElideRatio
+                    Layout.fillWidth: summaryTextMetrics.width >= root.contentWidth * root.summaryElideRatio
                     visible: !root.onlyNotification
                     font.pixelSize: root.fontSize
                     color: Appearance.colors.colOnLayer3
@@ -171,6 +169,7 @@ Item { // Notification item area
                     text: root.notificationObject.summary || ""
                 }
                 StyledText {
+                    id: collapsedBodyText
                     opacity: !root.expanded ? 1 : 0
                     visible: opacity > 0
                     Layout.fillWidth: true
@@ -180,7 +179,7 @@ Item { // Notification item area
                     font.pixelSize: root.fontSize
                     color: Appearance.colors.colSubtext
                     elide: Text.ElideRight
-                    wrapMode: Text.Wrap // Needed for proper eliding????
+                    wrapMode: Text.NoWrap
                     maximumLineCount: 1
                     textFormat: Text.StyledText
                     text: {
@@ -224,7 +223,7 @@ Item { // Notification item area
                     implicitWidth: actionsFlickable.implicitWidth
                     implicitHeight: actionsFlickable.implicitHeight
 
-                    layer.enabled: true
+                    layer.enabled: root.expanded && actionsFlickable.contentWidth > actionsFlickable.width + 1
                     layer.effect: OpacityMask {
                         maskSource: Rectangle {
                             width: actionsFlickable.width

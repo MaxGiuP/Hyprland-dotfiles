@@ -60,6 +60,10 @@ apply_gtk() {
   sh "$CONFIG_DIR/scripts/colors/applygtk.sh"
 }
 
+apply_gnome_accent() {
+  python3 "$CONFIG_DIR/scripts/colors/apply_gnome_accent.py"
+}
+
 apply_browsers() {
   python3 "$CONFIG_DIR/scripts/colors/apply_browser_theme.py"
 }
@@ -71,6 +75,8 @@ apply_vscodium() {
 # Check if terminal theming is enabled in config
 CONFIG_FILE="$XDG_CONFIG_HOME/illogical-impulse/config.json"
 if [ -f "$CONFIG_FILE" ]; then
+  apply_gnome_accent || true
+
   enable_terminal=$(jq -r '.appearance.wallpaperTheming.enableTerminal' "$CONFIG_FILE")
   if [ "$enable_terminal" = "true" ]; then
     apply_term &
@@ -89,6 +95,7 @@ if [ -f "$CONFIG_FILE" ]; then
   apply_browsers
 else
   echo "Config file not found at $CONFIG_FILE. Applying terminal theming by default."
+  apply_gnome_accent || true
   apply_term &
   apply_gtk
   apply_browsers

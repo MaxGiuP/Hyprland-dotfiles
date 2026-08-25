@@ -135,7 +135,7 @@ ContentPage {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Appearance.colors.colSubtext
-            text: Translation.tr("Selecting a locale updates the shell UI translation and the system-wide locale (/etc/locale.conf and Hyprland env.conf). Re-login for system changes to fully apply.")
+            text: Translation.tr("Selecting a locale updates the shell UI translation and the system-wide locale (/etc/locale.conf and Hyprland env.lua). Re-login for system changes to fully apply.")
         }
 
         Rectangle {

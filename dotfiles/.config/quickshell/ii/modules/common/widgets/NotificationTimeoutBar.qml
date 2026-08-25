@@ -44,5 +44,13 @@ Item {
         radius: height / 2
         color: root.fillColor
         opacity: (root.notification?.timeoutPaused ?? false) ? 0.7 : 1
+
+        Behavior on width {
+            enabled: !(root.notification?.timeoutPaused ?? false)
+            NumberAnimation {
+                duration: 160
+                easing.type: Easing.Linear
+            }
+        }
     }
 }

@@ -1,6 +1,7 @@
 import qs
 import qs.services
 import qs.modules.common
+import qs.modules.common.functions
 import qs.modules.common.widgets
 import QtQuick
 import QtQuick.Controls
@@ -24,6 +25,7 @@ Item {
     property int sidebarWidth: Appearance.sizes.sidebarWidth
     property int sidebarPadding: 10
     property string settingsQmlPath: Quickshell.shellPath("settings.qml")
+    property string settingsLauncherPath: `${Quickshell.env("HOME") || "/home/linmax"}/.config/hypr/hyprland/scripts/launch_first_available.sh`
     property bool showAudioOutputDialog: false
     property bool showAudioInputDialog: false
     property bool showBluetoothDialog: false
@@ -137,7 +139,6 @@ Item {
                 Bluetooth.defaultAdapter.discovering = false;
             } else {
                 Bluetooth.defaultAdapter.enabled = true;
-                Bluetooth.defaultAdapter.discovering = true;
             }
         }
     }
@@ -333,7 +334,7 @@ Item {
                 toggled: false
                 buttonIcon: "restart_alt"
                 onClicked: {
-                    Hyprland.dispatch("reload");
+                    Quickshell.execDetached(["hyprctl", "reload"]);
                     Quickshell.reload(true);
                 }
                 StyledToolTip {
@@ -345,7 +346,15 @@ Item {
                 buttonIcon: "settings"
                 onClicked: {
                     GlobalStates.sidebarRightOpen = false;
-                    GlobalStates.openOverlayWidget("settingsMenu");
+                    Quickshell.execDetached([
+                        "env",
+                        "XDG_CURRENT_DESKTOP=gnome",
+                        root.settingsLauncherPath,
+                        `qs -p ${root.settingsQmlPath}`,
+                        "systemsettings",
+                        "gnome-control-center",
+                        "better-control"
+                    ]);
                 }
                 StyledToolTip {
                     text: Translation.tr("Settings")

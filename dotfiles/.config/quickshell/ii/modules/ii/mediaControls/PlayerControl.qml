@@ -157,9 +157,13 @@ Item { // Player instance
         id: coverArtDownloader
         property string targetFile: root.artUrl ?? ""
         property string artFilePath: root.artFilePath
-        command: [ "bash", "-c", `[ -f '${artFilePath}' ] || curl -sSL '${targetFile}' -o '${artFilePath}'` ]
-        onExited: () => {
-            root.downloaded = true
+        command: [
+            "bash", "-c",
+            "[ -s \"$1\" ] || curl -fsSL \"$2\" -o \"$1\"",
+            "cover-art", artFilePath, targetFile
+        ]
+        onExited: (exitCode) => {
+            root.downloaded = exitCode === 0
         }
     }
 

@@ -95,51 +95,51 @@ ContentPage {
         title: Translation.tr("Hypr Config Files")
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/general.conf"
+            filePath: "/home/linmax/.config/hypr/hyprland/general.lua"
             title: Translation.tr("Core layout and input")
-            placeholderText: Translation.tr("Hyprland general.conf")
+            placeholderText: Translation.tr("Hyprland general.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/env.conf"
+            filePath: "/home/linmax/.config/hypr/hyprland/env.lua"
             title: Translation.tr("Environment and locale")
-            placeholderText: Translation.tr("Hyprland env.conf")
+            placeholderText: Translation.tr("Hyprland env.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/execs.conf"
+            filePath: "/home/linmax/.config/hypr/hyprland/execs.lua"
             title: Translation.tr("Startup commands")
-            placeholderText: Translation.tr("Hyprland execs.conf")
+            placeholderText: Translation.tr("Hyprland execs.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/keybinds.conf"
+            filePath: "/home/linmax/.config/hypr/hyprland/keybinds.lua"
             title: Translation.tr("Main keybinds")
-            placeholderText: Translation.tr("Hyprland keybinds.conf")
+            placeholderText: Translation.tr("Hyprland keybinds.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/keybinds.user.conf"
+            filePath: "/home/linmax/.config/hypr/hyprland/keybinds.user.lua"
             title: Translation.tr("Additional keybinds (inactive)")
-            placeholderText: Translation.tr("Hyprland keybinds.user.conf")
+            placeholderText: Translation.tr("Hyprland keybinds.user.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/rules.conf"
+            filePath: "/home/linmax/.config/hypr/hyprland/rules.lua"
             title: Translation.tr("Window rules")
-            placeholderText: Translation.tr("Hyprland rules.conf")
+            placeholderText: Translation.tr("Hyprland rules.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/workspaces.conf"
+            filePath: "/home/linmax/.config/hypr/workspaces.lua"
             title: Translation.tr("Workspace bindings")
-            placeholderText: Translation.tr("workspaces.conf")
+            placeholderText: Translation.tr("workspaces.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/monitors.conf"
+            filePath: "/home/linmax/.config/hypr/monitors.lua"
             title: Translation.tr("Monitor overrides")
-            placeholderText: Translation.tr("monitors.conf")
+            placeholderText: Translation.tr("monitors.lua")
         }
     }
 }

@@ -56,9 +56,10 @@ Item { // Window
     property bool compactMode: Appearance.font.pixelSize.smaller * 4 > targetWindowHeight || Appearance.font.pixelSize.smaller * 4 > targetWindowWidth
 
     property bool indicateXWayland: windowData?.xwayland ?? false
-    // Retain an available snapshot while the warm overview is hidden instead
-    // of recapturing every window on the launcher's opening frame.
-    readonly property var previewSource: HyprlandData.captureSourceForToplevel(root.toplevel)
+    // Retain one snapshot while the warm overview is hidden instead of
+    // recapturing every window on the launcher's opening frame.
+    readonly property var previewSource: HyprlandData.captureSourceForToplevel(root.toplevel, false)
+    readonly property bool hasLivePreview: previewSource !== null
 
     x: initX
     y: initY
@@ -100,7 +101,8 @@ Item { // Window
         id: windowPreview
         anchors.fill: parent
         captureSource: root.previewSource
-        live: GlobalStates.overviewOpen && root.previewSource !== null
+        live: GlobalStates.overviewOpen && (Config.options?.overview?.livePreviews ?? false)
+        constraintSize: Qt.size(Math.max(1, root.width), Math.max(1, root.height))
 
         // Color overlay for interactions
         Rectangle {
@@ -120,17 +122,14 @@ Item { // Window
             id: windowIcon
             property real baseSize: Math.min(root.targetWindowWidth, root.targetWindowHeight)
             anchors {
-                top: root.centerIcons ? undefined : parent.top
-                left: root.centerIcons ? undefined : parent.left
-                centerIn: root.centerIcons ? parent : undefined
-                margins: baseSize * root.iconGapRatio
+                top: root.centerIcons && !root.hasLivePreview ? undefined : parent.top
+                left: root.centerIcons && !root.hasLivePreview ? undefined : parent.left
+                centerIn: root.centerIcons && !root.hasLivePreview ? parent : undefined
+                margins: root.hasLivePreview ? Math.max(4, baseSize * 0.035) : baseSize * root.iconGapRatio
             }
             property var iconSize: {
-                // console.log("-=-=-", root.toplevel.title, "-=-=-")
-                // console.log("Target window size:", targetWindowWidth, targetWindowHeight)
-                // console.log("Icon ratio:", root.compactMode ? root.iconToWindowRatioCompact : root.iconToWindowRatio)
-                // console.log("Scale:", root.monitorData.scale)
-                // console.log("Final:", Math.min(targetWindowWidth, targetWindowHeight) * (root.compactMode ? root.iconToWindowRatioCompact : root.iconToWindowRatio) / root.monitorData.scale)
+                if (root.hasLivePreview)
+                    return Math.max(14, Math.min(24, baseSize * 0.16));
                 return baseSize * (root.compactMode ? root.iconToWindowRatioCompact : root.iconToWindowRatio);
             }
             // mipmap: true

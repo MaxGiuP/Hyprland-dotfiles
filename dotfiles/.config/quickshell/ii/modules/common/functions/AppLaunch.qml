@@ -9,12 +9,30 @@ Singleton {
     readonly property string launcherScriptPath: Quickshell.shellPath("scripts/launch_detached.sh")
 
     function normalizeCommand(command) {
-        if (!Array.isArray(command))
-            return [];
+        if (!Array.isArray(command)) {
+            const stringCommand = String(command ?? "").trim();
+            return stringCommand.length > 0 ? ["bash", "-lc", stringCommand] : [];
+        }
 
         return command
             .filter(part => part !== undefined && part !== null)
             .map(part => `${part}`);
+    }
+
+    function trimFileProtocol(path) {
+        const stringPath = String(path ?? "").trim();
+        if (!stringPath.startsWith("file://"))
+            return stringPath;
+
+        return decodeURIComponent(stringPath.slice(7));
+    }
+
+    function desktopFilePath(entry) {
+        return trimFileProtocol(entry?.desktopFilePath ?? entry?.path ?? "");
+    }
+
+    function desktopLaunchId(entry) {
+        return String(entry?.id ?? "").trim().replace(/\.desktop$/i, "");
     }
 
     function terminalWrapperCommand(command) {
@@ -38,12 +56,32 @@ Singleton {
         return true;
     }
 
+    function launchShellCommand(command) {
+        const stringCommand = String(command ?? "").trim();
+        if (stringCommand.length === 0)
+            return false;
+
+        return launchCommand(["bash", "-lc", stringCommand]);
+    }
+
     function launchDesktopId(appId) {
         const launchId = String(appId ?? "").trim().replace(/\.desktop$/i, "");
         if (launchId.length === 0)
             return false;
 
         return launchCommand(["gtk-launch", launchId]);
+    }
+
+    function launchDesktopFile(entry) {
+        const desktopPath = desktopFilePath(entry);
+        if (desktopPath.length > 0)
+            return launchCommand(["gio", "launch", desktopPath]);
+
+        const launchId = desktopLaunchId(entry);
+        if (launchId.length > 0)
+            return launchDesktopId(launchId);
+
+        return false;
     }
 
     function fallbackLaunch(entryOrAction) {
@@ -75,7 +113,9 @@ Singleton {
             return false;
 
         let launched = false;
-        if (!entry.runInTerminal && launchCommand(entry.command))
+        if (!entry.runInTerminal && launchDesktopFile(entry))
+            launched = true;
+        else if (!entry.runInTerminal && launchCommand(entry.command))
             launched = true;
         else if (entry.runInTerminal && launchCommand(terminalWrapperCommand(entry.command)))
             launched = true;

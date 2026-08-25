@@ -39,18 +39,40 @@ Singleton {
     function applyColors(fileContent) {
         const json = JSON.parse(fileContent)
         for (const key in json) {
-            if (json.hasOwnProperty(key)) {
-                // Convert snake_case to CamelCase
-                const camelCaseKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
-                const m3Key = `m3${camelCaseKey}`
-                Appearance.m3colors[m3Key] = json[key]
+            if (!json.hasOwnProperty(key))
+                continue
+
+            if (key === "darkmode") {
+                Appearance.m3colors.darkmode = !!json[key]
+                continue
             }
+
+            // Convert snake_case to CamelCase
+            const camelCaseKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase())
+            const m3Key = `m3${camelCaseKey}`
+            Appearance.m3colors[m3Key] = json[key]
         }
-        
-        Appearance.m3colors.darkmode = (Appearance.m3colors.m3background.hslLightness < 0.5)
+
+        // If the generator did not include an explicit mode, fall back to the
+        // background luminance. Explicit mode is required because very dark
+        // wallpapers can still be used with a deliberately light system theme.
+        if (json.darkmode === undefined)
+            Appearance.m3colors.darkmode = (Appearance.m3colors.m3background.hslLightness < 0.5)
 
         if (!Appearance.m3colors.darkmode)
             root.strengthenLightPalette()
+
+        // Some downstream widgets use raw m3on* colors instead of Appearance.colors
+        // wrappers. Normalize them to WCAG contrast against their actual current
+        // backgrounds so light accents get dark text and dark accents get light text.
+        Appearance.m3colors.m3onPrimary = ColorUtils.bestTextColor(Appearance.m3colors.m3primary)
+        Appearance.m3colors.m3onPrimaryContainer = ColorUtils.bestTextColor(Appearance.m3colors.m3primaryContainer)
+        Appearance.m3colors.m3onSecondary = ColorUtils.bestTextColor(Appearance.m3colors.m3secondary)
+        Appearance.m3colors.m3onSecondaryContainer = ColorUtils.bestTextColor(Appearance.m3colors.m3secondaryContainer)
+        Appearance.m3colors.m3onTertiary = ColorUtils.bestTextColor(Appearance.m3colors.m3tertiary)
+        Appearance.m3colors.m3onTertiaryContainer = ColorUtils.bestTextColor(Appearance.m3colors.m3tertiaryContainer)
+        Appearance.m3colors.m3onError = ColorUtils.bestTextColor(Appearance.m3colors.m3error)
+        Appearance.m3colors.m3onErrorContainer = ColorUtils.bestTextColor(Appearance.m3colors.m3errorContainer)
     }
 
     function resetFilePathNextTime() {

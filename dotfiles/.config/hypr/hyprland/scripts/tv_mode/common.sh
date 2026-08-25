@@ -162,7 +162,7 @@ tv_close_windows_on_workspace() {
         .address
     ' <<<"$clients_json" | while IFS= read -r address; do
         [[ -n "$address" ]] || continue
-        hyprctl dispatch closewindow "address:${address}" >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh closewindow "address:${address}" >/dev/null 2>&1 || true
     done
 }
 
@@ -216,8 +216,8 @@ tv_assign_special_workspace_rule() {
 
     hyprctl keyword workspace "$(tv_special_selector), persistent:true, monitor:${monitor}, gapsin:0, gapsout:0, border:false, rounding:false, decorate:false" >/dev/null 2>&1 || true
     hyprctl keyword workspace "special:tv-app, persistent:true, monitor:${monitor}, gapsin:0, gapsout:0, border:false, rounding:false, decorate:false" >/dev/null 2>&1 || true
-    hyprctl dispatch moveworkspacetomonitor "$(tv_special_selector)" "$monitor" >/dev/null 2>&1 || true
-    hyprctl dispatch moveworkspacetomonitor "special:tv-app" "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh moveworkspacetomonitor "$(tv_special_selector)" "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh moveworkspacetomonitor "special:tv-app" "$monitor" >/dev/null 2>&1 || true
 }
 
 tv_resolve_audio_sink() {
@@ -328,10 +328,10 @@ tv_toggle_special_workspace_on_monitor() {
     follow_mouse="$(hyprctl getoption input:follow_mouse 2>/dev/null | awk '/^int:/ { print $2; exit }')"
     [[ -n "$follow_mouse" ]] || follow_mouse=1
     hyprctl keyword input:follow_mouse 0 >/dev/null 2>&1 || true
-    hyprctl dispatch moveworkspacetomonitor "$workspace" "$monitor" >/dev/null 2>&1 || true
-    hyprctl dispatch focusmonitor "$monitor" >/dev/null 2>&1 || true
-    hyprctl dispatch togglespecialworkspace "$(tv_special_short_name "$workspace")" >/dev/null 2>&1 || true
-    hyprctl dispatch moveworkspacetomonitor "$workspace" "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh moveworkspacetomonitor "$workspace" "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focusmonitor "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh togglespecialworkspace "$(tv_special_short_name "$workspace")" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh moveworkspacetomonitor "$workspace" "$monitor" >/dev/null 2>&1 || true
     hyprctl keyword input:follow_mouse "$follow_mouse" >/dev/null 2>&1 || true
 }
 
@@ -350,7 +350,7 @@ tv_hide_special_workspace_everywhere() {
         visible="$(tv_visible_monitor_for_special_workspace "$workspace" || true)"
         [[ -n "$visible" ]] || return 0
 
-        hyprctl dispatch focusmonitor "$visible" >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focusmonitor "$visible" >/dev/null 2>&1 || true
         tv_toggle_special_workspace_on_monitor "$workspace" "$visible" || true
         sleep 0.05
     done
@@ -363,7 +363,7 @@ tv_hide_special_everywhere() {
         visible="$(tv_special_visible_monitor || true)"
         [[ -n "$visible" ]] || return 0
 
-        hyprctl dispatch focusmonitor "$visible" >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focusmonitor "$visible" >/dev/null 2>&1 || true
         tv_toggle_special_workspace_on_monitor "$(tv_special_selector)" "$visible" || true
         sleep 0.05
     done
@@ -399,7 +399,7 @@ tv_show_special_workspace_on_monitor() {
     local target_visible
 
     tv_assign_special_workspace_rule "$monitor"
-    hyprctl dispatch moveworkspacetomonitor "$workspace" "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh moveworkspacetomonitor "$workspace" "$monitor" >/dev/null 2>&1 || true
 
     currently_visible="$(tv_visible_monitor_for_special_workspace "$workspace" || true)"
     if [[ "$currently_visible" == "$monitor" ]]; then
@@ -416,8 +416,8 @@ tv_show_special_workspace_on_monitor() {
         tv_hide_special_workspace_everywhere "$workspace"
     fi
 
-    hyprctl dispatch focusmonitor "$monitor" >/dev/null 2>&1 || true
-    hyprctl dispatch moveworkspacetomonitor "$workspace" "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focusmonitor "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh moveworkspacetomonitor "$workspace" "$monitor" >/dev/null 2>&1 || true
     if ! tv_monitor_has_special_workspace_visible "$monitor" "$workspace"; then
         tv_toggle_special_workspace_on_monitor "$workspace" "$monitor" || true
     fi
@@ -437,7 +437,7 @@ tv_show_special_on_monitor() {
 tv_focus_monitor_center() {
     local monitor="$1"
 
-    hyprctl dispatch focusmonitor "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focusmonitor "$monitor" >/dev/null 2>&1 || true
 }
 
 tv_focus_window_on_monitor() {
@@ -467,10 +467,10 @@ tv_focus_window_on_monitor() {
     follow_mouse="$(hyprctl getoption input:follow_mouse 2>/dev/null | awk '/^int:/ { print $2; exit }')"
     [[ -n "$follow_mouse" ]] || follow_mouse=1
     hyprctl keyword input:follow_mouse 0 >/dev/null 2>&1 || true
-    hyprctl dispatch focusmonitor "$monitor" >/dev/null 2>&1 || true
-    hyprctl dispatch focuswindow "address:${address}" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focusmonitor "$monitor" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focuswindow "address:${address}" >/dev/null 2>&1 || true
     if [[ "$fullscreen" == "true" ]]; then
-        hyprctl dispatch fullscreenstate 2 2 >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh fullscreenstate 2 2 >/dev/null 2>&1 || true
     fi
     hyprctl keyword input:follow_mouse "$follow_mouse" >/dev/null 2>&1 || true
 }
@@ -573,7 +573,7 @@ tv_address_in_list() {
 
 tv_move_window_to_special() {
     local address="$1"
-    hyprctl dispatch movetoworkspacesilent "$(tv_special_selector),address:${address}" >/dev/null
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh movetoworkspacesilent "$(tv_special_selector),address:${address}" >/dev/null
 }
 
 tv_move_matching_windows_to_special() {

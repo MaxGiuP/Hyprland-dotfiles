@@ -24,7 +24,10 @@ PENDING_AUR_CAPTURED=""
 PENDING_AUR_IGNORE_ARGS=()
 declare -A CONFLICT_DECISIONS=()   # "installed:incoming" -> "skip"|"remove"
 CONFLICT_NEW_DECISION=0            # set to 1 when resolve_conflicts shows a new menu
+CONFLICT_ABORT=0                   # set to 1 when the user aborts conflict handling
 ASSUME_INSTALLED=()                # packages to pass as --assume-installed when skipping
+REBOOT_REQUIRED=0
+REBOOT_REASONS=()
 
 preferred_aur_helper() {
     if command -v yay >/dev/null 2>&1; then
@@ -48,6 +51,38 @@ package_version() {
     pacman -Q "$1" 2>/dev/null | awk '{print $2}'
 }
 
+package_upstream_version() {
+    local version
+    version=$(package_version "$1" || true)
+    version=${version#*:}
+    version=${version%-*}
+    [ -n "$version" ] && printf '%s\n' "$version"
+}
+
+installed_linux_release() {
+    local version
+    version=$(package_version linux || true)
+    [ -n "$version" ] || return 1
+    printf '%s\n' "${version/.arch/-arch}"
+}
+
+loaded_nvidia_version() {
+    [ -r /proc/driver/nvidia/version ] || return 1
+    awk '/NVRM version:/ { for (i = 1; i <= NF; i++) if ($i ~ /^[0-9]+([.][0-9]+)+$/) { print $i; exit } }' \
+        /proc/driver/nvidia/version
+}
+
+mark_reboot_required() {
+    local reason="$1"
+    local existing
+
+    REBOOT_REQUIRED=1
+    for existing in "${REBOOT_REASONS[@]:-}"; do
+        [ "$existing" = "$reason" ] && return 0
+    done
+    REBOOT_REASONS+=("$reason")
+}
+
 detect_vmware_host_modules_pkg() {
     pacman -Qq 2>/dev/null | rg '^vmware-host-modules' | head -n 1
 }
@@ -68,8 +103,12 @@ find_quickshell_build_dir() {
         "$HOME/quickshell-git"
         "$HOME/quickshell"
         "$HOME/.cache/yay/$qs_pkg"
+        "$HOME/.cache/yay/quickshell-git"
         "$HOME/.cache/paru/clone/$qs_pkg"
+        "$HOME/.cache/paru/clone/quickshell-git"
         "$HOME/Downloads/dots-hyprland/sdata/dist-arch/$qs_pkg"
+        "$HOME/Downloads/dots-hyprland/sdata/dist-arch/illogical-impulse-quickshell-git"
+        "$HOME/.cache/dots-hyprland/sdata/dist-arch/illogical-impulse-quickshell-git"
     )
 
     for candidate in "${candidates[@]}"; do
@@ -86,6 +125,44 @@ find_quickshell_build_dir() {
     fi
 
     return 1
+}
+
+sync_quickshell_user_local() {
+    local build_dir="${1:-}"
+    local src_root bin_src qml_src
+    local dest_bin="$HOME/.local/libexec/quickshell/quickshell"
+    local dest_qml="$HOME/.local/lib/qt6/qml"
+
+    src_root=""
+    if [ -n "$build_dir" ] && [ -d "$build_dir/pkg" ]; then
+        src_root=$(find "$build_dir/pkg" -mindepth 1 -maxdepth 1 -type d -name '*quickshell*' -print -quit 2>/dev/null || true)
+    fi
+
+    bin_src=""
+    if [ -n "$src_root" ] && [ -x "$src_root/usr/bin/quickshell" ]; then
+        bin_src="$src_root/usr/bin/quickshell"
+    elif [ -x /usr/bin/quickshell ]; then
+        bin_src=/usr/bin/quickshell
+    fi
+
+    if [ -z "$bin_src" ]; then
+        return 1
+    fi
+
+    install -Dm755 "$bin_src" "$dest_bin" || return 1
+
+    qml_src=""
+    if [ -n "$src_root" ] && [ -d "$src_root/usr/lib/qt6/qml/Quickshell" ]; then
+        qml_src="$src_root/usr/lib/qt6/qml/Quickshell"
+    elif [ -d /usr/lib/qt6/qml/Quickshell ]; then
+        qml_src=/usr/lib/qt6/qml/Quickshell
+    fi
+
+    if [ -n "$qml_src" ]; then
+        install -d "$dest_qml" || return 1
+        rm -rf "$dest_qml/Quickshell" || return 1
+        cp -a "$qml_src" "$dest_qml/" || return 1
+    fi
 }
 
 find_vmware_build_dir() {
@@ -197,9 +274,75 @@ if [ "${1:-}" = "--count-only" ]; then
 fi
 
 # ── Load translations ─────────────────────────────────────────────────────────
-LANG_CODE="${1:-en_US}"
+normalize_lang_code() {
+    local value="${1:-}"
+    value="${value%%:*}"
+    value="${value%%.*}"
+    value="${value%%@*}"
+    value="${value//-/_}"
+
+    case "$value" in
+        ""|auto|C|POSIX) return 1 ;;
+    esac
+
+    printf '%s\n' "$value"
+}
+
+translation_lang_code() {
+    local value="$1" match
+
+    if [ "${value#*_}" = "$value" ]; then
+        match=$(find "$HOME/.config/quickshell/ii/translations" -maxdepth 1 -type f -name "${value}_*.json" -print 2>/dev/null | sort | head -n 1)
+        if [ -n "$match" ]; then
+            basename "$match" .json
+            return 0
+        fi
+    fi
+
+    printf '%s\n' "$value"
+}
+
+locale_value_from_file() {
+    local file="$1" key="$2"
+    [ -r "$file" ] || return 1
+
+    awk -F= -v key="$key" '
+        $1 == key {
+            gsub(/^[[:space:]"'\''"]+|[[:space:]"'\''"]+$/, "", $2)
+            print $2
+            exit
+        }
+    ' "$file"
+}
+
+detect_lang_code() {
+    local explicit="${1:-}" candidate
+
+    if candidate=$(normalize_lang_code "$explicit"); then
+        translation_lang_code "$candidate"
+        return 0
+    fi
+
+    for candidate in \
+        "${LC_ALL:-}" \
+        "${LC_MESSAGES:-}" \
+        "${LANG:-}" \
+        "$(locale_value_from_file "$HOME/.config/environment.d/10-locale.conf" LANG 2>/dev/null || true)" \
+        "$(locale_value_from_file /etc/locale.conf LANG 2>/dev/null || true)" \
+        "$(locale_value_from_file /etc/default/locale LANG 2>/dev/null || true)"; do
+        if candidate=$(normalize_lang_code "$candidate"); then
+            translation_lang_code "$candidate"
+            return 0
+        fi
+    done
+
+    printf 'en_US\n'
+}
+
+LANG_CODE="$(detect_lang_code "${1:-}")"
 LOCALE_NAME="${LANG_CODE}.UTF-8"
 TRANS_FILE="$HOME/.config/quickshell/ii/translations/${LANG_CODE}.json"
+LANGUAGE_NAME="${LANG_CODE}:${LANG_CODE%%_*}"
 
 # Run the updater itself under the selected UI locale so sudo/pkexec prompts
 # and subprocess output use the same language immediately.
@@ -208,6 +351,7 @@ export LC_TIME="$LOCALE_NAME"
 export LC_CTYPE="$LOCALE_NAME"
 export LC_MESSAGES="$LOCALE_NAME"
 export LC_ALL="$LOCALE_NAME"
+export LANGUAGE="$LANGUAGE_NAME"
 
 declare -A T
 T[SUBTITLE]="Arch Linux system update"
@@ -297,8 +441,13 @@ run_pkg() {
 
 is_conflict_error() {
     grep -qiE \
-        'irrisolvab|irresolvable|unresolvable|conflicting.dep|package.conflict|failed to prepare' \
+        'irrisolvab|irresolvable|unresolvable|non risolvib|nicht auflösbar|konflikt|conflict|conflit|conflitto|conflicto|conflicting.dep|package.conflict|failed to prepare|could not prepare|konnte nicht vorbereitet' \
         <<< "${1:-}"
+}
+
+is_conflict_line() {
+    grep -q '::' <<< "${1:-}" \
+        && grep -qiE 'konflikt|conflict|conflit|conflitto|conflicto' <<< "${1:-}"
 }
 
 # Strip epoch:version-pkgrel from a package+version string.
@@ -313,18 +462,146 @@ show_pkg_info() {
     local pkg="$1"
     if pacman -Qi "$pkg" &>/dev/null; then
         echo -e "  ${DIM}  Status:      installed${R}"
-        pacman -Qi "$pkg" 2>/dev/null \
+        LC_ALL=C pacman -Qi "$pkg" 2>/dev/null \
             | grep -E '^\s*(Description|Version|Required By|Install Reason)\s*:' \
             | sed 's/^[[:space:]]*//' \
             | while IFS= read -r line; do echo -e "  ${DIM}  ${line}${R}"; done
     else
         echo -e "  ${DIM}  Status:      not yet installed (incoming)${R}"
-        { yay -Si "$pkg" 2>/dev/null || pacman -Si "$pkg" 2>/dev/null; } \
+        { LC_ALL=C yay -Si "$pkg" 2>/dev/null || LC_ALL=C pacman -Si "$pkg" 2>/dev/null; } \
             | grep -E '^\s*(Description|Version|URL|Repository)\s*:' \
             | head -4 \
             | sed 's/^[[:space:]]*//' \
             | while IFS= read -r line; do echo -e "  ${DIM}  ${line}${R}"; done
     fi
+}
+
+append_unique() {
+    local -n _arr="$1"
+    local _value="$2" _existing
+
+    [ -n "$_value" ] || return 0
+    for _existing in "${_arr[@]:-}"; do
+        [ "$_existing" = "$_value" ] && return 0
+    done
+    _arr+=("$_value")
+}
+
+pkg_required_by() {
+    local pkg="$1" required
+
+    required=$(LC_ALL=C pacman -Qi "$pkg" 2>/dev/null \
+        | awk -F: '/^Required By/ {
+            value=$2
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            print value
+            exit
+        }')
+    [ -n "$required" ] || required="None"
+    printf '%s\n' "$required"
+}
+
+pkg_install_reason() {
+    local pkg="$1" reason
+
+    reason=$(LC_ALL=C pacman -Qi "$pkg" 2>/dev/null \
+        | awk -F: '/^Install Reason/ {
+            value=$2
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            print value
+            exit
+        }')
+    [ -n "$reason" ] || reason="unknown"
+    printf '%s\n' "$reason"
+}
+
+pkg_satisfies_dependency() {
+    local pkg="$1" dep="$2"
+    local provides token name
+
+    [ "$pkg" = "$dep" ] && return 0
+
+    provides=$(LC_ALL=C pacman -Qi "$pkg" 2>/dev/null \
+        | awk -F: '/^Provides/ {
+            value=$2
+            gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+            print value
+            exit
+        }')
+    [ -n "$provides" ] && [ "$provides" != "None" ] || return 1
+
+    for token in $provides; do
+        name="${token%%[<>=]*}"
+        [ "$name" = "$dep" ] && return 0
+    done
+
+    return 1
+}
+
+add_skip_resolution() {
+    local -n _skip_arr="$1"
+    local installed="$2" incoming="$3"
+
+    append_unique _skip_arr "$incoming"
+    if pkg_satisfies_dependency "$installed" "$incoming"; then
+        append_unique ASSUME_INSTALLED "${incoming}=9999:0-0"
+        echo -e "  ${DIM}  ${installed} provides ${incoming}; adding --assume-installed for dependency solving.${R}"
+    fi
+}
+
+conflict_recommendation() {
+    local installed="$1" incoming="$2"
+    local required reason
+
+    required=$(pkg_required_by "$installed")
+    if [ -n "$required" ] && [ "$required" != "None" ]; then
+        printf 'skip\t%s is required by: %s\n' "$installed" "$required"
+        return 0
+    fi
+
+    reason=$(pkg_install_reason "$installed")
+    case "${reason,,}" in
+        *dependency*)
+            printf 'remove\t%s is not required by another installed package; replacing it should unblock the transaction\n' "$installed"
+            ;;
+        *)
+            printf 'remove\t%s has no reverse dependencies; replacing it with %s is usually the cleanest fix\n' "$installed" "$incoming"
+            ;;
+    esac
+}
+
+remove_conflict_package() {
+    local pkg="$1"
+    local required confirm
+
+    required=$(pkg_required_by "$pkg")
+    if [ -n "$required" ] && [ "$required" != "None" ]; then
+        echo
+        echo -e "  ${WARN}  ${YELLOW}${pkg} is required by: ${required}${R}"
+        echo -e "  ${WARN}  ${YELLOW}Force-removing it may temporarily break those packages until the replacement transaction succeeds.${R}"
+
+        if [ ! -t 0 ]; then
+            echo -e "  ${FAIL}  ${RED}No interactive terminal available to confirm forced removal.${R}"
+            return 1
+        fi
+
+        read -rp "  Type 'REMOVE ${pkg}' to force-remove it, or press Enter to abort: " confirm
+        if [ "$confirm" != "REMOVE ${pkg}" ]; then
+            echo -e "  ${WARN}  ${YELLOW}Removal cancelled.${R}"
+            return 1
+        fi
+
+        priv pacman -Rdd --noconfirm "$pkg" 2>&1 | sed 's/^/    /'
+        return "${PIPESTATUS[0]}"
+    fi
+
+    if priv pacman -Rns --noconfirm "$pkg" 2>&1 | sed 's/^/    /'; then
+        return 0
+    fi
+
+    echo -e "  ${WARN}  ${YELLOW}Normal removal failed; trying forced removal for ${pkg}.${R}"
+    priv pacman -Rdd --noconfirm "$pkg" 2>&1 | sed 's/^/    /'
+    return "${PIPESTATUS[0]}"
 }
 
 # Parse yay/pacman output for conflict lines.
@@ -334,27 +611,42 @@ extract_conflicts() {
     local -a seen=()
 
     while IFS= read -r line; do
-        # Language-agnostic: extract the package pacman asks to Remove
-        local remove_pkg
+        is_conflict_line "$line" || continue
+
+        local remove_pkg after tok1 tok3 pkg1 pkg2
+
+        # Language-agnostic: extract the package pacman asks to Remove, when
+        # pacman offers a direct removal prompt.
         remove_pkg=$(printf '%s' "$line" | grep -oP \
             '(?i)(?:Remove|Rimuovere|Supprimer|Entfernen|Verwijderen|Eliminar)\s+\K[a-z0-9@._+][a-z0-9@._+\-]*(?=\?)')
-        [ -z "$remove_pkg" ] && continue
 
-        # The two conflicting packages (with versions) follow "::"
-        local after tok1 tok2 pkg1 pkg2
+        # The two conflicting packages (with versions) follow "::". The second
+        # field is a localized conjunction ("and", "und", "e", "et", etc.).
         after=$(printf '%s' "$line" | sed 's/^.*::[[:space:]]*//')
-        # packages are at positions $1 and $3 — position $2 is the conjunction
-        # word ("and", "e", "et", "und", etc.) which varies by locale
         tok1=$(printf '%s' "$after" | awk '{print $1}')
         tok3=$(printf '%s' "$after" | awk '{print $3}')
+        [ -n "$tok1" ] && [ -n "$tok3" ] || continue
+
         pkg1=$(strip_pkg_version "$tok1")
         pkg2=$(strip_pkg_version "$tok3")
+        [ -n "$pkg1" ] && [ -n "$pkg2" ] || continue
 
-        # installed = the one pacman wants to remove; incoming = the other
         local installed incoming
-        if   [ "$remove_pkg" = "$pkg1" ]; then installed="$pkg1"; incoming="$pkg2"
-        elif [ "$remove_pkg" = "$pkg2" ]; then installed="$pkg2"; incoming="$pkg1"
-        else                                   installed="$remove_pkg"; incoming="$pkg1"
+        if [ -n "$remove_pkg" ]; then
+            # installed = the one pacman wants to remove; incoming = the other
+            if   [ "$remove_pkg" = "$pkg1" ]; then installed="$pkg1"; incoming="$pkg2"
+            elif [ "$remove_pkg" = "$pkg2" ]; then installed="$pkg2"; incoming="$pkg1"
+            else                                   installed="$remove_pkg"; incoming="$pkg1"
+            fi
+        elif pacman -Q "$pkg1" >/dev/null 2>&1 && ! pacman -Q "$pkg2" >/dev/null 2>&1; then
+            installed="$pkg1"
+            incoming="$pkg2"
+        elif pacman -Q "$pkg2" >/dev/null 2>&1 && ! pacman -Q "$pkg1" >/dev/null 2>&1; then
+            installed="$pkg2"
+            incoming="$pkg1"
+        else
+            installed="$pkg1"
+            incoming="$pkg2"
         fi
 
         local key="${installed}:${incoming}"
@@ -363,7 +655,7 @@ extract_conflicts() {
         [ "$dup" -eq 1 ] && continue
         seen+=("$key")
         printf '%s\n' "$key"
-    done < <(grep -i 'confli' <<< "$output")
+    done <<< "$output"
 }
 
 # Interactive conflict resolution menu.
@@ -372,6 +664,7 @@ resolve_conflicts() {
     local -a pairs=("$@")
     local -a to_remove=() to_skip=()
     CONFLICT_NEW_DECISION=0
+    CONFLICT_ABORT=0
 
     for pair in "${pairs[@]}"; do
         local installed="${pair%%:*}"
@@ -383,15 +676,21 @@ resolve_conflicts() {
             echo -e "\n  ${DIM}Applying stored decision for ${WHITE}${installed}${R}${DIM} ↔ ${CYAN}${incoming}${R}${DIM}: ${CONFLICT_DECISIONS[$_dkey]}${R}"
             case "${CONFLICT_DECISIONS[$_dkey]}" in
                 skip)
-                    to_skip+=("$incoming")
-                    ASSUME_INSTALLED+=("${incoming}=9999:0-0")
+                    add_skip_resolution to_skip "$installed" "$incoming"
                     ;;
-                remove) to_remove+=("$installed") ;;
+                remove) append_unique to_remove "$installed" ;;
             esac
             continue
         fi
 
         CONFLICT_NEW_DECISION=1
+        local recommendation rec_reason default_choice
+        IFS=$'\t' read -r recommendation rec_reason < <(conflict_recommendation "$installed" "$incoming")
+        case "$recommendation" in
+            remove) default_choice=2 ;;
+            *)      default_choice=1 ;;
+        esac
+
         echo
         echo -e "  ${RED}${BOLD}⚡ Package conflict${R}"
         echo -e "  ${DIM}  ─────────────────────────────────────────────────────────${R}"
@@ -402,18 +701,45 @@ resolve_conflicts() {
         echo -e "  ${BOLD}${CYAN}${incoming}${R}  ${DIM}(incoming — conflicts with installed)${R}"
         show_pkg_info "$incoming"
         echo
+        echo -e "  ${BOLD}Recommended course of action:${R}"
+        if [ "$recommendation" = "remove" ]; then
+            echo -e "  ${GREEN}Remove ${WHITE}${installed}${R}${GREEN}, then rerun pacman so ${CYAN}${incoming}${R}${GREEN} can be installed/upgraded.${R}"
+        else
+            echo -e "  ${GREEN}Keep ${WHITE}${installed}${R}${GREEN} and skip ${CYAN}${incoming}${R}${GREEN} for this run.${R}"
+        fi
+        echo -e "  ${DIM}Reason: ${rec_reason}${R}"
+        echo
 
         local choice
         while true; do
             echo -e "  ${BOLD}How to resolve?${R}"
-            echo -e "  ${GREEN}1)${R} Ignore        — skip ${CYAN}${incoming}${R} for this run, keep ${WHITE}${installed}${R}"
-            echo -e "  ${GREEN}2)${R} Replace ${WHITE}${installed}${R} with ${CYAN}${incoming}${R}"
-            echo -e "  ${GREEN}3)${R} Replace ${CYAN}${incoming}${R} with ${WHITE}${installed}${R}"
-            read -rp "  Choice [1-3]: " choice
+            echo -e "  ${GREEN}1)${R} Keep ${WHITE}${installed}${R} — skip ${CYAN}${incoming}${R} for this run"
+            echo -e "  ${GREEN}2)${R} Replace — remove ${WHITE}${installed}${R}, then rerun pacman"
+            echo -e "  ${GREEN}3)${R} Abort pacman updates"
+
+            if [ ! -t 0 ]; then
+                choice="$default_choice"
+                echo -e "  ${DIM}No interactive terminal; applying default choice ${choice}.${R}"
+            else
+                read -rp "  Choice [${default_choice}]: " choice
+                choice="${choice:-$default_choice}"
+            fi
+
             case "$choice" in
-                1) to_skip+=("$incoming");    CONFLICT_DECISIONS[$_dkey]="skip";   ASSUME_INSTALLED+=("${incoming}=9999:0-0"); break ;;
-                2) to_remove+=("$installed"); CONFLICT_DECISIONS[$_dkey]="remove"; break ;;
-                3) to_skip+=("$incoming");    CONFLICT_DECISIONS[$_dkey]="skip";   ASSUME_INSTALLED+=("${incoming}=9999:0-0"); break ;;
+                1)
+                    add_skip_resolution to_skip "$installed" "$incoming"
+                    CONFLICT_DECISIONS[$_dkey]="skip"
+                    break
+                    ;;
+                2)
+                    append_unique to_remove "$installed"
+                    CONFLICT_DECISIONS[$_dkey]="remove"
+                    break
+                    ;;
+                3)
+                    CONFLICT_ABORT=1
+                    return 1
+                    ;;
                 *) echo -e "  ${WARN}  Please enter 1, 2, or 3." ;;
             esac
         done
@@ -422,9 +748,134 @@ resolve_conflicts() {
     if [ ${#to_remove[@]} -gt 0 ]; then
         echo
         echo -e "  ${WARN}  ${YELLOW}Removing: ${to_remove[*]}${R}"
-        priv pacman -Rdd --noconfirm "${to_remove[@]}" 2>&1 | sed 's/^/    /'
+        local _pkg
+        for _pkg in "${to_remove[@]}"; do
+            if ! remove_conflict_package "$_pkg"; then
+                CONFLICT_ABORT=1
+                return 1
+            fi
+        done
     fi
-    for p in "${to_skip[@]}"; do SKIP_PKGS+=("$p"); done
+    for p in "${to_skip[@]}"; do append_unique SKIP_PKGS "$p"; done
+    return 0
+}
+
+# ── pacman updates ────────────────────────────────────────────────────────────
+
+run_visible_capture() {
+    local __outvar="$1" tmp rc captured
+    shift
+
+    tmp=$(mktemp -t update-output.XXXXXX) || return 1
+    "$@" 2>&1 | tee "$tmp"
+    rc=${PIPESTATUS[0]}
+    captured=$(cat "$tmp" 2>/dev/null || true)
+    rm -f "$tmp"
+    printf -v "$__outvar" '%s' "$captured"
+    return "$rc"
+}
+
+run_pacman_updates() {
+    section "${T[PACMAN]}"
+
+    if ! command -v pacman >/dev/null 2>&1; then
+        skip "pacman"
+        return 0
+    fi
+
+    local rc captured loop ok
+    local -a ignore_args assume_args pairs
+
+    ignore_args=()
+    for p in "${SKIP_PKGS[@]:-}"; do
+        [ -n "$p" ] && ignore_args+=(--ignore "$p")
+    done
+    assume_args=()
+    for p in "${ASSUME_INSTALLED[@]:-}"; do
+        [ -n "$p" ] && assume_args+=(--assume-installed "$p")
+    done
+
+    if run_visible_capture captured priv pacman -Syu "${ignore_args[@]}" "${assume_args[@]}"; then
+        ok "pacman"
+        return 0
+    fi
+
+    if is_conflict_error "$captured"; then
+        echo -e "\n  ${WARN}  ${YELLOW}Detected a pacman package conflict in the failed transaction.${R}"
+    else
+        echo -e "\n  ${DIM}Analysing pacman failure...${R}"
+        captured=$(LC_ALL=C priv pacman -Syu --noconfirm --noprogressbar --print \
+            "${ignore_args[@]}" "${assume_args[@]}" 2>&1 || true)
+    fi
+
+    if ! is_conflict_error "$captured"; then
+        fail "pacman"
+        return 1
+    fi
+
+    ok=0
+    loop=0
+    while is_conflict_error "$captured"; do
+        loop=$((loop + 1))
+        [ "$loop" -gt 10 ] && break
+
+        pairs=()
+        while IFS= read -r _p; do
+            [ -n "$_p" ] && pairs+=("$_p")
+        done < <(extract_conflicts "$captured")
+
+        if [ "${#pairs[@]}" -eq 0 ]; then
+            echo
+            echo -e "  ${WARN}  ${YELLOW}pacman reported a conflict, but it could not be parsed automatically.${R}"
+            break
+        fi
+
+        if ! resolve_conflicts "${pairs[@]}"; then
+            echo
+            echo -e "  ${WARN}  ${YELLOW}pacman conflict handling was aborted.${R}"
+            break
+        fi
+
+        ignore_args=()
+        for _p in "${SKIP_PKGS[@]:-}"; do
+            [ -n "$_p" ] && ignore_args+=(--ignore "$_p")
+        done
+        assume_args=()
+        for _p in "${ASSUME_INSTALLED[@]:-}"; do
+            [ -n "$_p" ] && assume_args+=(--assume-installed "$_p")
+        done
+
+        echo
+        echo -e "  ${DIM}Re-running pacman after conflict resolution...${R}"
+        run_visible_capture captured priv pacman -Syu "${ignore_args[@]}" "${assume_args[@]}"
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            ok=1
+            break
+        fi
+
+        if ! is_conflict_error "$captured"; then
+            echo -e "\n  ${DIM}Re-analysing pacman failure...${R}"
+            captured=$(LC_ALL=C priv pacman -Syu --noconfirm --noprogressbar --print \
+                "${ignore_args[@]}" "${assume_args[@]}" 2>&1 || true)
+        fi
+
+        if ! is_conflict_error "$captured"; then
+            echo
+            echo -e "  ${WARN}  ${YELLOW}pacman still failed, but not with a parseable package conflict.${R}"
+            break
+        fi
+
+        if [ "$CONFLICT_NEW_DECISION" -eq 0 ]; then
+            echo
+            echo -e "  ${WARN}  ${YELLOW}pacman conflict persists even with the stored decision applied.${R}"
+            break
+        fi
+
+        echo -e "\n  ${DIM}New conflict still present; prompting again if needed...${R}"
+    done
+
+    [ "$ok" -eq 1 ] && ok "pacman" || fail "pacman"
 }
 
 # ── AUR updates ───────────────────────────────────────────────────────────────
@@ -569,12 +1020,7 @@ KERNEL_BEFORE=$(package_version linux || true)
 KERNEL_HEADERS_BEFORE=$(package_version linux-headers || true)
 
 # ── pacman ────────────────────────────────────────────────────────────────────
-section "${T[PACMAN]}"
-if command -v pacman >/dev/null 2>&1; then
-    if priv pacman -Syu; then ok "pacman"; else fail "pacman"; fi
-else
-    skip "pacman"
-fi
+run_pacman_updates
 
 # ── AUR ───────────────────────────────────────────────────────────────────────
 run_aur_updates
@@ -588,6 +1034,7 @@ rebuild_quickshell() {
     section "quickshell — source rebuild"
 
     local qs_pkg build_dir git_dir helper compat_output behind rebuild_needed rebuild_reason
+    local package_bin resolved_bin
     qs_pkg=$(detect_quickshell_pkg)
     if [ -z "$qs_pkg" ]; then
         skip "quickshell"
@@ -602,15 +1049,32 @@ rebuild_quickshell() {
 
     rebuild_needed=0
     rebuild_reason=""
+    package_bin="/usr/bin/quickshell"
+    resolved_bin=$(command -v quickshell 2>/dev/null || true)
 
-    if command -v quickshell >/dev/null 2>&1; then
-        compat_output=$(quickshell --private-check-compat 2>&1 || true)
+    if [ -x "$package_bin" ]; then
+        compat_output=$("$package_bin" --private-check-compat 2>&1 || true)
         if [ -n "$compat_output" ]; then
             printf '%s\n' "$compat_output"
         fi
-        if ! quickshell --private-check-compat >/dev/null 2>&1; then
+        if ! "$package_bin" --private-check-compat >/dev/null 2>&1; then
             rebuild_needed=1
-            rebuild_reason="Qt compatibility mismatch"
+            rebuild_reason="packaged Qt compatibility mismatch"
+        fi
+    fi
+
+    if [ -n "$resolved_bin" ] && [ "$resolved_bin" != "$package_bin" ]; then
+        compat_output=$("$resolved_bin" --private-check-compat 2>&1 || true)
+        if [ -n "$compat_output" ]; then
+            printf '%s\n' "$compat_output"
+        fi
+        if ! "$resolved_bin" --private-check-compat >/dev/null 2>&1; then
+            rebuild_needed=1
+            if [ -n "$rebuild_reason" ]; then
+                rebuild_reason="${rebuild_reason}; wrapper compatibility mismatch"
+            else
+                rebuild_reason="wrapper compatibility mismatch"
+            fi
         fi
     fi
 
@@ -640,6 +1104,7 @@ rebuild_quickshell() {
 
     if [ "$rebuild_needed" -eq 0 ]; then
         echo -e "  ${PASS}  ${GREEN}quickshell compatibility OK — no rebuild needed${R}"
+        sync_quickshell_user_local "" >/dev/null 2>&1 || true
         return 0
     fi
 
@@ -667,7 +1132,14 @@ rebuild_quickshell() {
         fi
     fi
 
-    if command -v quickshell >/dev/null 2>&1 && quickshell --private-check-compat >/dev/null 2>&1; then
+    if sync_quickshell_user_local "$build_dir"; then
+        echo -e "  ${PASS}  ${GREEN}synced user-local quickshell binary${R}"
+    else
+        echo -e "  ${WARN}  ${YELLOW}could not sync user-local quickshell binary${R}"
+    fi
+
+    if [ -x "$package_bin" ] && "$package_bin" --private-check-compat >/dev/null 2>&1 \
+        && command -v quickshell >/dev/null 2>&1 && quickshell --private-check-compat >/dev/null 2>&1; then
         ok "quickshell"
     else
         fail "quickshell"
@@ -886,6 +1358,87 @@ repair_vmware() {
 
 repair_vmware
 
+hyprland_binary_replaced() {
+    local pid exe
+
+    while IFS= read -r pid; do
+        [ -n "$pid" ] || continue
+        exe=$(readlink "/proc/$pid/exe" 2>/dev/null || true)
+        case "$exe" in
+            *"(deleted)"*) return 0 ;;
+        esac
+    done < <(pgrep -x Hyprland 2>/dev/null || true)
+
+    return 1
+}
+
+check_post_update_runtime() {
+    section "Post-update runtime"
+
+    local running_kernel installed_kernel loaded_nvidia installed_nvidia
+
+    running_kernel=$(uname -r)
+    installed_kernel=$(installed_linux_release 2>/dev/null || true)
+
+    if [ -n "$installed_kernel" ] && [ "$running_kernel" != "$installed_kernel" ]; then
+        mark_reboot_required "running kernel ${running_kernel}, installed kernel ${installed_kernel}"
+        echo -e "  ${WARN}  ${YELLOW}Kernel package changed; reboot required to load ${installed_kernel}.${R}"
+    else
+        echo -e "  ${PASS}  ${GREEN}running kernel matches installed linux package${R}"
+    fi
+
+    loaded_nvidia=$(loaded_nvidia_version 2>/dev/null || true)
+    installed_nvidia=$(package_upstream_version nvidia-utils 2>/dev/null || true)
+    if [ -n "$loaded_nvidia" ] && [ -n "$installed_nvidia" ]; then
+        if [ "$loaded_nvidia" != "$installed_nvidia" ]; then
+            mark_reboot_required "loaded NVIDIA kernel module ${loaded_nvidia}, installed userspace ${installed_nvidia}"
+            echo -e "  ${WARN}  ${YELLOW}NVIDIA API mismatch detected; reboot required before Hyprland can start reliably.${R}"
+        else
+            echo -e "  ${PASS}  ${GREEN}NVIDIA userspace and loaded kernel module match${R}"
+        fi
+    else
+        echo -e "  ${DIM}  –  NVIDIA module not loaded or nvidia-utils not installed${R}"
+    fi
+
+    if hyprland_binary_replaced; then
+        mark_reboot_required "running Hyprland binary was replaced during the update"
+        echo -e "  ${WARN}  ${YELLOW}Running Hyprland binary was replaced; clean restart/reboot required.${R}"
+    else
+        echo -e "  ${PASS}  ${GREEN}running Hyprland binary is not deleted/replaced${R}"
+    fi
+
+    if [ "$REBOOT_REQUIRED" -eq 1 ]; then
+        echo
+        echo -e "  ${WARN}  ${YELLOW}${BOLD}A reboot is required to finish this update safely.${R}"
+        for reason in "${REBOOT_REASONS[@]}"; do
+            echo -e "  ${DIM}  • ${reason}${R}"
+        done
+    fi
+}
+
+prompt_reboot_if_required() {
+    local choice
+
+    [ "$REBOOT_REQUIRED" -eq 1 ] || return 0
+
+    echo
+    if [ "${UPDATE_AUTO_REBOOT:-0}" = "1" ] || [ "${AG_UPDATE_AUTO_REBOOT:-0}" = "1" ]; then
+        echo -e "  ${WARN}  ${YELLOW}Auto-reboot enabled; rebooting now.${R}"
+        priv systemctl reboot
+        return 0
+    fi
+
+    read -rp "  Reboot now to finish the update safely? [y/N]: " choice
+    case "$choice" in
+        y|Y|yes|YES)
+            priv systemctl reboot
+            ;;
+        *)
+            echo -e "  ${WARN}  ${YELLOW}Reboot deferred. Hyprland/NVIDIA may remain unstable until reboot.${R}"
+            ;;
+    esac
+}
+
 # ── Deferred AUR conflict resolution ─────────────────────────────────────────
 if [ -n "$PENDING_AUR_HELPER" ]; then
     section "Conflict Resolution — ${PENDING_AUR_HELPER}"
@@ -903,7 +1456,11 @@ if [ -n "$PENDING_AUR_HELPER" ]; then
             < <(extract_conflicts "$_def_captured")
         [ "${#_def_pairs[@]}" -eq 0 ] && break
 
-        resolve_conflicts "${_def_pairs[@]}"
+        if ! resolve_conflicts "${_def_pairs[@]}"; then
+            echo
+            echo -e "  ${WARN}  ${YELLOW}${PENDING_AUR_HELPER} conflict handling was aborted.${R}"
+            break
+        fi
 
         _def_ignore=()
         for _p in "${SKIP_PKGS[@]:-}"; do [ -n "$_p" ] && _def_ignore+=(--ignore "$_p"); done
@@ -938,6 +1495,8 @@ if [ -n "$PENDING_AUR_HELPER" ]; then
     [ "$_def_ok" -eq 1 ] && ok "$PENDING_AUR_HELPER" || fail "$PENDING_AUR_HELPER"
 fi
 
+check_post_update_runtime
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo
 echo -e "  ${BOLD}${BLUE}┌──────────────────────────────────────────────────────────┐${R}"
@@ -955,6 +1514,7 @@ if [ ${#FAILED[@]} -gt 0 ]; then
     echo -e "  ${RED}  ⚠  ${T[ERRORS]}${R}"
     echo -e "  ${DIM}     ${T[SCROLL]}${R}"
     echo
+    prompt_reboot_if_required
     read -rp "  ${T[PRESS_ENTER]}"
     exit 1
 fi
@@ -962,4 +1522,5 @@ fi
 echo
 echo -e "  ${GREEN}${BOLD}  ✔  ${T[ALL_DONE]}${R}"
 echo
+prompt_reboot_if_required
 read -rp "  ${T[PRESS_ENTER]}"

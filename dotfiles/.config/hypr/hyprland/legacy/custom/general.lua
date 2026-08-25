@@ -1,0 +1,61 @@
+local h = require("hyprland.lib")
+
+-- Migrated from legacy/custom/general.conf. Optional legacy custom module; not loaded by default.
+
+hl.monitor({ output = "DP-1", mode = "2560x1440@165", position = "1920x0", scale = 1 })
+hl.monitor({ output = "HDMI-A-1", mode = "1920x1080@60", position = "0x550", scale = 1 })
+hl.monitor({ output = "HDMI-A-2", mode = "1360x768@60", position = "4480x550", scale = 1 })
+
+-- DP-1 Workspaces (1–10)
+hl.workspace_rule({ workspace = "1", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "2", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "3", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "4", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "5", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "6", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "7", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "8", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "9", persistent = true, monitor = "DP-1" })
+hl.workspace_rule({ workspace = "10", layout = "scrolling", persistent = true, monitor = "DP-1" })
+
+-- HDMI-A-1 Workspaces (11–20)
+hl.workspace_rule({ workspace = "11", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "12", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "13", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "14", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "15", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "16", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "17", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "18", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "19", persistent = true, monitor = "HDMI-A-1" })
+hl.workspace_rule({ workspace = "20", layout = "scrolling", persistent = true, monitor = "HDMI-A-1" })
+
+-- HDMI-A-2 Workspaces (21–30)
+hl.workspace_rule({ workspace = "21", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "22", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "23", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "24", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "25", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "26", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "27", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "28", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "29", persistent = true, monitor = "HDMI-A-2" })
+hl.workspace_rule({ workspace = "30", layout = "scrolling", persistent = true, monitor = "HDMI-A-2" })
+
+local function dispatch_workspace(target)
+    hl.on("hyprland.start", function()
+        hl.exec_cmd("hyprctl dispatch workspace " .. target)
+    end)
+    hl.on("config.reloaded", function()
+        hl.exec_cmd("hyprctl dispatch workspace " .. target)
+    end)
+end
+
+dispatch_workspace([["DP-1,1"]])
+dispatch_workspace([["HDMI-A-1,11"]])
+dispatch_workspace([["HDMI-A-2,21"]])
+
+-- Combine Audio
+-- hl.on("hyprland.start", function()
+--     hl.exec_cmd("bash ~/.config/hypr/custom/scripts/combine-audio.sh")
+-- end)

@@ -9,8 +9,38 @@ CACHE_DIR="$XDG_CACHE_HOME/quickshell"
 STATE_DIR="$XDG_STATE_HOME/quickshell"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHELL_CONFIG_FILE="$XDG_CONFIG_HOME/illogical-impulse/config.json"
+RUNTIME_CONFIG_FILE="$CACHE_DIR/runtime-config.json"
+RUNTIME_CONFIG_FILE_ALT="$CACHE_DIR/quickshell/runtime-config.json"
 MATUGEN_DIR="$XDG_CONFIG_HOME/matugen"
 terminalscheme="$SCRIPT_DIR/terminal/scheme-base.json"
+WALLPAPER_ANIMATION_DELAY="${II_WALLPAPER_ANIMATION_DELAY:-4.0}"
+WALLPAPER_SWITCH_TOKEN_FILE="$STATE_DIR/user/generated/wallpaper/switch.token"
+animation_settled_flag=""
+visual_switch_done=""
+wallpaper_switch_token=""
+
+should_defer_heavy_work() {
+    [[ "$visual_switch_done" == "1" && -z "$animation_settled_flag" && "${II_WALLPAPER_DEFER_HEAVY:-1}" != "0" ]]
+}
+
+note_visual_wallpaper_switch() {
+    visual_switch_done="1"
+    if should_defer_heavy_work; then
+        mkdir -p "$(dirname "$WALLPAPER_SWITCH_TOKEN_FILE")"
+        wallpaper_switch_token="$$:${EPOCHREALTIME:-$(date +%s%N)}"
+        printf '%s\n' "$wallpaper_switch_token" > "$WALLPAPER_SWITCH_TOKEN_FILE"
+    fi
+}
+
+wait_for_wallpaper_animation() {
+    if should_defer_heavy_work; then
+        sleep "$WALLPAPER_ANIMATION_DELAY"
+        if [[ -n "$wallpaper_switch_token" && -f "$WALLPAPER_SWITCH_TOKEN_FILE" ]] \
+            && [[ "$(cat "$WALLPAPER_SWITCH_TOKEN_FILE" 2>/dev/null)" != "$wallpaper_switch_token" ]]; then
+            exit 0
+        fi
+    fi
+}
 
 handle_kde_material_you_colors() {
     # Check if Qt app theming is enabled in config
@@ -36,13 +66,13 @@ handle_kde_material_you_colors() {
 
 pre_process() {
     local mode_flag="$1"
-    # Set GNOME color-scheme if mode_flag is dark or light
+    # Set only the light/dark preference here. Do not reset GTK/icon/cursor
+    # themes: Max uses a custom desktop theme stack, and wallpaper theming should
+    # recolor accents without clobbering the selected theme.
     if [[ "$mode_flag" == "dark" ]]; then
         gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'
-        gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3-dark'
     elif [[ "$mode_flag" == "light" ]]; then
         gsettings set org.gnome.desktop.interface color-scheme 'prefer-light'
-        gsettings set org.gnome.desktop.interface gtk-theme 'adw-gtk3'
     fi
 
     if [ ! -d "$CACHE_DIR"/user/generated ]; then
@@ -57,6 +87,13 @@ post_process() {
 
     handle_kde_material_you_colors &
     "$SCRIPT_DIR/code/material-code-set-color.sh" &
+
+    # Reload Hyprland so generated border/background colors from matugen apply
+    # immediately. This covers both the legacy colors.conf path and the Lua
+    # colors.lua path used by the migrated config.
+    if command -v hyprctl >/dev/null 2>&1; then
+        hyprctl reload >/dev/null 2>&1 || true
+    fi
 }
 
 check_and_prompt_upscale() {
@@ -141,18 +178,27 @@ EOF
     mv "$RESTORE_SCRIPT.tmp" "$RESTORE_SCRIPT"
 }
 
+update_config_path() {
+    local jq_expr="$1"
+    local path="$2"
+    local config_file
+
+    for config_file in "$SHELL_CONFIG_FILE" "$RUNTIME_CONFIG_FILE" "$RUNTIME_CONFIG_FILE_ALT"; do
+        if [ -f "$config_file" ]; then
+            mkdir -p "$(dirname "$config_file")"
+            jq --arg path "$path" "$jq_expr" "$config_file" > "$config_file.tmp" && mv "$config_file.tmp" "$config_file"
+        fi
+    done
+}
+
 set_wallpaper_path() {
     local path="$1"
-    if [ -f "$SHELL_CONFIG_FILE" ]; then
-        jq --arg path "$path" '.background.wallpaperPath = $path' "$SHELL_CONFIG_FILE" > "$SHELL_CONFIG_FILE.tmp" && mv "$SHELL_CONFIG_FILE.tmp" "$SHELL_CONFIG_FILE"
-    fi
+    update_config_path '.background.wallpaperPath = $path' "$path"
 }
 
 set_thumbnail_path() {
     local path="$1"
-    if [ -f "$SHELL_CONFIG_FILE" ]; then
-        jq --arg path "$path" '.background.thumbnailPath = $path' "$SHELL_CONFIG_FILE" > "$SHELL_CONFIG_FILE.tmp" && mv "$SHELL_CONFIG_FILE.tmp" "$SHELL_CONFIG_FILE"
-    fi
+    update_config_path '.background.thumbnailPath = $path' "$path"
 }
 
 switch() {
@@ -161,19 +207,6 @@ switch() {
     type_flag="$3"
     color_flag="$4"
     color="$5"
-
-    # Start Gemini auto-categorization if enabled
-    aiStylingEnabled=$(jq -r '.background.clock.cookie.aiStyling' "$SHELL_CONFIG_FILE")
-    if [[ "$aiStylingEnabled" == "true" ]]; then
-        "$SCRIPT_DIR/../ai/gemini-categorize-wallpaper.sh" "$imgpath" > "$STATE_DIR/user/generated/wallpaper/category.txt" &
-    fi
-
-    read scale screenx screeny screensizey < <(hyprctl monitors -j | jq '.[] | select(.focused) | .scale, .x, .y, .height' | xargs)
-    cursorposx=$(hyprctl cursorpos -j | jq '.x' 2>/dev/null) || cursorposx=960
-    cursorposx=$(bc <<< "scale=0; ($cursorposx - $screenx) * $scale / 1")
-    cursorposy=$(hyprctl cursorpos -j | jq '.y' 2>/dev/null) || cursorposy=540
-    cursorposy=$(bc <<< "scale=0; ($cursorposy - $screeny) * $scale / 1")
-    cursorposy_inverted=$((screensizey - cursorposy))
 
     if [[ "$color_flag" == "1" ]]; then
         matugen_args=(color hex "$color")
@@ -245,9 +278,26 @@ switch() {
         else
             matugen_args=(image "$imgpath")
             generate_colors_material_args=(--path "$imgpath")
-            # Update wallpaper path in config
+            # Update wallpaper and thumbnail paths in config. Static images should
+            # keep thumbnailPath in sync too; leaving it pointed at an old image can
+            # make fallback/blur/safety paths show the wrong wallpaper.
             set_wallpaper_path "$imgpath"
+            set_thumbnail_path "$imgpath"
+            [[ -z "$noswitch_flag" ]] && note_visual_wallpaper_switch
             remove_restore
+        fi
+    fi
+
+    wait_for_wallpaper_animation
+
+    # Start Gemini auto-categorization only after the switch settles. Repeated
+    # wallpaper changes should not leave old image analysis jobs competing with
+    # the reveal animation.
+    if [[ "$color_flag" != "1" && -n "$imgpath" ]]; then
+        aiStylingEnabled=$(jq -r '.background.clock.cookie.aiStyling' "$SHELL_CONFIG_FILE")
+        if [[ "$aiStylingEnabled" == "true" ]]; then
+            mkdir -p "$STATE_DIR/user/generated/wallpaper"
+            "$SCRIPT_DIR/../ai/gemini-categorize-wallpaper.sh" "$imgpath" > "$STATE_DIR/user/generated/wallpaper/category.txt" &
         fi
     fi
 
@@ -296,6 +346,13 @@ switch() {
     fi
 
     matugen "${matugen_args[@]}"
+
+    if command -v jq >/dev/null 2>&1 && [ -f "$STATE_DIR/user/generated/colors.json" ]; then
+        jq --arg mode "$mode_flag" '. + {darkmode: ($mode == "dark")}' \
+            "$STATE_DIR/user/generated/colors.json" > "$STATE_DIR/user/generated/colors.json.tmp" \
+            && mv "$STATE_DIR/user/generated/colors.json.tmp" "$STATE_DIR/user/generated/colors.json"
+    fi
+
     source "$(eval echo $ILLOGICAL_IMPULSE_VIRTUAL_ENV)/bin/activate"
     python3 "$SCRIPT_DIR/generate_colors_material.py" "${generate_colors_material_args[@]}" \
         > "$STATE_DIR"/user/generated/material_colors.scss
@@ -363,6 +420,10 @@ main() {
             --noswitch)
                 noswitch_flag="1"
                 imgpath=$(jq -r '.background.wallpaperPath' "$SHELL_CONFIG_FILE" 2>/dev/null || echo "")
+                shift
+                ;;
+            --animation-settled)
+                animation_settled_flag="1"
                 shift
                 ;;
             *)

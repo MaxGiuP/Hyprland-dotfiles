@@ -17,6 +17,7 @@ Scope {
     property bool extend: false
     property real sidebarWidth: root.extend ? Appearance.sizes.sidebarWidthExtended : Appearance.sizes.sidebarWidth
     property Item sidebarContent: null
+    readonly property bool sidebarContentRequired: GlobalStates.sidebarLeftOpen || root.detach || root.pin
     property var panelWindowsByScreen: ({})
     property var pinnedWindowsByScreen: ({})
     property string pinnedScreenName: ""
@@ -96,6 +97,34 @@ Scope {
 
         if (root.sidebarContent.parent !== targetParent)
             root.sidebarContent.parent = targetParent;
+    }
+
+    function ensureSidebarContent() {
+        if (root.sidebarContent)
+            return;
+
+        root.sidebarContent = sidebarContentComponent.createObject(null, {
+            "scopeRoot": root,
+        });
+        root.relocateSidebarContent();
+    }
+
+    function releaseSidebarContent() {
+        if (root.sidebarContentRequired || !root.sidebarContent)
+            return;
+
+        const oldContent = root.sidebarContent;
+        root.sidebarContent = null;
+        oldContent.destroy();
+    }
+
+    function syncSidebarContent() {
+        if (root.sidebarContentRequired) {
+            sidebarContentReleaseTimer.stop();
+            root.ensureSidebarContent();
+        } else {
+            sidebarContentReleaseTimer.restart();
+        }
     }
 
     function focusSidebarContent() {
@@ -210,11 +239,15 @@ Scope {
         }
     }
 
+    Timer {
+        id: sidebarContentReleaseTimer
+        interval: 350
+        repeat: false
+        onTriggered: root.releaseSidebarContent()
+    }
+
     Component.onCompleted: {
-        root.sidebarContent = sidebarContentComponent.createObject(null, {
-            "scopeRoot": root,
-        });
-        root.relocateSidebarContent();
+        root.syncSidebarContent();
         root.syncPinnedReservation();
     }
 
@@ -231,6 +264,7 @@ Scope {
             root.pinnedScreenName = "";
         }
 
+        root.syncSidebarContent();
         root.relocateSidebarContent();
         root.syncPinnedReservation();
 
@@ -239,9 +273,11 @@ Scope {
     }
 
     onPinChanged: {
+        root.syncSidebarContent();
         root.relocateSidebarContent();
         root.syncPinnedReservation();
     }
+    onSidebarContentRequiredChanged: root.syncSidebarContent()
     onTargetScreenNameChanged: root.relocateSidebarContent()
     onPinnedScreenNameChanged: {
         root.relocateSidebarContent();

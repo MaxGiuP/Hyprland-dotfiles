@@ -18,8 +18,10 @@ Scope {
         PanelWindow {
             id: root
             required property var modelData
+            readonly property string screenName: modelData?.name ?? ""
+            readonly property bool tvModeVisible: HyprlandData.monitorShowsTvModeWorkspace(screenName)
 
-            visible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked
+            visible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked && !tvModeVisible
             screen: modelData
 
             WlrLayershell.namespace: "quickshell:notificationPopup"

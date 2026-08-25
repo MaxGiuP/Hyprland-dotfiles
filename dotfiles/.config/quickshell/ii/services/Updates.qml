@@ -22,7 +22,7 @@ Singleton {
     property string pendingOverlayCommand: ""
     property string pendingOverlayCommandLabel: ""
     property int pendingOverlayCommandNonce: 0
-    readonly property int watchIntervalMs: 10 * 1000
+    readonly property int watchIntervalMs: Math.max(1, Config.options?.updates?.checkInterval ?? 120) * 60 * 1000
     
     readonly property bool updateAdvised: available && count > Config.options.updates.adviseUpdateThreshold
     readonly property bool updateStronglyAdvised: available && count > Config.options.updates.stronglyAdviseUpdateThreshold
@@ -47,7 +47,8 @@ Singleton {
 
     function updateScriptCommand() {
         const scriptPath = CF.StringUtils.shellSingleQuoteEscape(root.updateScriptPath)
-        return `'${scriptPath}'`
+        const languageCode = CF.StringUtils.shellSingleQuoteEscape(Translation.languageCode || Qt.locale().name)
+        return `'${scriptPath}' '${languageCode}'`
     }
 
     function launchUpdateScript() {

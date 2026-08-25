@@ -32,7 +32,7 @@ ContentPage {
                  for dir in "$HOME/.icons" "/usr/share/icons"; do
                    f="$dir/$theme/hyprcursors/left_ptr.hlc"
                    [ -f "$f" ] || continue
-                   out="/tmp/qs-cursor-preview-${theme}.svg"
+                   out="/tmp/qs-cursor-preview-$theme.svg"
                    unzip -p "$f" "*.svg" 2>/dev/null | head -c 65536 > "$out" && echo "$out"
                    exit 0
                  done`
@@ -86,10 +86,10 @@ ContentPage {
                    for dir in "$HOME/.icons" "/usr/share/icons"; do
                      td="$dir/$theme"
                      [ -d "$td" ] || continue
-                     f=$(find "$td" -name "${icon}.svg" -o -name "${icon}.png" 2>/dev/null | sort -t '/' -k 5 -rn | head -1)
+                     f=$(find "$td" -name "$icon.svg" -o -name "$icon.png" 2>/dev/null | sort -t '/' -k 5 -rn | head -1)
                      [ -n "$f" ] && result="$f" && break
                    done
-                   echo "${result:-none}"
+                   if [ -n "$result" ]; then echo "$result"; else echo "none"; fi
                  done`
             ]
             stdout: SplitParser {
@@ -311,8 +311,9 @@ ContentPage {
 
             RippleButtonWithIcon {
                 Layout.fillWidth: true
-                materialIcon: "refresh"
-                mainText: Translation.tr("Refresh values")
+                materialIcon: DesktopThemeSettings.scanning ? "progress_activity" : "refresh"
+                mainText: DesktopThemeSettings.scanning ? Translation.tr("Refreshing values") : Translation.tr("Refresh values")
+                enabled: !DesktopThemeSettings.scanning
                 onClicked: DesktopThemeSettings.refreshAll()
             }
         }
@@ -911,7 +912,9 @@ ContentPage {
 
                             MouseArea {
                                 anchors.fill: parent
+                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
+                                onEntered: Wallpapers.preload(modelData)
                                 onClicked: Wallpapers.apply(modelData)
                             }
 

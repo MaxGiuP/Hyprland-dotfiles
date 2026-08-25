@@ -131,10 +131,11 @@ Item {
     // Scroll to switch workspaces
     WheelHandler {
         onWheel: (event) => {
-            if (event.angleDelta.y < 0)
-                Hyprland.dispatch(`workspace r+1`);
-            else if (event.angleDelta.y > 0)
-                Hyprland.dispatch(`workspace r-1`);
+            if (event.angleDelta.y < 0) {
+                HyprlandDispatch.dispatch(`workspace r+1`);
+            } else if (event.angleDelta.y > 0) {
+                HyprlandDispatch.dispatch(`workspace r-1`);
+            }
         }
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
     }
@@ -144,7 +145,7 @@ Item {
         acceptedButtons: Qt.BackButton
         onPressed: (event) => {
             if (event.button === Qt.BackButton) {
-                Hyprland.dispatch(`togglespecialworkspace`);
+                HyprlandDispatch.dispatch(`togglespecialworkspace`);
             } 
         }
     }
@@ -167,8 +168,9 @@ Item {
                 implicitWidth: workspaceButtonWidth
                 implicitHeight: workspaceButtonWidth
                 radius: (width / 2)
-                property var previousOccupied: (workspaceOccupied[index-1] && !(!activeWindow?.activated && root.activeWorkspaceId === index))
-                property var rightOccupied: (workspaceOccupied[index+1] && !(!activeWindow?.activated && root.activeWorkspaceId === index+2))
+                property int workspaceValue: root.workspaceGroup * root.workspacesShown + index + 1
+                property var previousOccupied: (workspaceOccupied[index-1] && !(!activeWindow?.activated && root.activeWorkspaceId === workspaceValue - 1))
+                property var rightOccupied: (workspaceOccupied[index+1] && !(!activeWindow?.activated && root.activeWorkspaceId === workspaceValue + 1))
                 property var radiusPrev: previousOccupied ? 0 : (width / 2)
                 property var radiusNext: rightOccupied ? 0 : (width / 2)
 
@@ -178,7 +180,7 @@ Item {
                 bottomRightRadius: radiusNext
                 
                 color: ColorUtils.transparentize(Appearance.m3colors.m3secondaryContainer, 0.4)
-                opacity: (workspaceOccupied[index] && !(!activeWindow?.activated && root.activeWorkspaceId === index+1)) ? 1 : 0
+                opacity: (workspaceOccupied[index] && !(!activeWindow?.activated && root.activeWorkspaceId === workspaceValue)) ? 1 : 0
 
                 Behavior on opacity {
                     animation: Appearance.animation.elementMove.numberAnimation.createObject(this)
@@ -213,6 +215,9 @@ Item {
         AnimatedTabIndexPair {
             id: idxPair
             index: root.workspaceIndexInGroup
+            idx1Duration: 85
+            idx2Duration: 220
+            easingType: Easing.OutCubic
         }
         property real indicatorPosition: Math.min(idxPair.idx1, idxPair.idx2) * workspaceButtonWidth + root.activeWorkspaceMargin
         property real indicatorLength: Math.abs(idxPair.idx1 - idxPair.idx2) * workspaceButtonWidth + workspaceButtonWidth - root.activeWorkspaceMargin * 2
@@ -244,7 +249,9 @@ Item {
                 property int workspaceValue: workspaceGroup * root.workspacesShown + index + 1
                 implicitHeight: vertical ? Appearance.sizes.verticalBarWidth : Appearance.sizes.barHeight
                 implicitWidth: vertical ? Appearance.sizes.verticalBarWidth : Appearance.sizes.verticalBarWidth
-                onPressed: Hyprland.dispatch(`workspace ${workspaceValue}`)
+                onPressed: {
+                    HyprlandDispatch.dispatch(`workspace ${workspaceValue}`);
+                }
                 width: vertical ? undefined : workspaceButtonWidth
                 height: vertical ? workspaceButtonWidth : undefined
 

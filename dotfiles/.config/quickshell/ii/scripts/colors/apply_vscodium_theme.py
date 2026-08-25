@@ -38,6 +38,8 @@ def build_customizations(colors: dict) -> dict:
     glass_low = alpha(colors["surface_container_low"], "c4")
     glass_container = alpha(colors["surface_container"], "cc")
     glass_high = alpha(colors["surface_container_high"], "d0")
+    popup_surface = colors["surface_container"]
+    popup_surface_high = colors["surface_container_high"]
 
     return {
         "editor.background": glass_surface,
@@ -82,7 +84,7 @@ def build_customizations(colors: dict) -> dict:
         "list.activeSelectionForeground": colors["on_secondary_container"],
         "list.hoverBackground": glass_container,
         "list.inactiveSelectionBackground": glass_high,
-        "menu.background": glass_container,
+        "menu.background": popup_surface,
         "menu.foreground": colors["on_surface"],
         "menu.border": colors["outline_variant"],
         "menu.separatorBackground": colors["outline_variant"],
@@ -124,9 +126,19 @@ def build_customizations(colors: dict) -> dict:
         "input.foreground": colors["on_surface"],
         "input.border": colors["outline"],
         "focusBorder": colors["primary"],
-        "dropdown.background": glass_container,
+        "dropdown.background": popup_surface,
         "dropdown.foreground": colors["on_surface"],
         "dropdown.border": colors["outline"],
+        "editorWidget.background": popup_surface,
+        "editorWidget.foreground": colors["on_surface"],
+        "editorWidget.border": colors["outline_variant"],
+        "editorSuggestWidget.background": popup_surface,
+        "editorSuggestWidget.foreground": colors["on_surface"],
+        "editorSuggestWidget.border": colors["outline_variant"],
+        "editorSuggestWidget.selectedBackground": popup_surface_high,
+        "quickInput.background": popup_surface,
+        "quickInput.foreground": colors["on_surface"],
+        "quickInputList.focusBackground": popup_surface_high,
         "badge.background": colors["secondary_container"],
         "badge.foreground": colors["on_secondary_container"],
         "notifications.background": glass_low,

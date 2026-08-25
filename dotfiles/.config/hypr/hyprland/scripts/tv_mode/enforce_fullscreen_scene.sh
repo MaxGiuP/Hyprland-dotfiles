@@ -78,12 +78,12 @@ enforce_target() {
         return 0
     fi
 
-    hyprctl dispatch focuswindow "address:${address}" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focuswindow "address:${address}" >/dev/null 2>&1 || true
     if [[ "$fullscreen" == "0" ]]; then
-        hyprctl dispatch fullscreen 0 >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh fullscreen 0 >/dev/null 2>&1 || true
     fi
-    hyprctl dispatch focuswindow "address:${address}" >/dev/null 2>&1 || true
-    hyprctl dispatch bringactivetotop >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focuswindow "address:${address}" >/dev/null 2>&1 || true
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh bringactivetotop >/dev/null 2>&1 || true
 }
 
 refresh_steam_ui_after_app_close() {
@@ -93,8 +93,8 @@ refresh_steam_ui_after_app_close() {
     sleep 0.35
 
     if [[ -n "$steam_address" ]]; then
-        hyprctl dispatch focuswindow "address:${steam_address}" >/dev/null 2>&1 || true
-        hyprctl dispatch bringactivetotop >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focuswindow "address:${steam_address}" >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh bringactivetotop >/dev/null 2>&1 || true
     fi
 }
 

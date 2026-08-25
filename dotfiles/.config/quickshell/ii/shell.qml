@@ -21,6 +21,7 @@ ShellRoot {
 
     // Stuff for every panel family
     ReloadPopup {}
+    SoftwareDimmingOverlay {}
 
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()

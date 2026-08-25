@@ -41,9 +41,10 @@ Scope {
                 readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(screenName)
                 readonly property bool tvSpecialVisible: tvOutput && HyprlandData.monitorShowsTvSpecialWorkspace(screenName)
                 readonly property bool hideWhenFullscreen: Config.options.bar.hideWhenFullscreen ?? false
-                visible: !tvSpecialVisible && (!hideWhenFullscreen || !fullscreenOnMonitor)
+                visible: !tvSpecialVisible
                 readonly property bool topBarVisible: !Config.options.bar.bottom
                     && visible
+                    && (!hideWhenFullscreen || !fullscreenOnMonitor)
                     && !launchpadOnThisScreen
                     && (!Config?.options.bar.autoHide.enable || mustShow)
                 readonly property real topBarClearance: topBarVisible
@@ -74,7 +75,7 @@ Scope {
                 readonly property bool launchpadOnThisScreen: GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen
                 property bool mustShow: (hoverRegion.containsMouse || superShow) && !launchpadOnThisScreen
                 exclusionMode: ExclusionMode.Normal
-                exclusiveZone: ((!visible) || launchpadOnThisScreen || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
+                exclusiveZone: ((!visible) || launchpadOnThisScreen || (hideWhenFullscreen && fullscreenOnMonitor) || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
                 WlrLayershell.namespace: "quickshell:bar"
                 implicitHeight: Appearance.sizes.barHeight + Appearance.rounding.screenRounding
@@ -132,6 +133,7 @@ Scope {
 
                     BarContent {
                         id: barContent
+                        screen: screenScope.modelData
                         
                         implicitHeight: Appearance.sizes.barHeight
                         anchors {

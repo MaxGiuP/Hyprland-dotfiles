@@ -6,7 +6,8 @@ SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 QS_CONFIG="${1:-${QS_CONFIG:-ii}}"
 SERVICE_NAME="${QS_SERVICE_NAME:-quickshell.service}"
 QS_BIN="${QS_BIN:-}"
-WAIT_FOR_IPC_TENTHS="${WAIT_FOR_IPC_TENTHS:-100}"
+WAIT_FOR_IPC_TENTHS="${WAIT_FOR_IPC_TENTHS:-30}"
+QS_IPC_TIMEOUT="${QS_IPC_TIMEOUT:-0.25}"
 EVENT_LOG="$SCRIPT_DIR/quickshell_event_log.sh"
 
 "$EVENT_LOG" ensure-invoked "config=$QS_CONFIG" "service=$SERVICE_NAME" "argv=$*" || true
@@ -34,10 +35,25 @@ quickshell_ready() {
   resolve_qs_bin || return 1
 
   if command -v timeout >/dev/null 2>&1; then
-    timeout 1 "$QS_BIN" -c "$QS_CONFIG" ipc call lock focus >/dev/null 2>&1
+    timeout "$QS_IPC_TIMEOUT" "$QS_BIN" -c "$QS_CONFIG" ipc call lock focus >/dev/null 2>&1
   else
     "$QS_BIN" -c "$QS_CONFIG" ipc call lock focus >/dev/null 2>&1
   fi
+}
+
+start_quickshell_service() {
+  if command -v systemctl >/dev/null 2>&1 && systemctl --user start "$SERVICE_NAME" >/dev/null 2>&1; then
+    "$EVENT_LOG" ensure-systemd-started "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
+    return 0
+  fi
+
+  "$EVENT_LOG" ensure-systemd-start-failed "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
+  return 1
+}
+
+start_quickshell_manual() {
+  "$EVENT_LOG" ensure-manual-start "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
+  setsid -f "$SCRIPT_DIR/start_quickshell.sh" "$QS_CONFIG" >/dev/null 2>&1 &
 }
 
 wait_for_quickshell_ready() {
@@ -61,6 +77,12 @@ resolve_qs_bin || {
   exit 1
 }
 
+"$SCRIPT_DIR/quickshell_compat_check.sh" "$QS_BIN" "$QS_CONFIG" || exit $?
+
+if ! has_quickshell; then
+  start_quickshell_service || start_quickshell_manual
+fi
+
 if wait_for_quickshell_ready; then
   exit 0
 fi
@@ -76,8 +98,7 @@ if has_quickshell; then
   "$EVENT_LOG" ensure-process-present-but-ipc-unready "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
 fi
 
-"$EVENT_LOG" ensure-manual-start "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
-setsid -f "$SCRIPT_DIR/start_quickshell.sh" "$QS_CONFIG" >/dev/null 2>&1 &
+start_quickshell_manual
 
 if wait_for_quickshell_ready; then
   exit 0

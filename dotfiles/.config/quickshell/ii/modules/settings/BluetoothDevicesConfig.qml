@@ -14,6 +14,7 @@ ContentPage {
 
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
+    readonly property bool isDiscovering: Bluetooth.defaultAdapter?.discovering ?? false
 
     function scrollToSection(sectionId) {
         const map = { "overview": btOverviewSection, "devices": btDevicesSection, "other": btOtherSection }
@@ -23,6 +24,15 @@ ContentPage {
 
     PwObjectTracker {
         objects: root.trackedOutputDevices
+    }
+
+    Timer {
+        id: scanTimer
+        interval: 30000
+        onTriggered: {
+            if (Bluetooth.defaultAdapter?.discovering)
+                Bluetooth.defaultAdapter.discovering = false
+        }
     }
 
     ContentSection {
@@ -68,28 +78,80 @@ ContentPage {
         icon: "bluetooth"
         title: Translation.tr("Bluetooth devices")
 
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            RippleButtonWithIcon {
+                Layout.fillWidth: true
+                materialIcon: root.isDiscovering ? "stop_circle" : "bluetooth_searching"
+                mainText: root.isDiscovering ? Translation.tr("Stop scanning") : Translation.tr("Scan for devices")
+                enabled: BluetoothStatus.enabled && BluetoothStatus.available
+                toggled: root.isDiscovering
+                onClicked: {
+                    if (!Bluetooth.defaultAdapter) return
+                    if (root.isDiscovering) {
+                        Bluetooth.defaultAdapter.discovering = false
+                        scanTimer.stop()
+                    } else {
+                        Bluetooth.defaultAdapter.discovering = true
+                        scanTimer.restart()
+                    }
+                }
+            }
+        }
+
+        StyledIndeterminateProgressBar {
+            Layout.fillWidth: true
+            visible: root.isDiscovering
+        }
+
         Repeater {
             model: BluetoothStatus.friendlyDeviceList
 
             delegate: Rectangle {
                 required property var modelData
                 Layout.fillWidth: true
-                implicitHeight: deviceRow.implicitHeight + 16
+                implicitHeight: deviceRow.implicitHeight + 20
                 radius: Appearance.rounding.normal
                 color: Appearance.colors.colLayer1
                 border.width: 1
-                border.color: Appearance.colors.colOutlineVariant
+                border.color: modelData.connected
+                    ? Appearance.colors.colPrimary
+                    : Appearance.colors.colOutlineVariant
 
                 RowLayout {
                     id: deviceRow
                     anchors.fill: parent
-                    anchors.margins: 8
-                    spacing: 10
+                    anchors.margins: 10
+                    spacing: 12
 
-                    MaterialSymbol {
-                        text: modelData.connected ? "bluetooth_connected" : modelData.paired ? "headphones" : "bluetooth_searching"
-                        iconSize: 20
-                        color: Appearance.colors.colOnLayer1
+                    Item {
+                        implicitWidth: 32
+                        implicitHeight: 32
+
+                        Image {
+                            id: deviceSystemIcon
+                            anchors.fill: parent
+                            source: modelData.icon ? Quickshell.iconPath(modelData.icon, "") : ""
+                            visible: status === Image.Ready
+                            fillMode: Image.PreserveAspectFit
+                        }
+
+                        MaterialSymbol {
+                            anchors.fill: parent
+                            visible: !deviceSystemIcon.visible
+                            text: {
+                                if (modelData.connected) return "bluetooth_connected"
+                                if (modelData.pairing) return "bluetooth_searching"
+                                if (modelData.paired) return "headphones"
+                                return "bluetooth_searching"
+                            }
+                            iconSize: 24
+                            color: modelData.connected
+                                ? Appearance.colors.colPrimary
+                                : Appearance.colors.colOnLayer1
+                        }
                     }
 
                     ColumnLayout {
@@ -100,16 +162,91 @@ ContentPage {
                             text: modelData.name || Translation.tr("Unknown device")
                             color: Appearance.colors.colOnLayer1
                             font.weight: Font.Medium
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
                         }
 
-                        StyledText {
-                            text: modelData.connected
-                                ? Translation.tr("Connected")
+                        RowLayout {
+                            spacing: 6
+                            Layout.fillWidth: true
+
+                            StyledText {
+                                text: {
+                                    const s = modelData.state
+                                    if (s === BluetoothDeviceState.Connecting) return Translation.tr("Connecting…")
+                                    if (s === BluetoothDeviceState.Disconnecting) return Translation.tr("Disconnecting…")
+                                    if (modelData.connected) return Translation.tr("Connected")
+                                    if (modelData.pairing) return Translation.tr("Pairing…")
+                                    if (modelData.paired) return Translation.tr("Paired")
+                                    return Translation.tr("Available")
+                                }
+                                color: modelData.connected
+                                    ? Appearance.colors.colPrimary
+                                    : Appearance.colors.colSubtext
+                                font.pixelSize: Appearance.font.pixelSize.small
+                            }
+
+                            RowLayout {
+                                visible: modelData.batteryAvailable
+                                spacing: 3
+
+                                MaterialSymbol {
+                                    text: {
+                                        const p = modelData.battery
+                                        if (p > 0.9) return "battery_full"
+                                        if (p > 0.72) return "battery_6_bar"
+                                        if (p > 0.54) return "battery_5_bar"
+                                        if (p > 0.36) return "battery_3_bar"
+                                        if (p > 0.18) return "battery_2_bar"
+                                        if (p > 0.05) return "battery_1_bar"
+                                        return "battery_0_bar"
+                                    }
+                                    iconSize: Appearance.font.pixelSize.small + 2
+                                    color: modelData.battery < 0.2
+                                        ? Appearance.colors.colError
+                                        : Appearance.colors.colSubtext
+                                }
+
+                                StyledText {
+                                    text: Math.round(modelData.battery * 100) + "%"
+                                    color: modelData.battery < 0.2
+                                        ? Appearance.colors.colError
+                                        : Appearance.colors.colSubtext
+                                    font.pixelSize: Appearance.font.pixelSize.small
+                                }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: 4
+
+                        RippleButtonWithIcon {
+                            visible: modelData.connected || (modelData.paired && !modelData.pairing)
+                            enabled: modelData.state !== BluetoothDeviceState.Connecting
+                                  && modelData.state !== BluetoothDeviceState.Disconnecting
+                            materialIcon: modelData.connected ? "link_off" : "link"
+                            mainText: {
+                                if (modelData.state === BluetoothDeviceState.Connecting) return Translation.tr("Connecting…")
+                                if (modelData.state === BluetoothDeviceState.Disconnecting) return Translation.tr("Disconnecting…")
+                                return modelData.connected ? Translation.tr("Disconnect") : Translation.tr("Connect")
+                            }
+                            onClicked: modelData.connected ? modelData.disconnect() : modelData.connect()
+                        }
+
+                        RippleButtonWithIcon {
+                            visible: !modelData.connected
+                            materialIcon: modelData.pairing ? "cancel" : modelData.paired ? "delete" : "add_link"
+                            mainText: modelData.pairing
+                                ? Translation.tr("Cancel")
                                 : modelData.paired
-                                    ? Translation.tr("Paired")
-                                    : Translation.tr("Available")
-                            color: Appearance.colors.colSubtext
-                            font.pixelSize: Appearance.font.pixelSize.small
+                                    ? Translation.tr("Forget")
+                                    : Translation.tr("Pair")
+                            onClicked: {
+                                if (modelData.pairing) modelData.cancelPair()
+                                else if (modelData.paired) modelData.forget()
+                                else modelData.pair()
+                            }
                         }
                     }
                 }
@@ -117,10 +254,21 @@ ContentPage {
         }
 
         StyledText {
-            visible: BluetoothStatus.friendlyDeviceList.length === 0
+            visible: BluetoothStatus.friendlyDeviceList.length === 0 && !root.isDiscovering
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
-            text: Translation.tr("No Bluetooth devices are currently visible.")
+            wrapMode: Text.Wrap
+            text: BluetoothStatus.enabled
+                ? Translation.tr("No Bluetooth devices found. Tap \"Scan for devices\" to search.")
+                : Translation.tr("Enable Bluetooth to see devices.")
+            color: Appearance.colors.colSubtext
+        }
+
+        StyledText {
+            visible: BluetoothStatus.friendlyDeviceList.length === 0 && root.isDiscovering
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            text: Translation.tr("Scanning for nearby devices…")
             color: Appearance.colors.colSubtext
         }
     }

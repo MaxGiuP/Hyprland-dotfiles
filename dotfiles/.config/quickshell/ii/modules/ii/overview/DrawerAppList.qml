@@ -156,7 +156,7 @@ Item {
                         hoverEnabled: true
                         onClicked: {
                             contextMenu.visible = false
-                            contextMenu.targetApp?.execute()
+                            AppLaunch.launchDesktopEntry(contextMenu.targetApp)
                             root.appLaunched()
                         }
                     }

@@ -71,7 +71,7 @@ Singleton {
             "appIcon": notif.appIcon,
             "appName": notif.appName,
             "body": notif.body,
-            "image": notif.image,
+            "image": persistedImage(notif.image),
             "summary": notif.summary,
             "time": notif.time,
             "urgency": notif.urgency,
@@ -131,6 +131,56 @@ Singleton {
         }
     }
 
+    function persistedImage(image) {
+        const value = String(image ?? "");
+        return value.startsWith("image://qsimage/") ? "" : value;
+    }
+
+    function maxHistory() {
+        const configured = Number(Config?.options.notifications.maxHistory ?? 40);
+        return isFinite(configured) ? Math.max(0, Math.floor(configured)) : 40;
+    }
+
+    function disposeNotificationWrapper(notif) {
+        if (!notif)
+            return;
+
+        if (notif.timer != null) {
+            notif.timer.stop();
+            notif.timer.destroy();
+            notif.timer = null;
+        }
+        notif.destroy();
+    }
+
+    function trimListToHistory(items) {
+        const max = root.maxHistory();
+        if (max <= 0) {
+            items.forEach(notif => root.disposeNotificationWrapper(notif));
+            return [];
+        }
+        if (items.length <= max)
+            return items;
+
+        const popupItems = items.filter(notif => notif?.popup);
+        const nonPopupItems = items.filter(notif => !(notif?.popup));
+        const retainedNonPopup = nonPopupItems.slice(Math.max(0, nonPopupItems.length - Math.max(0, max - popupItems.length)));
+        const retainedSet = new Set(popupItems.concat(retainedNonPopup));
+        const dropped = items.filter(notif => !retainedSet.has(notif));
+        dropped.forEach(notif => root.disposeNotificationWrapper(notif));
+        return items.filter(notif => retainedSet.has(notif));
+    }
+
+    function persistableListFor(items) {
+        const max = root.maxHistory();
+        const filtered = items.filter(notif => !notif.isPhoneNotif);
+        return max <= 0 ? [] : filtered.slice(Math.max(0, filtered.length - max));
+    }
+
+    function persistNotifications() {
+        notifFileView.setText(stringifyList(root.list));
+    }
+
     property bool silent: false
     property int unread: 0
     property double timeoutNow: Date.now()
@@ -154,18 +204,17 @@ Singleton {
 
     Timer {
         id: timeoutProgressTicker
-        interval: 50
+        interval: Math.max(50, Config?.options.notifications.progressUpdateInterval ?? 125)
         repeat: true
-        running: true
+        running: root.popupList.some((notif) => notif.timeoutDurationMs > 0 && !notif.timeoutPaused)
 
         onTriggered: {
-            if (root.popupList.some((notif) => notif.timeoutDurationMs > 0 && !notif.timeoutPaused))
-                root.timeoutNow = Date.now();
+            root.timeoutNow = Date.now();
         }
     }
 
     function stringifyList(list) {
-        return JSON.stringify(list.filter((notif) => !notif.isPhoneNotif).map((notif) => notifToJSON(notif)), null, 2);
+        return JSON.stringify(root.persistableListFor(list).map((notif) => notifToJSON(notif)), null, 2);
     }
 
     function effectiveTimeoutInterval(expireTimeout) {
@@ -225,7 +274,6 @@ Singleton {
 
     function handleTimerElapsed(notificationId) {
         const notifObject = root.getNotificationById(notificationId);
-        print("[Notifications] Notification timer triggered for ID: " + notificationId + ", transient: " + notifObject?.isTransient);
         if (!notifObject)
             return;
 
@@ -312,7 +360,7 @@ Singleton {
                 "notification": notification,
                 "time": Date.now(),
             });
-			root.list = [...root.list, newNotifObject];
+			root.list = root.trimListToHistory([...root.list, newNotifObject]);
 
             // Popup
             if (!root.popupInhibited) {
@@ -323,7 +371,7 @@ Singleton {
             }
             root.notify(newNotifObject);
             // console.log(notifToString(newNotifObject));
-            notifFileView.setText(stringifyList(root.list));
+            root.persistNotifications();
         }
     }
 
@@ -347,14 +395,14 @@ Singleton {
                 "deviceId": notif.deviceId,
                 "deviceName": notif.deviceName,
             });
-            root.list = [...root.list, newNotifObject];
+            root.list = root.trimListToHistory([...root.list, newNotifObject]);
             if (showPopup && !root.popupInhibited) {
                 newNotifObject.popup = true;
                 root.configurePopupTimeout(newNotifObject, Config?.options.notifications.timeout ?? 12000);
                 root.unread++;
             }
             root.notify(newNotifObject);
-            notifFileView.setText(stringifyList(root.list));
+            root.persistNotifications();
         }
     }
 
@@ -367,13 +415,10 @@ Singleton {
         const index = root.list.findIndex((notif) => notif.notificationId === id);
         const notifServerIndex = notifServer.trackedNotifications.values.findIndex((notif) => notif.id + root.idOffset === id);
         if (index !== -1) {
-            if (root.list[index].timer != null) {
-                root.list[index].timer.stop();
-                root.list[index].timer.destroy();
-                root.list[index].timer = null;
-            }
+            const removedNotif = root.list[index];
             root.list.splice(index, 1);
-            notifFileView.setText(stringifyList(root.list));
+            root.disposeNotificationWrapper(removedNotif);
+            root.persistNotifications();
             triggerListChange()
         }
         if (notifServerIndex !== -1) {
@@ -383,9 +428,10 @@ Singleton {
     }
 
     function discardAllNotifications() {
+        root.list.forEach(notif => root.disposeNotificationWrapper(notif));
         root.list = []
         triggerListChange()
-        notifFileView.setText(stringifyList(root.list));
+        root.persistNotifications();
         notifServer.trackedNotifications.values.forEach((notif) => {
             notif.dismiss()
         })
@@ -508,7 +554,10 @@ Singleton {
         path: Qt.resolvedUrl(filePath)
         onLoaded: {
             const fileContents = notifFileView.text()
-            root.list = JSON.parse(fileContents).map((notif) => {
+            const storedNotifications = JSON.parse(fileContents || "[]")
+            let maxId = 0
+            const loadedNotifications = storedNotifications.map((notif) => {
+                maxId = Math.max(maxId, notif.notificationId)
                 return notifComponent.createObject(root, {
                     "notificationId": notif.notificationId,
                     "actions": [], // Notification actions are meaningless if they're not tracked by the server or the sender is dead
@@ -516,20 +565,17 @@ Singleton {
                     "appIcon": notif.appIcon,
                     "appName": notif.appName,
                     "body": notif.body,
-                    "image": notif.image,
+                    "image": root.persistedImage(notif.image),
                     "summary": notif.summary,
                     "time": notif.time,
                     "urgency": notif.urgency,
                 });
             });
-            // Find largest notificationId
-            let maxId = 0
-            root.list.forEach((notif) => {
-                maxId = Math.max(maxId, notif.notificationId)
-            })
+            root.list = root.trimListToHistory(loadedNotifications)
 
             console.log("[Notifications] File loaded")
             root.idOffset = maxId
+            root.persistNotifications()
             root.initDone()
         }
         onLoadFailed: (error) => {

@@ -16,8 +16,10 @@ DockButton {
     property var appToplevel
     property var appListRoot
     property int lastFocused: -1
+    readonly property var toplevels: Array.from(appToplevel?.toplevels ?? []).filter(toplevel => toplevel !== null && toplevel !== undefined)
+    readonly property string appId: String(appToplevel?.appId ?? "")
     readonly property real availableButtonSize: Math.max(0, height - topInset - bottomInset)
-    readonly property bool showWindowDots: appToplevel.toplevels.length > 0
+    readonly property bool showWindowDots: toplevels.length > 0
     property int iconSize: Math.max(26, Math.round(availableButtonSize * 0.9))
     property real countDotWidth: Math.max(7, iconSize * 0.22)
     property real countDotHeight: Math.max(3, iconSize * 0.11)
@@ -25,11 +27,11 @@ DockButton {
     readonly property real indicatorHeight: showWindowDots ? (dotTopMargin + countDotHeight) : 0
     readonly property real contentVisualHeight: iconSize + indicatorHeight
     readonly property real contentVerticalBias: Math.max(2, availableButtonSize * 0.04)
-    property bool appIsActive: appToplevel.toplevels.find(t => (t.activated == true)) !== undefined
+    property bool appIsActive: toplevels.find(toplevel => toplevel?.activated === true) !== undefined
 
-    readonly property bool isSeparator: appToplevel.appId === "SEPARATOR"
-    readonly property bool isPinnedApp: appToplevel.pinned && !isSeparator
-    readonly property var desktopEntry: appToplevel?.desktopEntry ?? TaskbarApps.resolveDesktopEntry(appToplevel.appId)
+    readonly property bool isSeparator: appId === "SEPARATOR"
+    readonly property bool isPinnedApp: (appToplevel?.pinned ?? false) && !isSeparator
+    readonly property var desktopEntry: appToplevel?.desktopEntry ?? TaskbarApps.resolveDesktopEntry(appId)
     property string pendingLaunchAppId: ""
     property int pendingLaunchWindowCount: 0
     property real initialX: 0
@@ -40,13 +42,13 @@ DockButton {
         if (pinDragActive) {
             root.didDrag = true
             appListRoot.dockDragging = true
-            appListRoot.draggedPinnedAppId = appToplevel.appId
+            appListRoot.draggedPinnedAppId = root.appId
             appListRoot.dropTargetPinnedAppId = ""
             appListRoot.clearPreviewState()
         }
     }
     readonly property bool separatorDropTarget: appListRoot.dockDragging && isSeparator && appListRoot.dropTargetPinnedAppId === ""
-    readonly property bool buttonDropTarget: appListRoot.dockDragging && !isSeparator && appListRoot.dropTargetPinnedAppId === appToplevel.appId
+    readonly property bool buttonDropTarget: appListRoot.dockDragging && !isSeparator && appListRoot.dropTargetPinnedAppId === root.appId
     enabled: !isSeparator
     implicitWidth: isSeparator ? 1 : implicitHeight - topInset - bottomInset
     z: pinDragArea.drag.active ? 10 : 0
@@ -65,12 +67,12 @@ DockButton {
     }
 
     function beginHoverPreview() {
-        if (appToplevel.toplevels.length === 0) {
+        if (root.toplevels.length === 0) {
             return;
         }
 
         appListRoot.showPreviewForButton(root);
-        lastFocused = appToplevel.toplevels.length - 1;
+        lastFocused = root.toplevels.length - 1;
     }
 
     function endHoverPreview() {
@@ -166,7 +168,7 @@ DockButton {
 
     function forceQuitApp() {
         const pidSet = new Set()
-        for (const toplevel of appToplevel.toplevels) {
+        for (const toplevel of root.toplevels) {
             const pid = Number(toplevel?.pid ?? toplevel?.hyprlandClient?.pid ?? -1)
             if (pid > 0)
                 pidSet.add(pid)
@@ -178,12 +180,12 @@ DockButton {
             return
         }
 
-        for (const toplevel of appToplevel.toplevels)
+        for (const toplevel of root.toplevels)
             toplevel?.close()
     }
 
     Loader {
-        active: isSeparator && TaskbarApps.apps.some(app => !app.pinned && app.appId !== "SEPARATOR")
+        active: isSeparator && TaskbarApps.apps.some(app => !(app?.pinned ?? false) && app?.appId !== "SEPARATOR")
         anchors {
             fill: parent
             topMargin: dockVisualBackground.margin + dockRow.padding + Appearance.rounding.normal
@@ -255,12 +257,12 @@ DockButton {
 
     DropArea {
         anchors.fill: parent
-        enabled: appListRoot.dockDragging && appListRoot.draggedPinnedAppId.length > 0 && appListRoot.draggedPinnedAppId !== appToplevel.appId && (root.isPinnedApp || root.isSeparator)
+        enabled: appListRoot.dockDragging && appListRoot.draggedPinnedAppId.length > 0 && appListRoot.draggedPinnedAppId !== root.appId && (root.isPinnedApp || root.isSeparator)
         onEntered: drag => {
-            appListRoot.dropTargetPinnedAppId = root.isSeparator ? "" : appToplevel.appId
+            appListRoot.dropTargetPinnedAppId = root.isSeparator ? "" : root.appId
         }
         onExited: drag => {
-            const currentTarget = root.isSeparator ? "" : appToplevel.appId
+            const currentTarget = root.isSeparator ? "" : root.appId
             if (appListRoot.dropTargetPinnedAppId === currentTarget) {
                 appListRoot.dropTargetPinnedAppId = ""
             }
@@ -268,12 +270,12 @@ DockButton {
     }
 
     onClicked: {
-        if (appToplevel.toplevels.length === 0) {
+        if (root.toplevels.length === 0) {
             root.launchNewInstance();
             return;
         }
-        lastFocused = (lastFocused + 1) % appToplevel.toplevels.length
-        appToplevel.toplevels[lastFocused].activate()
+        lastFocused = (lastFocused + 1) % root.toplevels.length
+        root.toplevels[lastFocused]?.activate()
     }
 
     middleClickAction: () => {
@@ -330,7 +332,7 @@ DockButton {
                     }
 
                     DockMaterialMenuButton {
-                        visible: appToplevel.toplevels.length > 0
+                        visible: root.toplevels.length > 0
                         label: Translation.tr("Force quit")
                         symbol: "close"
                         onTriggered: {
@@ -343,7 +345,7 @@ DockButton {
                         label: root.isPinnedApp ? Translation.tr("Unpin from bar") : Translation.tr("Pin to bar")
                         symbol: root.isPinnedApp ? "keep_off" : "keep"
                         onTriggered: {
-                            TaskbarApps.togglePin(root.desktopEntry?.id ?? appToplevel.appId)
+                            TaskbarApps.togglePin(root.desktopEntry?.id ?? root.appId)
                             dockContextMenu.close()
                         }
                     }
@@ -422,7 +424,7 @@ DockButton {
                     anchors.horizontalCenter: parent.horizontalCenter
                     active: !root.isSeparator
                     sourceComponent: IconImage {
-                        source: Quickshell.iconPath(AppSearch.guessIcon(appToplevel.appId), "image-missing")
+                        source: Quickshell.iconPath(AppSearch.guessIcon(root.appId), "image-missing")
                         width: root.iconSize
                         height: root.iconSize
                         implicitSize: root.iconSize
@@ -470,11 +472,11 @@ DockButton {
                         horizontalCenter: parent.horizontalCenter
                     }
                     Repeater {
-                        model: Math.min(appToplevel.toplevels.length, 3)
+                        model: Math.min(root.toplevels.length, 3)
                         delegate: Rectangle {
                             required property int index
                             radius: Appearance.rounding.full
-                            implicitWidth: (appToplevel.toplevels.length <= 3) ?
+                            implicitWidth: (root.toplevels.length <= 3) ?
                                 root.countDotWidth : root.countDotHeight
                             implicitHeight: root.countDotHeight
                             color: appIsActive ? Appearance.colors.colPrimary : ColorUtils.transparentize(Appearance.colors.colOnLayer0, 0.4)

@@ -20,6 +20,7 @@ Singleton {
 
     property var ddcMonitors: []
     property var lastChangedMonitor: null
+    property list<string> softwareDimmingScreens: ["HDMI-A-1"]
     readonly property list<BrightnessMonitor> monitors: Quickshell.screens.map(screen => monitorComp.createObject(root, {
         screen
     }))
@@ -70,11 +71,21 @@ Singleton {
         stdout: SplitParser {
             splitMarker: "\n\n"
             onRead: data => {
-                if (data.startsWith("Display ")) {
+                if (data.startsWith("Display ") || data.startsWith("Invalid display")) {
                     const lines = data.split("\n").map(l => l.trim());
+                    const connectorLine = lines.find(l => l.startsWith("DRM connector:"));
+                    const busLine = lines.find(l => l.startsWith("I2C bus:"));
+                    if (!connectorLine || !busLine)
+                        return;
+
+                    const connector = connectorLine.split(":").slice(1).join(":").trim();
+                    const busNum = busLine.split("/dev/i2c-")[1]?.trim() ?? "";
+                    if (!connector || !busNum)
+                        return;
+
                     root.ddcMonitors.push({
-                        name: lines.find(l => l.startsWith("DRM connector:")).split("-").slice(1).join('-'),
-                        busNum: lines.find(l => l.startsWith("I2C bus:")).split("/dev/i2c-")[1]
+                        name: connector.split("-").slice(1).join('-'),
+                        busNum
                     });
                 }
             }
@@ -97,6 +108,7 @@ Singleton {
         property real brightnessMultiplier: 1.0
         property real multipliedBrightness: Math.max(0, Math.min(1, brightness * (Config.options.light.antiFlashbang.enable ? brightnessMultiplier : 1)))
         property bool ready: false
+        property bool usesSoftwareDimming: false
         property bool animateChanges: !monitor.isDdc
 
         onBrightnessChanged: {
@@ -120,24 +132,52 @@ Singleton {
 
         function initialize() {
             monitor.ready = false;
+            monitor.usesSoftwareDimming = false;
+            if (root.softwareDimmingScreens.includes(screen.name)) {
+                monitor.enableSoftwareDimming();
+                monitor.finishInitialization();
+                return;
+            }
+
             const match = root.ddcMonitors.find(m => m.name === screen.name && !root.monitors.slice(0, root.monitors.indexOf(this)).some(mon => mon.busNum === m.busNum));
             isDdc = !!match;
             busNum = match?.busNum ?? "";
-            initProc.command = isDdc ? ["ddcutil", "-b", busNum, "getvcp", "10", "--brief"] : ["sh", "-c", `echo "a b c $(brightnessctl g) $(brightnessctl m)"`];
+            initProc.command = isDdc ? ["ddcutil", "-b", busNum, "getvcp", "10", "--brief"] : ["sh", "-c", `echo "backlight $(brightnessctl --class backlight g 2>/dev/null) $(brightnessctl --class backlight m 2>/dev/null)"`];
             initProc.running = true;
+        }
+
+        function enableSoftwareDimming() {
+            monitor.isDdc = false;
+            monitor.busNum = "";
+            monitor.rawMaxBrightness = 100;
+            if (!isFinite(monitor.brightness) || monitor.brightness <= 0)
+                monitor.brightness = 1;
+            monitor.usesSoftwareDimming = true;
+            monitor.ready = true;
+        }
+
+        function finishInitialization() {
+            initializeMonitor(root.monitors.indexOf(monitor) + 1);
         }
 
         readonly property Process initProc: Process {
             stdout: SplitParser {
                 onRead: data => {
-                    const [, , , current, max] = data.split(" ");
-                    monitor.rawMaxBrightness = parseInt(max);
-                    monitor.brightness = parseInt(current) / monitor.rawMaxBrightness;
+                    const fields = data.trim().split(/\s+/);
+                    const current = monitor.isDdc ? parseInt(fields[3], 10) : parseInt(fields[1], 10);
+                    const max = monitor.isDdc ? parseInt(fields[4], 10) : parseInt(fields[2], 10);
+                    if (isNaN(current) || isNaN(max) || max <= 0)
+                        return;
+
+                    monitor.rawMaxBrightness = max;
+                    monitor.brightness = Math.max(0, Math.min(1, current / monitor.rawMaxBrightness));
                     monitor.ready = true;
                 }
             }
             onExited: (exitCode, exitStatus) => {
-                initializeMonitor(root.monitors.indexOf(monitor) + 1);
+                if (!monitor.ready)
+                    monitor.enableSoftwareDimming();
+                monitor.finishInitialization();
             }
         }
 
@@ -151,10 +191,15 @@ Singleton {
         }
 
         function syncBrightness() {
+            if (!monitor.ready)
+                return;
+
             const brightnessValue = Math.max(monitor.multipliedBrightness, 0);
-            if (isDdc) {
+            if (monitor.usesSoftwareDimming) {
+                return;
+            } else if (isDdc) {
                 const rawValueRounded = Math.max(Math.floor(brightnessValue * monitor.rawMaxBrightness), 1);
-                setProc.exec(["ddcutil", "-b", busNum, "setvcp", "10", rawValueRounded]);
+                setProc.exec(["ddcutil", "--noverify", "-b", busNum, "setvcp", "10", rawValueRounded]);
             } else {
                 const valuePercentNumber = Math.floor(brightnessValue * 100);
                 let valuePercent = `${valuePercentNumber}%`;
@@ -164,6 +209,9 @@ Singleton {
         }
 
         function setBrightness(value: real): void {
+            if (!monitor.ready)
+                return;
+
             value = Math.max(0, Math.min(1, value));
             monitor.brightness = value;
         }

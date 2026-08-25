@@ -57,7 +57,7 @@ cross_monitor_move() {
     xwayland=$(echo "$active_json" | jq -r '.xwayland')
 
     if [ "$floating" = "true" ]; then
-        hyprctl dispatch movewindow "mon:$target_mon"
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh movewindow "mon:$target_mon"
         return 0
     fi
 
@@ -67,16 +67,16 @@ cross_monitor_move() {
     target_ws=$(echo "$monitors" | jq -r --arg mon "$target_mon" '.[] | select(.name == $mon) | .activeWorkspace.id')
     [ -n "$target_ws" ] && [ "$target_ws" != "null" ] || return 1
 
-    hyprctl dispatch movetoworkspacesilent "$target_ws"
+    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh movetoworkspacesilent "$target_ws"
     moved_window=$(hyprctl -j clients 2>/dev/null | jq -r --arg aaddr "$aaddr_local" '.[] | select(.address == $aaddr)')
     target_cx=$(echo "$moved_window" | jq -r '.at[0] + (.size[0] / 2 | floor)')
     target_cy=$(echo "$moved_window" | jq -r '.at[1] + (.size[1] / 2 | floor)')
     if [ "$target_cx" != "null" ] && [ "$target_cy" != "null" ]; then
-        hyprctl dispatch movecursor "$target_cx $target_cy" >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh movecursor "$target_cx $target_cy" >/dev/null 2>&1 || true
     fi
 
     if [ "$fullscreen" != "0" ] || [ "$xwayland" = "true" ]; then
-        hyprctl dispatch focusmonitor "$target_mon" >/dev/null 2>&1 || true
+        /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focusmonitor "$target_mon" >/dev/null 2>&1 || true
     fi
 }
 
@@ -125,15 +125,15 @@ action=$(echo "$clients" | jq -r \
 ')
 
 case "$action" in
-  swap)    hyprctl dispatch swapwindow "$dir" ;;
-  reorient) hyprctl dispatch movewindow "$dir" ;;
+  swap)    /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh swapwindow "$dir" ;;
+  reorient) /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh movewindow "$dir" ;;
   edge)
     if ! cross_monitor_move "$active"; then
       # No monitor in that direction: make full-height edge window (3+ windows only)
       other_count=$(echo "$clients" | jq \
         --arg aaddr "$aaddr" --argjson ws "$aws" \
         '[.[] | select(.address != $aaddr and .workspace.id == $ws and .floating == false)] | length')
-      [ "$other_count" -ge 2 ] && hyprctl dispatch movewindow "$dir"
+      [ "$other_count" -ge 2 ] && /home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh movewindow "$dir"
     fi
     ;;
 esac

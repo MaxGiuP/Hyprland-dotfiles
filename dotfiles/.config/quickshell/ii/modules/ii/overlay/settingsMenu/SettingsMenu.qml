@@ -15,7 +15,7 @@ StyledOverlayWidget {
     showCenterButton: true
 
     property real contentPadding: 8
-    property int currentPage: Persistent.states.overlay.settingsMenu.currentPage ?? 0
+    property int currentPage: 0
     property bool configPathCopied: false
     property int requestedSubTab: -1
     property string requestedSectionId: ""
@@ -37,11 +37,26 @@ StyledOverlayWidget {
         { displayName: Translation.tr("Hyprland"), description: Translation.tr("Keybinds, rules and configuration"), icon: "deployed_code", component: "modules/settings/HyprConfig.qml" }
     ]
 
+    function normalizedPage(page) {
+        return Math.max(0, Math.min(page, root.pages.length - 1))
+    }
+
+    function pageComponent(page) {
+        return root.pages[root.normalizedPage(page)].component
+    }
+
     onCurrentPageChanged: {
+        const safePage = root.normalizedPage(currentPage)
+        if (safePage !== currentPage) {
+            currentPage = safePage
+            return
+        }
         Persistent.states.overlay.settingsMenu.currentPage = currentPage
         if (root.currentPage !== 0 && root.searchQuery.length > 0)
             root.searchQuery = ""
     }
+
+    Component.onCompleted: currentPage = root.normalizedPage(Persistent.states.overlay.settingsMenu.currentPage ?? 0)
 
     function copyConfigPath() {
         root.configPathCopied = true
@@ -273,7 +288,7 @@ StyledOverlayWidget {
                     active: Config.ready
 
                     Component.onCompleted: {
-                        source = Quickshell.shellPath(root.pages[root.currentPage].component)
+                        source = Quickshell.shellPath(root.pageComponent(root.currentPage))
                     }
 
                     Connections {
@@ -308,7 +323,7 @@ StyledOverlayWidget {
                             PropertyAction {
                                 target: pageLoader
                                 property: "source"
-                                value: Quickshell.shellPath(root.pages[root.currentPage].component)
+                                value: Quickshell.shellPath(root.pageComponent(root.currentPage))
                             }
                             PropertyAction {
                                 target: pageLoader

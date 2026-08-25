@@ -127,7 +127,7 @@ Item {
     }
 
     function showPreviewForButton(button) {
-        if (!button || dockDragging || button.appToplevel.toplevels.length === 0) {
+        if (!button || dockDragging || button.toplevels.length === 0) {
             clearPreviewState()
             return
         }
@@ -276,7 +276,7 @@ Item {
                     anchors.centerIn: parent
                     Repeater {
                         model: ScriptModel {
-                            values: previewPopup.appTopLevel?.toplevels ?? []
+                            values: Array.from(previewPopup.appTopLevel?.toplevels ?? []).filter(toplevel => toplevel !== null && toplevel !== undefined)
                         }
                         RippleButton {
                             id: windowButton
@@ -327,7 +327,9 @@ Item {
                                 }
                                 ScreencopyView {
                                     id: screencopyView
-                                    readonly property var previewSource: previewPopup ? HyprlandData.captureSourceForToplevel(windowButton.modelData) : null
+                                    readonly property var previewSource: previewPopup.show
+                                        ? HyprlandData.captureSourceForToplevel(windowButton.modelData, false)
+                                        : null
                                     captureSource: previewSource
                                     live: previewSource !== null
                                     paintCursor: true

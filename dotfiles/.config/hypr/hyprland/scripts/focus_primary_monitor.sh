@@ -29,5 +29,5 @@ read -r mon_x mon_y mon_w mon_h <<<"$geometry"
 cursor_x=$((mon_x + (mon_w / 2)))
 cursor_y=$((mon_y + (mon_h / 2)))
 
-hyprctl dispatch focusmonitor "$target_monitor" >/dev/null 2>&1 || true
-hyprctl dispatch movecursor "$cursor_x" "$cursor_y" >/dev/null 2>&1 || true
+/home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh focusmonitor "$target_monitor" >/dev/null 2>&1 || true
+/home/linmax/.config/hypr/hyprland/scripts/hypr_dispatch.sh movecursor "$cursor_x" "$cursor_y" >/dev/null 2>&1 || true

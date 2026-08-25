@@ -16,9 +16,6 @@ import qs.modules.waffle.actionCenter
 Item {
     id: root
 
-    Component.onCompleted: {
-        if (Bluetooth.defaultAdapter.enabled) Bluetooth.defaultAdapter.discovering = true;
-    }
     Component.onDestruction: {
         Bluetooth.defaultAdapter.discovering = false;
     }
@@ -54,9 +51,7 @@ Item {
                             onCheckedChanged: {
                                 if (Bluetooth.defaultAdapter) {
                                     Bluetooth.defaultAdapter.enabled = checked;
-                                    if (checked) {
-                                        Bluetooth.defaultAdapter.discovering = true;
-                                    } else {
+                                    if (!checked) {
                                         Bluetooth.defaultAdapter.discovering = false;
                                     }
                                 }

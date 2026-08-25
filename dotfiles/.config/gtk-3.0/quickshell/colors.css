@@ -10,83 +10,83 @@
  *    reads @bg_color, @base_color, @selected_bg_color etc. gets our
  *    Material You colors automatically, including NemoIconContainer.
  * ══════════════════════════════════════════════════════════════ */
-@define-color theme_fg_color            #f1dfd9;
-@define-color theme_bg_color            #1a110e;
-@define-color theme_base_color          #1a110e;
-@define-color theme_text_color          #f1dfd9;
-@define-color theme_selected_bg_color   #71361c;
-@define-color theme_selected_fg_color   #ffdbce;
-@define-color theme_unfocused_fg_color  #f1dfd9;
-@define-color theme_unfocused_bg_color  #1a110e;
-@define-color theme_unfocused_base_color #1a110e;
-@define-color theme_unfocused_text_color #f1dfd9;
-@define-color theme_unfocused_selected_bg_color  #5d4035;
-@define-color theme_unfocused_selected_fg_color  #ffdbce;
-@define-color fg_color                  #f1dfd9;
-@define-color bg_color                  #1a110e;
-@define-color base_color                #1a110e;
-@define-color text_color                #f1dfd9;
-@define-color selected_bg_color         #71361c;
-@define-color selected_fg_color         #ffdbce;
-@define-color insensitive_bg_color      #231a16;
-@define-color insensitive_fg_color      #d8c2ba;
-@define-color insensitive_base_color    #1a110e;
-@define-color unfocused_insensitive_color #d8c2ba;
-@define-color borders                   #53433e;
-@define-color unfocused_borders         #53433e;
-@define-color link_color                #ffb599;
-@define-color placeholder_text_color    #d8c2ba;
-@define-color content_view_bg           #1a110e;
-@define-color text_view_bg              #1a110e;
-@define-color wm_bg                     #322824;
-@define-color wm_bg_unfocused           #271e1a;
+@define-color theme_fg_color            #e4e2e3;
+@define-color theme_bg_color            #131314;
+@define-color theme_base_color          #131314;
+@define-color theme_text_color          #e4e2e3;
+@define-color theme_selected_bg_color   #3e4852;
+@define-color theme_selected_fg_color   #dae3f1;
+@define-color theme_unfocused_fg_color  #e4e2e3;
+@define-color theme_unfocused_bg_color  #131314;
+@define-color theme_unfocused_base_color #131314;
+@define-color theme_unfocused_text_color #e4e2e3;
+@define-color theme_unfocused_selected_bg_color  #42474e;
+@define-color theme_unfocused_selected_fg_color  #dee3eb;
+@define-color fg_color                  #e4e2e3;
+@define-color bg_color                  #131314;
+@define-color base_color                #131314;
+@define-color text_color                #e4e2e3;
+@define-color selected_bg_color         #3e4852;
+@define-color selected_fg_color         #dae3f1;
+@define-color insensitive_bg_color      #1b1c1d;
+@define-color insensitive_fg_color      #c8c6c7;
+@define-color insensitive_base_color    #131314;
+@define-color unfocused_insensitive_color #c8c6c7;
+@define-color borders                   #474748;
+@define-color unfocused_borders         #474748;
+@define-color link_color                #bec7d4;
+@define-color placeholder_text_color    #c8c6c7;
+@define-color content_view_bg           #131314;
+@define-color text_view_bg              #131314;
+@define-color wm_bg                     #2a2a2b;
+@define-color wm_bg_unfocused           #1f2021;
 
-@define-color accent_color              #ffb599;
-@define-color accent_bg_color           #71361c;
-@define-color accent_fg_color           #ffdbce;
+@define-color accent_color              #bec7d4;
+@define-color accent_bg_color           #3e4852;
+@define-color accent_fg_color           #dae3f1;
 @define-color destructive_color         #ffb4ab;
 @define-color destructive_bg_color      #ffb4ab;
 @define-color destructive_fg_color      #690005;
-@define-color success_color             #d4c78e;
-@define-color warning_color             #e7beaf;
+@define-color success_color             #b9c8da;
+@define-color warning_color             #c2c7cf;
 @define-color error_color               #ffb4ab;
 
-@define-color window_bg_color           #1a110e;
-@define-color window_fg_color           #f1dfd9;
-@define-color view_bg_color             #1a110e;
-@define-color view_fg_color             #f1dfd9;
-@define-color headerbar_bg_color        #322824;
-@define-color headerbar_fg_color        #f1dfd9;
-@define-color headerbar_border_color    #53433e;
-@define-color headerbar_backdrop_color  #271e1a;
-@define-color headerbar_shade_color     #53433e;
-@define-color sidebar_bg_color          #231a16;
-@define-color sidebar_fg_color          #f1dfd9;
-@define-color card_bg_color             #271e1a;
-@define-color card_fg_color             #f1dfd9;
-@define-color popover_bg_color          #3d322f;
-@define-color popover_fg_color          #f1dfd9;
-@define-color thumbnail_bg_color        #271e1a;
-@define-color thumbnail_fg_color        #f1dfd9;
+@define-color window_bg_color           #131314;
+@define-color window_fg_color           #e4e2e3;
+@define-color view_bg_color             #131314;
+@define-color view_fg_color             #e4e2e3;
+@define-color headerbar_bg_color        #2a2a2b;
+@define-color headerbar_fg_color        #e4e2e3;
+@define-color headerbar_border_color    #474748;
+@define-color headerbar_backdrop_color  #1f2021;
+@define-color headerbar_shade_color     #474748;
+@define-color sidebar_bg_color          #1b1c1d;
+@define-color sidebar_fg_color          #e4e2e3;
+@define-color card_bg_color             #1f2021;
+@define-color card_fg_color             #e4e2e3;
+@define-color popover_bg_color          #343536;
+@define-color popover_fg_color          #e4e2e3;
+@define-color thumbnail_bg_color        #1f2021;
+@define-color thumbnail_fg_color        #e4e2e3;
 
-@define-color primary_color              #ffb599;
-@define-color on_primary_color           #552008;
-@define-color primary_container_color    #71361c;
-@define-color on_primary_container_color #ffdbce;
-@define-color secondary_color            #e7beaf;
-@define-color on_secondary_color         #442a20;
-@define-color secondary_container_color  #5d4035;
-@define-color on_secondary_container_color #ffdbce;
-@define-color outline_color              #a08d86;
-@define-color outline_variant_color      #53433e;
-@define-color on_surface                 #f1dfd9;
-@define-color on_surface_variant         #d8c2ba;
-@define-color surface_bright             #423733;
-@define-color surface_container_lowest  #140c09;
-@define-color surface_container_low     #231a16;
-@define-color surface_container         #271e1a;
-@define-color surface_container_high    #322824;
-@define-color surface_container_highest #3d322f;
+@define-color primary_color              #bec7d4;
+@define-color on_primary_color           #28313b;
+@define-color primary_container_color    #3e4852;
+@define-color on_primary_container_color #dae3f1;
+@define-color secondary_color            #c2c7cf;
+@define-color on_secondary_color         #2c3137;
+@define-color secondary_container_color  #42474e;
+@define-color on_secondary_container_color #dee3eb;
+@define-color outline_color              #919091;
+@define-color outline_variant_color      #474748;
+@define-color on_surface                 #e4e2e3;
+@define-color on_surface_variant         #c8c6c7;
+@define-color surface_bright             #39393a;
+@define-color surface_container_lowest  #0e0e0f;
+@define-color surface_container_low     #1b1c1d;
+@define-color surface_container         #1f2021;
+@define-color surface_container_high    #2a2a2b;
+@define-color surface_container_highest #343536;
 
 /* ══════════════════════════════════════════════════════════════
  * 2. WINDOW & BACKGROUND
@@ -95,8 +95,8 @@ window,
 window.background,
 .background,
 dialog {
-  background-color: #1a110e;
-  color: #f1dfd9;
+  background-color: #131314;
+  color: #e4e2e3;
 }
 
 /* GTK3 containers don't inherit background — set them explicitly so nothing
@@ -111,8 +111,8 @@ window > box > stack,
 window > box > paned,
 window > box > box > box,
 window > box > box > paned {
-  background-color: #1a110e;
-  color: #f1dfd9;
+  background-color: #131314;
+  color: #e4e2e3;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -122,27 +122,27 @@ headerbar,
 .titlebar,
 headerbar.titlebar,
 .titlebar.horizontal {
-  background-color: #322824;
+  background-color: #2a2a2b;
   background-image: none;
-  color: #f1dfd9;
-  border-bottom: 1px solid #53433e;
+  color: #e4e2e3;
+  border-bottom: 1px solid #474748;
   box-shadow: none;
 }
 headerbar:backdrop,
 .titlebar:backdrop {
-  background-color: #271e1a;
+  background-color: #1f2021;
   background-image: none;
-  color: #d8c2ba;
+  color: #c8c6c7;
   box-shadow: none;
 }
 headerbar .title,
 .titlebar .title {
-  color: #f1dfd9;
+  color: #e4e2e3;
   font-weight: 600;
 }
 headerbar .subtitle,
 .titlebar .subtitle {
-  color: #d8c2ba;
+  color: #c8c6c7;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -152,9 +152,9 @@ toolbar,
 toolbar.primary-toolbar,
 .toolbar,
 .primary-toolbar {
-  background-color: #322824;
+  background-color: #2a2a2b;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
   box-shadow: none;
   /* border-bottom-width is 0 (default), but border-bottom-color still defaults
    * to currentColor.  Chrome/Brave read border-bottom-color from the GTK3
@@ -168,7 +168,7 @@ toolbar.primary-toolbar,
 toolbar:backdrop,
 .toolbar:backdrop,
 .primary-toolbar:backdrop {
-  background-color: #271e1a;
+  background-color: #1f2021;
 }
 toolbar button,
 toolbar > toolbutton,
@@ -176,7 +176,7 @@ toolbar > toolbutton,
 .primary-toolbar button {
   background-color: transparent;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
   border: none;
   box-shadow: none;
 }
@@ -221,10 +221,10 @@ window.thunar-window headerbar,
 .nemo-window .primary-toolbar,
 .thunar .primary-toolbar,
 .thunar-window .primary-toolbar {
-  background-color: #271e1a;
+  background-color: #1f2021;
   background-image: none;
-  color: #f1dfd9;
-  border-color: #53433e;
+  color: #e4e2e3;
+  border-color: #474748;
   box-shadow: none;
 }
 .thunar,
@@ -239,9 +239,9 @@ window.thunar-window,
 .thunar-window notebook,
 .thunar scrolledwindow,
 .thunar-window scrolledwindow {
-  background-color: #1a110e;
+  background-color: #131314;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 .thunar headerbar,
 .thunar-window headerbar,
@@ -255,11 +255,11 @@ window.thunar-window,
 .thunar-window .location-toolbar,
 .thunar .primary-toolbar,
 .thunar-window .primary-toolbar {
-  background: #271e1a;
-  background-color: #271e1a;
+  background: #1f2021;
+  background-color: #1f2021;
   background-image: none;
-  color: #f1dfd9;
-  border-bottom: 1px solid #53433e;
+  color: #e4e2e3;
+  border-bottom: 1px solid #474748;
   box-shadow: none;
 }
 .nemo-window headerbar button,
@@ -275,10 +275,10 @@ window.thunar-window,
 .nemo-window .linked > button,
 .thunar .linked > button,
 .thunar-window .linked > button {
-  background-color: #271e1a;
+  background-color: #1f2021;
   background-image: none;
-  color: #f1dfd9;
-  border-color: #53433e;
+  color: #e4e2e3;
+  border-color: #474748;
   box-shadow: none;
 }
 .nemo-window headerbar button:hover,
@@ -291,21 +291,21 @@ window.thunar-window,
 .thunar-window .standard-toolbar button:hover,
 .thunar .location-toolbar button:hover,
 .thunar-window .location-toolbar button:hover {
-  background-color: #423733;
+  background-color: #39393a;
 }
 
 /* ══════════════════════════════════════════════════════════════
  * 5. MENU BAR
  * ══════════════════════════════════════════════════════════════ */
 menubar {
-  background-color: #322824;
+  background-color: #2a2a2b;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 menubar > menuitem:hover,
 menubar > menuitem:selected {
-  background-color: alpha(#ffb599, 0.14);
-  color: #f1dfd9;
+  background-color: alpha(#bec7d4, 0.14);
+  color: #e4e2e3;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -314,29 +314,29 @@ menubar > menuitem:selected {
 menu,
 .menu,
 .context-menu {
-  background-color: #3d322f;
-  color: #f1dfd9;
-  border: 1px solid #53433e;
+  background-color: #343536;
+  color: #e4e2e3;
+  border: 1px solid #474748;
 }
 menuitem,
 .menuitem {
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 menuitem:hover {
-  background-color: alpha(#ffb599, 0.14);
-  color: #f1dfd9;
+  background-color: alpha(#bec7d4, 0.14);
+  color: #e4e2e3;
 }
 menuitem:selected,
 menuitem:active {
-  background-color: alpha(#ffb599, 0.22);
-  color: #f1dfd9;
+  background-color: alpha(#bec7d4, 0.22);
+  color: #e4e2e3;
 }
 menuitem:disabled {
-  color: #d8c2ba;
+  color: #c8c6c7;
 }
 menu separator,
 .menu separator {
-  background-color: #53433e;
+  background-color: #474748;
   min-height: 1px;
 }
 
@@ -356,33 +356,33 @@ scrolledwindow > iconview,
 viewport,
 viewport > *,
 nemo-canvas-item {
-  background-color: #1a110e;
+  background-color: #131314;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 
 treeview,
 treeview.view,
 iconview,
 iconview > cell {
-  background-color: #1a110e;
-  color: #f1dfd9;
+  background-color: #131314;
+  color: #e4e2e3;
   background-image: none;
 }
 treeview.view:hover {
-  background-color: #271e1a;
+  background-color: #1f2021;
 }
 treeview.view:selected,
 treeview.view:selected:focus,
 iconview:selected,
 iconview:selected:focus,
 iconview > cell:selected {
-  background-color: #71361c;
-  color: #ffdbce;
+  background-color: #3e4852;
+  color: #dae3f1;
 }
 treeview.view:selected:backdrop {
-  background-color: #5d4035;
-  color: #ffdbce;
+  background-color: #42474e;
+  color: #dee3eb;
 }
 
 /* Explicit Nemo/Thunar content views */
@@ -415,9 +415,9 @@ treeview.view:selected:backdrop {
 .thunar-window viewport,
 standard-view,
 .standard-view {
-  background-color: #1a110e;
+  background-color: #131314;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
   box-shadow: none;
 }
 .nemo-window nemo-canvas-item,
@@ -425,9 +425,9 @@ standard-view,
 .thunar-window standard-view,
 .thunar .standard-view,
 .thunar-window .standard-view {
-  background-color: #1a110e;
+  background-color: #131314;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -441,26 +441,26 @@ placessidebar > viewport,
 nemo-places-sidebar,
 nemo-places-sidebar list,
 places-treeview {
-  background-color: #231a16;
-  color: #f1dfd9;
+  background-color: #1b1c1d;
+  color: #e4e2e3;
   background-image: none;
 }
 .sidebar row,
 .navigation-sidebar row,
 placessidebar row {
   background-color: transparent;
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 .sidebar row:hover,
 .navigation-sidebar row:hover,
 placessidebar row:hover {
-  background-color: alpha(#71361c, 0.18);
+  background-color: alpha(#3e4852, 0.18);
 }
 .sidebar row:selected,
 .navigation-sidebar row:selected,
 placessidebar row:selected {
-  background-color: #71361c;
-  color: #ffdbce;
+  background-color: #3e4852;
+  color: #dae3f1;
 }
 
 /* Explicit Nemo/Thunar sidebars */
@@ -471,9 +471,9 @@ placessidebar row:selected {
 .thunar .shortcuts-pane,
 .thunar-window .sidebar,
 .thunar-window .shortcuts-pane {
-  background-color: #231a16;
+  background-color: #1b1c1d;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -481,9 +481,9 @@ placessidebar row:selected {
  * ══════════════════════════════════════════════════════════════ */
 statusbar,
 .statusbar {
-  background-color: #231a16;
-  color: #d8c2ba;
-  border-top: 1px solid #53433e;
+  background-color: #1b1c1d;
+  color: #c8c6c7;
+  border-top: 1px solid #474748;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -493,19 +493,19 @@ path-bar,
 path-bar > button,
 path-bar > button.text-button,
 path-bar > button.image-button {
-  background-color: #271e1a;
+  background-color: #1f2021;
   background-image: none;
-  color: #f1dfd9;
+  color: #e4e2e3;
   box-shadow: none;
 }
 path-bar > button:hover {
-  background-color: #322824;
+  background-color: #2a2a2b;
 }
 path-bar > button:checked,
 path-bar > button:active {
-  background-color: #71361c;
+  background-color: #3e4852;
   background-image: none;
-  color: #ffdbce;
+  color: #dae3f1;
 }
 
 .nemo-window path-bar,
@@ -514,10 +514,10 @@ path-bar > button:active {
 .thunar path-bar > button,
 .thunar-window path-bar,
 .thunar-window path-bar > button {
-  background-color: #322824;
+  background-color: #2a2a2b;
   background-image: none;
-  color: #f1dfd9;
-  border-color: #53433e;
+  color: #e4e2e3;
+  border-color: #474748;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -525,17 +525,17 @@ path-bar > button:active {
  * ══════════════════════════════════════════════════════════════ */
 entry,
 spinbutton {
-  background-color: #271e1a;
-  color: #f1dfd9;
-  border: 1px solid #53433e;
+  background-color: #1f2021;
+  color: #e4e2e3;
+  border: 1px solid #474748;
   box-shadow: none;
   background-image: none;
 }
 entry:focus,
 entry:focus-within,
 spinbutton:focus {
-  border-color: #ffb599;
-  background-color: #271e1a;
+  border-color: #bec7d4;
+  background-color: #1f2021;
   background-image: none;
 }
 entry.search,
@@ -553,12 +553,12 @@ searchbar entry.search:focus,
 searchbar entry.search:focus-within,
 searchbar searchentry:focus,
 searchbar searchentry:focus-within {
-  background-color: #322824;
+  background-color: #2a2a2b;
   background-image: none;
 }
 entry:disabled {
-  background-color: #231a16;
-  color: #d8c2ba;
+  background-color: #1b1c1d;
+  color: #c8c6c7;
 }
 
 .nemo-window entry,
@@ -567,10 +567,10 @@ entry:disabled {
 .nemo-window .linked > entry,
 .thunar .linked > entry,
 .thunar-window .linked > entry {
-  background-color: #322824;
+  background-color: #2a2a2b;
   background-image: none;
-  color: #f1dfd9;
-  border-color: #53433e;
+  color: #e4e2e3;
+  border-color: #474748;
   box-shadow: none;
 }
 
@@ -578,29 +578,29 @@ entry:disabled {
  * 12. BUTTONS
  * ══════════════════════════════════════════════════════════════ */
 button {
-  background-color: #322824;
+  background-color: #2a2a2b;
   background-image: none;
-  color: #f1dfd9;
-  border: 1px solid #53433e;
+  color: #e4e2e3;
+  border: 1px solid #474748;
   box-shadow: none;
 }
 button:hover {
-  background-color: #423733;
+  background-color: #39393a;
 }
 button:active,
 button:checked {
-  background-color: #71361c;
-  color: #ffdbce;
-  border-color: #71361c;
+  background-color: #3e4852;
+  color: #dae3f1;
+  border-color: #3e4852;
 }
 button:disabled {
-  background-color: #231a16;
-  color: #d8c2ba;
+  background-color: #1b1c1d;
+  color: #c8c6c7;
 }
 button.suggested-action {
-  background-color: #71361c;
-  color: #ffdbce;
-  border-color: #71361c;
+  background-color: #3e4852;
+  color: #dae3f1;
+  border-color: #3e4852;
 }
 button.destructive-action {
   background-color: #ffb4ab;
@@ -614,32 +614,32 @@ button.flat:active {
 }
 button.flat {
   background-color: transparent;
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 button.flat:hover {
   background-color: alpha(white, 0.08);
 }
 button.flat:active,
 button.flat:checked {
-  background-color: #71361c;
-  color: #ffdbce;
+  background-color: #3e4852;
+  color: #dae3f1;
 }
 
 /* ══════════════════════════════════════════════════════════════
  * 13. NOTEBOOK TABS
  * ══════════════════════════════════════════════════════════════ */
 notebook > header {
-  background-color: #322824;
-  border-bottom: 1px solid #53433e;
+  background-color: #2a2a2b;
+  border-bottom: 1px solid #474748;
 }
 notebook > header tab {
   background-color: transparent;
-  color: #d8c2ba;
+  color: #c8c6c7;
 }
 notebook > header tab:checked {
-  background-color: #271e1a;
-  color: #f1dfd9;
-  border-bottom: 2px solid #ffb599;
+  background-color: #1f2021;
+  color: #e4e2e3;
+  border-bottom: 2px solid #bec7d4;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -649,13 +649,13 @@ scrollbar {
   background-color: transparent;
 }
 scrollbar slider {
-  background-color: alpha(#f1dfd9, 0.3);
+  background-color: alpha(#e4e2e3, 0.3);
   border-radius: 10px;
   min-width: 6px;
   min-height: 6px;
 }
 scrollbar slider:hover {
-  background-color: alpha(#f1dfd9, 0.5);
+  background-color: alpha(#e4e2e3, 0.5);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -668,7 +668,7 @@ scrollbar slider:hover {
 overshoot.top {
   background-color: transparent;
   background-image: -gtk-gradient(radial, center top, 0, center top, 0.5,
-    to(alpha(#ffb599, 0.18)), to(alpha(#ffb599, 0)));
+    to(alpha(#bec7d4, 0.18)), to(alpha(#bec7d4, 0)));
   background-size: 100% 100%;
   background-repeat: no-repeat;
   box-shadow: none;
@@ -676,7 +676,7 @@ overshoot.top {
 overshoot.bottom {
   background-color: transparent;
   background-image: -gtk-gradient(radial, center bottom, 0, center bottom, 0.5,
-    to(alpha(#ffb599, 0.18)), to(alpha(#ffb599, 0)));
+    to(alpha(#bec7d4, 0.18)), to(alpha(#bec7d4, 0)));
   background-size: 100% 100%;
   background-repeat: no-repeat;
   box-shadow: none;
@@ -684,7 +684,7 @@ overshoot.bottom {
 overshoot.left {
   background-color: transparent;
   background-image: -gtk-gradient(radial, left center, 0, left center, 0.5,
-    to(alpha(#ffb599, 0.18)), to(alpha(#ffb599, 0)));
+    to(alpha(#bec7d4, 0.18)), to(alpha(#bec7d4, 0)));
   background-size: 100% 100%;
   background-repeat: no-repeat;
   box-shadow: none;
@@ -692,29 +692,29 @@ overshoot.left {
 overshoot.right {
   background-color: transparent;
   background-image: -gtk-gradient(radial, right center, 0, right center, 0.5,
-    to(alpha(#ffb599, 0.18)), to(alpha(#ffb599, 0)));
+    to(alpha(#bec7d4, 0.18)), to(alpha(#bec7d4, 0)));
   background-size: 100% 100%;
   background-repeat: no-repeat;
   box-shadow: none;
 }
 undershoot.top {
   background-color: transparent;
-  background-image: linear-gradient(to bottom, alpha(#53433e, 0.2), transparent);
+  background-image: linear-gradient(to bottom, alpha(#474748, 0.2), transparent);
   box-shadow: none;
 }
 undershoot.bottom {
   background-color: transparent;
-  background-image: linear-gradient(to top, alpha(#53433e, 0.2), transparent);
+  background-image: linear-gradient(to top, alpha(#474748, 0.2), transparent);
   box-shadow: none;
 }
 undershoot.left {
   background-color: transparent;
-  background-image: linear-gradient(to right, alpha(#53433e, 0.2), transparent);
+  background-image: linear-gradient(to right, alpha(#474748, 0.2), transparent);
   box-shadow: none;
 }
 undershoot.right {
   background-color: transparent;
-  background-image: linear-gradient(to left, alpha(#53433e, 0.2), transparent);
+  background-image: linear-gradient(to left, alpha(#474748, 0.2), transparent);
   box-shadow: none;
 }
 
@@ -722,8 +722,8 @@ undershoot.right {
  * 15. SELECTION
  * ══════════════════════════════════════════════════════════════ */
 selection {
-  background-color: #71361c;
-  color: #ffdbce;
+  background-color: #3e4852;
+  color: #dae3f1;
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -742,33 +742,33 @@ separator,
   min-height: 0;
 }
 frame > border {
-  border-color: #53433e;
+  border-color: #474748;
 }
 
 /* ══════════════════════════════════════════════════════════════
  * 17. INFOBAR
  * ══════════════════════════════════════════════════════════════ */
-infobar.info    > revealer > box { background-color: #322824; color: #f1dfd9; }
-infobar.warning > revealer > box { background-color: #e7beaf;  color: #1a110e; }
+infobar.info    > revealer > box { background-color: #2a2a2b; color: #e4e2e3; }
+infobar.warning > revealer > box { background-color: #c2c7cf;  color: #131314; }
 infobar.error   > revealer > box { background-color: #ffb4ab;          color: #690005; }
 
 /* ══════════════════════════════════════════════════════════════
  * 18. TOOLTIP
  * ══════════════════════════════════════════════════════════════ */
 tooltip {
-  background-color: #423733;
-  color: #f1dfd9;
-  border: 1px solid #53433e;
+  background-color: #39393a;
+  color: #e4e2e3;
+  border: 1px solid #474748;
 }
 
 /* ══════════════════════════════════════════════════════════════
  * 19. LABEL
  * ══════════════════════════════════════════════════════════════ */
 label {
-  color: #f1dfd9;
+  color: #e4e2e3;
 }
 label:disabled {
-  color: #d8c2ba;
+  color: #c8c6c7;
 }
 
 /* ── Chromium / Brave separator fixes (GTK3 user CSS) ─────────────────────────

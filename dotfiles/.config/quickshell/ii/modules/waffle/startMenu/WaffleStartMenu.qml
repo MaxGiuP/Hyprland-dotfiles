@@ -83,6 +83,14 @@ Scope {
         LauncherSearch.ensurePrefix(Config.options.search.prefix.emojis);
     }
 
+    function toggleSearchAfterSuperRelease() {
+        if (!GlobalStates.superReleaseMightTrigger) {
+            GlobalStates.superReleaseMightTrigger = true;
+            return;
+        }
+        GlobalStates.searchOpen = !GlobalStates.searchOpen;
+    }
+
     IpcHandler {
         target: "search"
 
@@ -117,11 +125,15 @@ Scope {
         }
 
         onReleased: {
-            if (!GlobalStates.superReleaseMightTrigger) {
-                GlobalStates.superReleaseMightTrigger = true;
-                return;
-            }
-            GlobalStates.searchOpen = !GlobalStates.searchOpen;
+            root.toggleSearchAfterSuperRelease();
+        }
+    }
+    GlobalShortcut {
+        name: "searchToggleIfTap"
+        description: "Toggles search when a Super release was not interrupted"
+
+        onPressed: {
+            root.toggleSearchAfterSuperRelease();
         }
     }
     GlobalShortcut {

@@ -20,6 +20,9 @@ MouseArea {
     property int introStartDelayMs: 0
     property var captureScreen: null
     property bool screenCaptureSuspended: false
+    property bool releasePrepared: false
+    property int captureTransitionVeilHoldMs: 90
+    property int captureTransitionVeilFadeMs: 180
     property bool introStarted: false
     property bool playUnlockAnimation: true
     property var pendingSessionAction: null
@@ -63,18 +66,31 @@ MouseArea {
     readonly property real lockBlurProgress: Config.options.lock.blur.enable
         ? Math.max(0, Math.min(1, GlobalStates.screenLockBlurProgress))
         : 0
-    readonly property bool useWallpaperFallback: root.screenCaptureSuspended || !root.captureScreen
-    readonly property bool suppressWallpaperFallback: root.screenCaptureSuspended
-        && root.context.unlockInProgress
-    readonly property bool showWallpaperFallback: root.useWallpaperFallback && !root.suppressWallpaperFallback
+    readonly property bool screenCaptureEnabled: !root.releasePrepared
+        && !root.screenCaptureSuspended
+        && !!root.captureScreen
+    readonly property bool useWallpaperFallback: !root.screenCaptureEnabled
+    readonly property bool showWallpaperFallback: root.useWallpaperFallback
     property bool blurCapturePending: false
     property bool blurWasActive: false
 
+    function showCaptureTransitionVeil() {
+        captureTransitionVeilHideTimer.stop();
+        captureTransitionVeilFadeOut.stop();
+        captureTransitionVeil.visible = true;
+        captureTransitionVeil.opacity = 1;
+    }
+
+    function hideCaptureTransitionVeil(delayMs) {
+        captureTransitionVeilHideTimer.interval = Math.max(0, delayMs ?? root.captureTransitionVeilHoldMs);
+        captureTransitionVeilHideTimer.restart();
+    }
+
     function refreshBlurCapture() {
-        if (root.useWallpaperFallback)
+        if (!root.screenCaptureEnabled)
             return;
 
-        if (!root.captureScreen) {
+        if (screenshotView.width < 1 || screenshotView.height < 1) {
             root.blurCapturePending = true;
             return;
         }
@@ -83,12 +99,21 @@ MouseArea {
         screenshotView.captureFrame();
     }
 
+    function detachScreenCaptureNow() {
+        root.suspendScreenCapture();
+        root.blurWasActive = false;
+        root.captureScreen = null;
+    }
+
     function suspendScreenCapture() {
+        releaseCaptureDetachTimer.stop();
+        resumeCaptureTimer.stop();
         root.screenCaptureSuspended = true;
         root.blurCapturePending = false;
     }
 
     function resumeScreenCapture() {
+        root.releasePrepared = false;
         root.resetToLockedState();
         root.screenCaptureSuspended = false;
         root.blurCapturePending = false;
@@ -96,9 +121,20 @@ MouseArea {
             resumeCaptureTimer.restart();
     }
 
-    function prepareForRelease() {
-        root.suspendScreenCapture();
-        root.captureScreen = null;
+    function prepareForRelease(immediate) {
+        root.showCaptureTransitionVeil();
+
+        if (root.releasePrepared) {
+            if (immediate)
+                root.detachScreenCaptureNow();
+            return;
+        }
+
+        root.releasePrepared = true;
+        if (immediate)
+            root.detachScreenCaptureNow();
+        else
+            releaseCaptureDetachTimer.restart();
     }
 
     // ─── GPU (nvidia-smi) ────────────────────────────────────────────────────
@@ -186,12 +222,30 @@ MouseArea {
     onWidthChanged: startIntroAnimation()
     onHeightChanged: startIntroAnimation()
     onCaptureScreenChanged: {
-        if (root.blurCapturePending && root.captureScreen && !root.useWallpaperFallback)
+        if (root.screenCaptureEnabled && !root.releasePrepared)
+            root.showCaptureTransitionVeil();
+
+        if (root.blurCapturePending && root.screenCaptureEnabled)
             Qt.callLater(root.refreshBlurCapture);
     }
+    onScreenCaptureEnabledChanged: {
+        if (!root.screenCaptureEnabled || root.releasePrepared)
+            return;
+
+        root.showCaptureTransitionVeil();
+        if (root.lockBlurProgress > 0.001)
+            Qt.callLater(root.refreshBlurCapture);
+        else
+            root.hideCaptureTransitionVeil(120);
+    }
     onLockBlurProgressChanged: {
+        if (root.releasePrepared) {
+            root.blurWasActive = false;
+            return;
+        }
+
         const blurIsActive = root.lockBlurProgress > 0.001;
-        if (blurIsActive && !root.blurWasActive && !root.useWallpaperFallback)
+        if (blurIsActive && !root.blurWasActive && root.screenCaptureEnabled)
             Qt.callLater(root.refreshBlurCapture);
 
         root.blurWasActive = blurIsActive;
@@ -202,8 +256,34 @@ MouseArea {
         interval: 900
         repeat: false
         onTriggered: {
-            if (root.captureScreen && !root.useWallpaperFallback)
+            if (root.screenCaptureEnabled)
                 root.refreshBlurCapture();
+        }
+    }
+
+    Timer {
+        id: releaseCaptureDetachTimer
+        interval: root.captureTransitionVeilHoldMs
+        repeat: false
+        onTriggered: root.detachScreenCaptureNow()
+    }
+
+    Timer {
+        id: captureTransitionVeilHideTimer
+        repeat: false
+        onTriggered: captureTransitionVeilFadeOut.restart()
+    }
+
+    NumberAnimation {
+        id: captureTransitionVeilFadeOut
+        target: captureTransitionVeil
+        property: "opacity"
+        to: 0
+        duration: root.captureTransitionVeilFadeMs
+        easing.type: Easing.OutCubic
+        onStopped: {
+            if (captureTransitionVeil.opacity <= 0.001)
+                captureTransitionVeil.visible = false;
         }
     }
 
@@ -278,7 +358,7 @@ MouseArea {
         clip: true
         visible: opacity > 0
         opacity: root.useWallpaperFallback
-            ? (root.suppressWallpaperFallback ? 0 : (wallpaperImage.status === Image.Ready ? 1 : 0))
+            ? 1
             : (screenshotView.hasContent ? 1 : 0)
         readonly property real blurScale: 1 + ((Config.options.lock.blur.extraZoom - 1) * root.lockBlurProgress)
         readonly property real blurRadius: Config.options.lock.blur.radius * root.lockBlurProgress
@@ -308,6 +388,10 @@ MouseArea {
             sourceSize.width: root.safeSurfaceSize.width
             sourceSize.height: root.safeSurfaceSize.height
             visible: root.showWallpaperFallback
+            onStatusChanged: {
+                if (status === Image.Ready && !root.screenCaptureEnabled && !root.releasePrepared)
+                    root.hideCaptureTransitionVeil(80);
+            }
         }
 
         ScreencopyView {
@@ -318,10 +402,14 @@ MouseArea {
             height: root.safeSurfaceSize.height + screenshotLayer.blurOverscan * 2
             scale: screenshotLayer.blurScale
             transformOrigin: Item.Center
-            captureSource: root.useWallpaperFallback ? null : root.captureScreen
+            captureSource: root.screenCaptureEnabled ? root.captureScreen : null
             live: false
             paintCursor: false
-            visible: !root.useWallpaperFallback && root.captureScreen
+            visible: root.screenCaptureEnabled
+            onHasContentChanged: {
+                if (hasContent && root.screenCaptureEnabled && !root.releasePrepared)
+                    root.hideCaptureTransitionVeil(80);
+            }
         }
 
         ShaderEffectSource {
@@ -330,8 +418,8 @@ MouseArea {
             y: screenshotView.y
             width: screenshotView.width
             height: screenshotView.height
-            sourceItem: screenshotView
-            live: !root.useWallpaperFallback
+            sourceItem: root.screenCaptureEnabled ? screenshotView : null
+            live: root.screenCaptureEnabled
             hideSource: true
             visible: false
         }
@@ -341,8 +429,8 @@ MouseArea {
             y: screenshotView.y
             width: screenshotView.width
             height: screenshotView.height
-            visible: !root.useWallpaperFallback && root.captureScreen && screenshotView.hasContent
-            source: screenshotTexture
+            visible: root.screenCaptureEnabled && screenshotView.hasContent
+            source: root.screenCaptureEnabled ? screenshotTexture : null
             radius: screenshotLayer.blurRadius
             samples: Math.max(1, Math.ceil(radius) * 2 + 1)
             transparentBorder: false
@@ -372,6 +460,25 @@ MouseArea {
             anchors.fill: parent
             color: ColorUtils.transparentize(Appearance.colors.colLayer0, 0.7)
             opacity: root.lockBlurProgress
+        }
+    }
+
+    Item {
+        id: captureTransitionVeil
+        z: -10
+        anchors.fill: parent
+        visible: true
+        opacity: 1
+
+        Rectangle {
+            anchors.fill: parent
+            color: Appearance.colors.colLayer0
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            color: Appearance.colors.colPrimary
+            opacity: 0.08
         }
     }
 
