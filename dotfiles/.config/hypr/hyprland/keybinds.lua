@@ -109,10 +109,10 @@ bind([[Alt]], [[F4]], [[killactive]], [[]], nil) -- [hidden] Close (Windows)
 bind([[Super]], [[Q]], [[killactive]], [[]], nil) -- Close
 bind([[Super+Shift+Alt]], [[Q]], [[exec]], [[hyprctl kill]], nil) -- Forcefully zap a window
 
-bind([[Super SHIFT]], [[left]], [[movewindow]], [[l]], nil)
-bind([[Super SHIFT]], [[right]], [[movewindow]], [[r]], nil)
-bind([[Super SHIFT]], [[up]], [[movewindow]], [[u]], nil)
-bind([[Super SHIFT]], [[down]], [[movewindow]], [[d]], nil)
+bind([[Super SHIFT]], [[left]], [[exec]], [[~/.config/hypr/hyprland/scripts/swap_or_move.sh l]], nil)
+bind([[Super SHIFT]], [[right]], [[exec]], [[~/.config/hypr/hyprland/scripts/swap_or_move.sh r]], nil)
+bind([[Super SHIFT]], [[up]], [[exec]], [[~/.config/hypr/hyprland/scripts/swap_or_move.sh u]], nil)
+bind([[Super SHIFT]], [[down]], [[exec]], [[~/.config/hypr/hyprland/scripts/swap_or_move.sh d]], nil)
 
 bind([[Super ALT]], [[right]], [[resizeactive]], [[50 0]], { repeating = true })
 bind([[Super ALT]], [[left]], [[resizeactive]], [[-50 0]], { repeating = true })
