@@ -253,6 +253,7 @@ Item {
                         property string keyPayload: ""
                         property bool deviceAvailable: modelData.available
                         property string deviceId: modelData.id
+                        property var capabilities: modelData.capabilities ?? ({})
                         Layout.fillWidth: true
                         radius: Appearance.rounding.normal
                         color: Appearance.colors.colLayer2
@@ -281,6 +282,20 @@ Item {
                         function normalizePlayerKey(value) {
                             return `${value ?? ""}`.toLowerCase().replace(/[^a-z0-9]+/g, "");
                         }
+
+                        function supports(capability) {
+                            return deviceCard.capabilities?.[capability] === true;
+                        }
+
+                        readonly property var quickActions: [
+                            { icon: "notifications_active", tip: Translation.tr("Ping"), capability: "ping", args: ["--device", modelData.id, "--ping", "--ping-msg", Translation.tr("Ping from Quickshell")] },
+                            { icon: "ring_volume", tip: Translation.tr("Ring"), capability: "ring", args: ["--device", modelData.id, "--ring"] },
+                            { icon: "content_paste", tip: Translation.tr("Clipboard"), capability: "clipboard", args: ["--device", modelData.id, "--send-clipboard"] },
+                            { icon: "lock", tip: Translation.tr("Lock"), capability: "lock", args: ["--device", modelData.id, "--lock"] },
+                            { icon: "lock_open", tip: Translation.tr("Unlock"), capability: "lock", args: ["--device", modelData.id, "--unlock"] },
+                            { icon: "hard_drive", tip: Translation.tr("Mount"), capability: "storage", args: ["--device", modelData.id, "--mount"] },
+                            { icon: "folder", tip: Translation.tr("Storage"), capability: "storage", openPath: true }
+                        ].filter(action => deviceCard.supports(action.capability))
 
                         function playerForSource(playerName) {
                             const target = normalizePlayerKey(playerName);
@@ -412,7 +427,7 @@ Item {
 
                         Timer {
                             interval: 5000
-                            running: deviceCard.deviceAvailable
+                            running: deviceCard.deviceAvailable && deviceCard.supports("mpris")
                             repeat: true
                             onTriggered: deviceCard.refreshPlayerList()
                             Component.onCompleted: {
@@ -557,13 +572,13 @@ Item {
                             // ── Media player ──
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                visible: deviceCard.kdePlayerList.length > 0
+                                visible: deviceCard.supports("mpris") && deviceCard.kdePlayerList.length > 0
                                 spacing: 6
 
                                 ListView {
                                     id: playerSourceView
                                     Layout.fillWidth: true
-                                    implicitHeight: 148
+                                    implicitHeight: 164
                                     orientation: ListView.Horizontal
                                     snapMode: ListView.SnapToItem
                                     boundsBehavior: Flickable.StopAtBounds
@@ -607,8 +622,8 @@ Item {
                                         height: playerSourceView.height
                                         radius: Appearance.rounding.normal
                                         color: selected
-                                            ? Qt.alpha(Appearance.colors.colPrimaryContainer, 0.2)
-                                            : Appearance.colors.colLayer3
+                                            ? Qt.alpha(Appearance.colors.colPrimaryContainer, 0.48)
+                                            : Qt.alpha(Appearance.colors.colLayer3, 0.94)
                                         border.width: 1
                                         border.color: selected
                                             ? Qt.alpha(Appearance.colors.colPrimary, 0.3)
@@ -631,6 +646,15 @@ Item {
                                             property string artFilePath: ""
                                             command: ["bash", "-c", `[ -f '${artFilePath}' ] || curl -sSL '${targetFile}' -o '${artFilePath}'`]
                                             onExited: playerPage.artReady = true
+                                        }
+
+                                        Image {
+                                            anchors.fill: parent
+                                            source: playerPage.displayedArt
+                                            fillMode: Image.PreserveAspectCrop
+                                            opacity: playerPage.displayedArt.length > 0 ? 0.12 : 0
+                                            asynchronous: true
+                                            cache: false
                                         }
 
                                         function seekBy(offsetSeconds) {
@@ -664,11 +688,13 @@ Item {
                                             spacing: 10
 
                                             Rectangle {
-                                                Layout.preferredWidth: 88
-                                                Layout.preferredHeight: 88
+                                                Layout.preferredWidth: 96
+                                                Layout.preferredHeight: 110
                                                 radius: Appearance.rounding.small
                                                 color: Appearance.colors.colLayer2
                                                 clip: true
+                                                border.width: 1
+                                                border.color: Qt.alpha(Appearance.colors.colPrimary, 0.22)
 
                                                 Image {
                                                     anchors.fill: parent
@@ -994,6 +1020,7 @@ Item {
 
                             // ── Send file ──
                             Rectangle {
+                                visible: deviceCard.supports("share")
                                 Layout.fillWidth: true
                                 implicitHeight: 36
                                 radius: Appearance.rounding.small
@@ -1063,15 +1090,7 @@ Item {
                                 spacing: 6
 
                                 Repeater {
-                                    model: [
-                                        { icon: "notifications_active", tip: Translation.tr("Ping"),      args: ["--device", modelData.id, "--ping", "--ping-msg", Translation.tr("Ping from Quickshell")] },
-                                        { icon: "ring_volume",          tip: Translation.tr("Ring"),      args: ["--device", modelData.id, "--ring"] },
-                                        { icon: "content_paste",        tip: Translation.tr("Clipboard"), args: ["--device", modelData.id, "--send-clipboard"] },
-                                        { icon: "lock",                 tip: Translation.tr("Lock"),      args: ["--device", modelData.id, "--lock"] },
-                                        { icon: "lock_open",            tip: Translation.tr("Unlock"),    args: ["--device", modelData.id, "--unlock"] },
-                                        { icon: "hard_drive",           tip: Translation.tr("Mount"),     args: ["--device", modelData.id, "--mount"] },
-                                        { icon: "folder",               tip: Translation.tr("Storage"),   openPath: true }
-                                    ]
+                                    model: deviceCard.quickActions
                                     delegate: RippleButton {
                                         required property var modelData
                                         implicitWidth: 32; implicitHeight: 32
@@ -1098,6 +1117,7 @@ Item {
 
                             // ── Send text ──
                             Rectangle {
+                                visible: deviceCard.supports("share")
                                 Layout.fillWidth: true
                                 implicitHeight: 32
                                 radius: Appearance.rounding.small
@@ -1146,7 +1166,7 @@ Item {
                             Flow {
                                 Layout.fillWidth: true
                                 spacing: 6
-                                visible: (modelData.remoteCommands ?? []).length > 0
+                                visible: deviceCard.supports("remoteCommands") && (modelData.remoteCommands ?? []).length > 0
 
                                 Repeater {
                                     model: modelData.remoteCommands ?? []
@@ -1179,7 +1199,7 @@ Item {
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 6
-                                visible: modelData.available
+                                visible: modelData.available && deviceCard.supports("sms")
 
                                 RowLayout {
                                     Layout.fillWidth: true

@@ -157,6 +157,15 @@ def parse_remote_commands(out_text):
     return commands[:12]
 
 
+def has_plugin(device_id, plugin_name):
+    """A plugin path only exists on D-Bus when it is enabled for this device."""
+    rc, _, _ = run([
+        "qdbus", "org.kde.kdeconnect",
+        f"/modules/kdeconnect/devices/{device_id}/{plugin_name}",
+    ])
+    return rc == 0
+
+
 def main():
     rc, list_out, list_err = run(["kdeconnect-cli", "--list-devices", "--id-name-only"])
     if rc != 0:
@@ -171,11 +180,23 @@ def main():
         device_id = entry["id"]
         name = entry["name"]
 
+        capabilities = {
+            "ping": has_plugin(device_id, "ping"),
+            "ring": has_plugin(device_id, "findmyphone"),
+            "clipboard": has_plugin(device_id, "clipboard"),
+            "lock": has_plugin(device_id, "lock"),
+            "storage": has_plugin(device_id, "sftp"),
+            "share": has_plugin(device_id, "share"),
+            "sms": has_plugin(device_id, "sms"),
+            "mpris": has_plugin(device_id, "mprisremote"),
+            "remoteCommands": has_plugin(device_id, "remotecmd"),
+        }
+
         notifications = get_notifications_dbus(device_id)
-        sms_conversations = get_sms_conversations(device_id) if device_id in available_ids else []
+        sms_conversations = get_sms_conversations(device_id) if device_id in available_ids and capabilities["sms"] else []
 
         rc_cmd, cmd_out, _ = run(["kdeconnect-cli", "--device", device_id, "--list-commands"])
-        remote_commands = parse_remote_commands(cmd_out) if rc_cmd == 0 else []
+        remote_commands = parse_remote_commands(cmd_out) if rc_cmd == 0 and capabilities["remoteCommands"] else []
         rc_mount, mount_out, _ = run(["kdeconnect-cli", "--device", device_id, "--get-mount-point"])
         mount_point = mount_out.strip() if rc_mount == 0 else ""
 
@@ -201,6 +222,7 @@ def main():
             "remoteCommands": remote_commands,
             "mountPoint": mount_point,
             "smsConversations": sms_conversations,
+            "capabilities": capabilities,
         })
 
     print(json.dumps({"devices": devices, "error": ""}))
