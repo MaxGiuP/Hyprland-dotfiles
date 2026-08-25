@@ -264,4 +264,10 @@ Scope {
         function close(): void { layoutSwitcherLoader.active = false; }
         function toggle(): void { root.toggle(); }
     }
+
+    GlobalShortcut {
+        name: "layoutSwitcherToggle"
+        description: "Choose window layout"
+        onPressed: root.toggle()
+    }
 }
