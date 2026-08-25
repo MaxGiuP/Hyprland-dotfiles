@@ -66,7 +66,9 @@ Scope {
 
                 Loader {
                     id: sidebarContentLoader
-                    active: screenScope.sidebarOpen || sidebarContentLoader.x < root.sidebarWidth || Config?.options.sidebar.keepRightSidebarLoaded
+                    // Keep the expensive sidebar tree warm so opening never
+                    // waits for its controls, devices, and notifications to load.
+                    active: true
                     x: root.sidebarWidth
                     y: Appearance.sizes.hyprlandGapsOut
                     width: root.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin
@@ -82,7 +84,7 @@ Scope {
                             to: "open"
                             NumberAnimation {
                                 property: "x"
-                                duration: 300
+                                duration: 160
                                 easing.type: Easing.OutCubic
                             }
                         },
@@ -91,7 +93,7 @@ Scope {
                             to: ""
                             NumberAnimation {
                                 property: "x"
-                                duration: 200
+                                duration: 140
                                 easing.type: Easing.InCubic
                             }
                         }
