@@ -8,6 +8,58 @@ ContentSection {
     icon: "left_panel_open"
     title: Translation.tr("Left sidebar")
 
+    ContentSubsection {
+        title: Translation.tr("Overview tab")
+
+        ConfigSwitch {
+            buttonIcon: "dashboard"
+            text: Translation.tr("Show overview tab")
+            checked: Config.options.sidebar.dashboard.enable
+            onCheckedChanged: Config.options.sidebar.dashboard.enable = checked
+        }
+
+        ConfigRow {
+            enabled: Config.options.sidebar.dashboard.enable
+            uniform: true
+            ConfigSwitch {
+                buttonIcon: "partly_cloudy_day"
+                text: Translation.tr("Weather")
+                checked: Config.options.sidebar.dashboard.showWeather
+                onCheckedChanged: Config.options.sidebar.dashboard.showWeather = checked
+            }
+            ConfigSwitch {
+                buttonIcon: "newspaper"
+                text: Translation.tr("News")
+                checked: Config.options.sidebar.dashboard.showNews
+                onCheckedChanged: Config.options.sidebar.dashboard.showNews = checked
+            }
+            ConfigSwitch {
+                buttonIcon: "show_chart"
+                text: Translation.tr("Markets")
+                checked: Config.options.sidebar.dashboard.showMarkets
+                onCheckedChanged: Config.options.sidebar.dashboard.showMarkets = checked
+            }
+        }
+
+        MaterialTextArea {
+            enabled: Config.options.sidebar.dashboard.enable && Config.options.sidebar.dashboard.showNews
+            Layout.fillWidth: true
+            placeholderText: Translation.tr("News RSS feed URL")
+            text: Config.options.sidebar.dashboard.newsFeed
+            wrapMode: TextEdit.Wrap
+            onTextChanged: Config.options.sidebar.dashboard.newsFeed = text.trim()
+        }
+
+        MaterialTextArea {
+            enabled: Config.options.sidebar.dashboard.enable && Config.options.sidebar.dashboard.showMarkets
+            Layout.fillWidth: true
+            placeholderText: Translation.tr("Stooq symbols, e.g. aapl.us,msft.us,^ftse")
+            text: Config.options.sidebar.dashboard.stockSymbols
+            wrapMode: TextEdit.Wrap
+            onTextChanged: Config.options.sidebar.dashboard.stockSymbols = text
+        }
+    }
+
     ConfigSwitch {
         buttonIcon: "translate"
         text: Translation.tr('Enable translator')
