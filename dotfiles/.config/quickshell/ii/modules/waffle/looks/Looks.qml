@@ -31,23 +31,23 @@ Singleton {
     lightColors: QtObject {
         id: lightColors
         property color bgPanelBody: "#F2F2F2"
-        property color bgPanelSeparator: "#E0E0E0"
+        property color bgPanelSeparator: "#D2D2D2"
         property color bg0: "#EEEEEE"
-        property color bg0Border: '#BEBEBE'
+        property color bg0Border: '#AAAAAA'
         property color bg1Base: "#F7F7F7"
         property color bg1: "#F7F7F7"
         property color bg1Hover: "#F7F7F7"
         property color bg1Active: '#EFEFEF'
-        property color bg1Border: '#E9E9E9'
+        property color bg1Border: '#D8D8D8'
         property color bg2: "#FBFBFB"
         property color bg2Base: "#FBFBFB"
         property color bg2Hover: '#ffffff'
         property color bg2Active: '#eeeeee'
-        property color bg2Border: '#E0E0E0'
-        property color subfg: "#5C5C5C"
+        property color bg2Border: '#CECECE'
+        property color subfg: "#494949"
         property color fg: "#000000"
-        property color fg1: "#626262"
-        property color inactiveIcon: "#C4C4C4"
+        property color fg1: "#4E4E4E"
+        property color inactiveIcon: "#A8A8A8"
         property color controlBgInactive: '#555458'
         property color controlBg: '#807F85'
         property color controlBgHover: '#57575B'
@@ -151,10 +151,10 @@ Singleton {
             property string ui: "Noto Sans"
         }
         property QtObject weight: QtObject { // Noto is not Segoe, so we might use slightly different weights
-            property int thin: Font.Normal
-            property int regular: Font.Medium
-            property int strong: Font.DemiBold
-            property int stronger: (Font.DemiBold + 2*Font.Bold) / 3
+            property int thin: root.dark ? Font.Normal : 450
+            property int regular: root.dark ? Font.Medium : 550
+            property int strong: root.dark ? Font.DemiBold : 625
+            property int stronger: root.dark ? (Font.DemiBold + 2*Font.Bold) / 3 : 675
             property int strongest: Font.Bold
         }
         property QtObject pixelSize: QtObject {

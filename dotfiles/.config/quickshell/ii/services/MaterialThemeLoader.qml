@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 
 import qs.modules.common
+import qs.modules.common.functions
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -13,6 +14,23 @@ import Quickshell.Io
 Singleton {
     id: root
     property string filePath: Directories.generatedMaterialThemePath
+
+    function darken(color, amount) {
+        return ColorUtils.mix(color, "#000000", 1 - amount)
+    }
+
+    function strengthenLightPalette() {
+        // Material's generated light schemes are deliberately soft. Keep the
+        // wallpaper hue, but give text, dividers and accents more definition.
+        Appearance.m3colors.m3onBackground = root.darken(Appearance.m3colors.m3onBackground, 0.18)
+        Appearance.m3colors.m3onSurface = root.darken(Appearance.m3colors.m3onSurface, 0.18)
+        Appearance.m3colors.m3onSurfaceVariant = root.darken(Appearance.m3colors.m3onSurfaceVariant, 0.14)
+        Appearance.m3colors.m3outline = root.darken(Appearance.m3colors.m3outline, 0.16)
+        Appearance.m3colors.m3outlineVariant = root.darken(Appearance.m3colors.m3outlineVariant, 0.10)
+        Appearance.m3colors.m3primary = root.darken(Appearance.m3colors.m3primary, 0.08)
+        Appearance.m3colors.m3secondary = root.darken(Appearance.m3colors.m3secondary, 0.08)
+        Appearance.m3colors.m3tertiary = root.darken(Appearance.m3colors.m3tertiary, 0.08)
+    }
 
     function reapplyTheme() {
         themeFileView.reload()
@@ -30,6 +48,9 @@ Singleton {
         }
         
         Appearance.m3colors.darkmode = (Appearance.m3colors.m3background.hslLightness < 0.5)
+
+        if (!Appearance.m3colors.darkmode)
+            root.strengthenLightPalette()
     }
 
     function resetFilePathNextTime() {

@@ -247,14 +247,14 @@ Singleton {
         }
         property QtObject variableAxes: QtObject {
             property var main: ({
-                "wght": 450,
+                "wght": root.m3colors.darkmode ? 450 : 475,
                 "wdth": 100,
             })
             property var numbers: ({
-                "wght": 450,
+                "wght": root.m3colors.darkmode ? 450 : 475,
             })
             property var title: ({ // Slightly bold weight for title
-                "wght": 550, // Weight (Lowered to compensate for increased grade)
+                "wght": root.m3colors.darkmode ? 550 : 575,
             })
         }
         property QtObject pixelSize: QtObject {
