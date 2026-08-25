@@ -92,9 +92,9 @@ Scope {
             Rectangle {
                 id: backdrop
                 anchors.fill: parent
-                // Keep the switcher legible even when the shell's content
-                // transparency is enabled.
-                color: "#A6000000"
+                // Match the overview/workspace-preview scrim instead of using
+                // a hard black overlay.
+                color: Appearance.colors.colScrim
                 opacity: root.isOpen ? 1 : 0
 
                 Behavior on opacity {
@@ -116,9 +116,9 @@ Scope {
                 anchors.centerIn: parent
                 width: 520
                 height: listColumn.implicitHeight + 34
-                color: Appearance.m3colors.m3surfaceContainerHigh
+                color: Appearance.colors.colLayer2
                 border.width: 1
-                border.color: Appearance.colors.colLayer0Border
+                border.color: Appearance.colors.colOutlineVariant
                 radius: Appearance.rounding.windowRounding
                 focus: true
                 opacity: root.isOpen ? 1 : 0
@@ -180,9 +180,9 @@ Scope {
                             width: listColumn.width
                             height: 76
                             radius: Appearance.rounding.small
-                            color: selected ? Appearance.colors.colPrimaryContainer : "transparent"
+                            color: selected ? Appearance.colors.colLayer2Hover : "transparent"
                             border.width: selected ? 1 : 0
-                            border.color: Appearance.colors.colPrimary
+                            border.color: Appearance.colors.colOutlineVariant
 
                             Behavior on color { ColorAnimation { duration: 100 } }
 
@@ -202,7 +202,7 @@ Scope {
                                 width: 24
                                 text: "›"
                                 visible: selected
-                                color: Appearance.colors.colOnPrimaryContainer
+                                color: Appearance.colors.colOnLayer2
                                 font.pixelSize: 31
                             }
 
@@ -213,7 +213,7 @@ Scope {
                                     verticalCenter: parent.verticalCenter
                                 }
                                 text: modelData.icon
-                                color: selected ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer0
+                                color: Appearance.colors.colOnLayer2
                                 font.pixelSize: 25
                             }
 
@@ -227,14 +227,14 @@ Scope {
 
                                 Text {
                                     text: modelData.name
-                                    color: selected ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnLayer0
+                                    color: Appearance.colors.colOnLayer2
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.normal
                                     font.weight: Font.DemiBold
                                 }
                                 Text {
                                     text: modelData.description
-                                    color: selected ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colSubtext
+                                    color: selected ? Appearance.colors.colOnLayer2 : Appearance.colors.colSubtext
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.small
                                 }
