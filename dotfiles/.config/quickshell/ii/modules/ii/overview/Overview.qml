@@ -289,11 +289,36 @@ Scope {
                                                  && GlobalStates.overviewDrawerMode
                                                  && searchWidget.displayedText == ""
 
+            // A hidden drawer's height can still change while the normal
+            // workspace overview is closing. Only animate slideY after this
+            // drawer was genuinely opened; otherwise keep it parked below the
+            // viewport without briefly showing a phantom fold-in transition.
+            property bool drawerTransitionArmed: false
+            onDrawerActiveChanged: {
+                if (drawerActive) {
+                    drawerTransitionDisarm.stop()
+                    drawerTransitionArmed = true
+                } else if (drawerTransitionArmed) {
+                    drawerTransitionDisarm.restart()
+                }
+            }
+
+            Timer {
+                id: drawerTransitionDisarm
+                interval: overviewScope.exitDuration + 20
+                repeat: false
+                onTriggered: {
+                    if (!drawerPanel.drawerActive)
+                        drawerPanel.drawerTransitionArmed = false
+                }
+            }
+
             property real slideY: drawerActive ? 0 : height
 
             transform: Translate { y: drawerPanel.slideY }
 
             Behavior on slideY {
+                enabled: drawerPanel.drawerActive || drawerPanel.drawerTransitionArmed
                 NumberAnimation {
                     duration: drawerPanel.drawerActive
                         ? overviewScope.entranceDuration
