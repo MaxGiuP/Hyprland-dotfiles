@@ -136,7 +136,7 @@ bind([[Super]], [[Space]], [[togglefloating]], [[]], nil) -- Float/Tile
 bind([[Super]], [[D]], [[fullscreenstate]], [[1 1 toggle]], nil) -- Maximize
 bind([[Super]], [[F]], [[fullscreen]], [[0]], nil) -- Fullscreen
 bind([[Super+Alt]], [[F]], [[fullscreenstate]], [[0 3]], nil) -- Fullscreen spoof
-bind([[Super]], [[P]], [[pin]], [[]], nil) -- Pin
+bind([[Super]], [[P]], [[exec]], [[mailspring]], { description = [[Open Mailspring]] })
 bind([[Super]], [[code:62]], [[layoutmsg]], [[togglesplit]], nil)
 bind([[Super]], [[R]], [[global]], [[quickshell:layoutSwitcherToggle]], nil) -- Choose window layout
 
