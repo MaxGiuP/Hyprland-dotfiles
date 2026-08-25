@@ -14,6 +14,7 @@ Item {
     property var devices: KdeConnectService.devices
     property var phoneNotifications: KdeConnectService.phoneNotifications
     property string lastError: KdeConnectService.lastError
+    readonly property int onlineDeviceCount: (root.devices ?? []).filter(device => device?.available).length
     property string sharePath: ""
     property string pendingStoragePath: ""
     property string pendingStorageDeviceId: ""
@@ -141,12 +142,94 @@ Item {
         anchors.margins: 10
         spacing: 10
 
-        StyledText {
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 82
+            radius: Appearance.rounding.normal
+            color: Appearance.colors.colPrimaryContainer
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 14
+                spacing: 12
+
+                Rectangle {
+                    implicitWidth: 46
+                    implicitHeight: 46
+                    radius: 23
+                    color: Qt.alpha(Appearance.colors.colPrimary, 0.14)
+
+                    MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: "devices"
+                        iconSize: 24
+                        color: Appearance.colors.colPrimary
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    StyledText {
+                        text: Translation.tr("KDE Connect")
+                        font.pixelSize: Appearance.font.pixelSize.large
+                        font.weight: Font.DemiBold
+                        color: Appearance.colors.colOnPrimaryContainer
+                    }
+
+                    StyledText {
+                        text: root.onlineDeviceCount > 0
+                            ? Translation.tr("%1 device%2 online").arg(root.onlineDeviceCount).arg(root.onlineDeviceCount === 1 ? "" : "s")
+                            : Translation.tr("Your connected devices")
+                        font.pixelSize: Appearance.font.pixelSize.smaller
+                        color: Qt.alpha(Appearance.colors.colOnPrimaryContainer, 0.72)
+                    }
+                }
+
+                RippleButton {
+                    implicitWidth: 36
+                    implicitHeight: 36
+                    buttonRadius: 18
+                    colBackground: Qt.alpha(Appearance.colors.colPrimary, 0.14)
+                    colBackgroundHover: Qt.alpha(Appearance.colors.colPrimary, 0.24)
+                    onClicked: root.refresh()
+                    contentItem: MaterialSymbol {
+                        anchors.centerIn: parent
+                        text: KdeConnectService.loading ? "hourglass_top" : "refresh"
+                        iconSize: 18
+                        color: Appearance.colors.colPrimary
+                    }
+                    StyledToolTip { text: Translation.tr("Refresh devices") }
+                }
+            }
+        }
+
+        Rectangle {
             visible: root.lastError.length > 0
-            text: root.lastError
-            color: Appearance.colors.colError
-            wrapMode: Text.Wrap
-            font.pixelSize: Appearance.font.pixelSize.smaller
+            Layout.fillWidth: true
+            implicitHeight: errorText.implicitHeight + 18
+            radius: Appearance.rounding.small
+            color: Qt.alpha(Appearance.colors.colError, 0.12)
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 9
+                spacing: 8
+                MaterialSymbol {
+                    text: "error_outline"
+                    iconSize: 17
+                    color: Appearance.colors.colError
+                }
+                StyledText {
+                    id: errorText
+                    Layout.fillWidth: true
+                    text: root.lastError
+                    color: Appearance.colors.colError
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                }
+            }
         }
 
         StyledFlickable {
@@ -173,11 +256,22 @@ Item {
                         Layout.fillWidth: true
                         radius: Appearance.rounding.normal
                         color: Appearance.colors.colLayer2
+                        clip: true
                         border.width: 1
                         border.color: modelData.available
                             ? Qt.alpha(Appearance.colors.colPrimary, 0.3)
                             : Appearance.colors.colLayer3
                         implicitHeight: cardColumn.implicitHeight + 20
+
+                        Rectangle {
+                            anchors.left: parent.left
+                            anchors.top: parent.top
+                            anchors.bottom: parent.bottom
+                            width: 3
+                            color: modelData.available
+                                ? Appearance.colors.colPrimary
+                                : Appearance.colors.colOutlineVariant
+                        }
 
                         property var kdePlayerList: []
                         property string kdeCurrentPlayer: ""
@@ -413,20 +507,6 @@ Item {
                                     }
                                 }
 
-                                RippleButton {
-                                    implicitWidth: 30
-                                    implicitHeight: 30
-                                    buttonRadius: 15
-                                    colBackground: "transparent"
-                                    colBackgroundHover: Appearance.colors.colLayer3
-                                    onClicked: root.refresh()
-                                    contentItem: MaterialSymbol {
-                                        anchors.centerIn: parent
-                                        text: KdeConnectService.loading ? "hourglass_top" : "refresh"
-                                        iconSize: 16
-                                        color: Appearance.colors.colSubtext
-                                    }
-                                }
                             }
 
                             // ── Battery bar ──
@@ -1456,12 +1536,36 @@ Item {
                     }
                 }
 
-                StyledText {
+                Rectangle {
                     visible: root.devices.length === 0 && root.lastError.length === 0
-                    text: Translation.tr("No paired devices detected.")
-                    color: Appearance.colors.colSubtext
-                    horizontalAlignment: Text.AlignHCenter
                     Layout.fillWidth: true
+                    implicitHeight: 156
+                    radius: Appearance.rounding.normal
+                    color: Appearance.colors.colLayer2
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 7
+                        MaterialSymbol {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: "phonelink_setup"
+                            iconSize: 30
+                            color: Appearance.colors.colPrimary
+                        }
+                        StyledText {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Translation.tr("No paired devices")
+                            font.weight: Font.Medium
+                        }
+                        StyledText {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Translation.tr("Pair a device in KDE Connect, then refresh here.")
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.smaller
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
+                        }
+                    }
                 }
             }
         }
