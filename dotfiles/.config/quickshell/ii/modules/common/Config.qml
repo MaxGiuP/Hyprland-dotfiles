@@ -713,14 +713,6 @@ Singleton {
 
             property JsonObject sidebar: JsonObject {
                 property bool keepRightSidebarLoaded: false
-                property JsonObject dashboard: JsonObject {
-                    property bool enable: true
-                    property bool showWeather: true
-                    property bool showNews: true
-                    property bool showMarkets: true
-                    property string newsFeed: "https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en"
-                    property string stockSymbols: "aapl.us,msft.us,^ftse"
-                }
                 property JsonObject translator: JsonObject {
                     property bool enable: false
                     property int delay: 300 // Delay before sending request. Reduces (potential) rate limits and lag.

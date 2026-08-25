@@ -14,16 +14,13 @@ Item {
     anchors.fill: parent
     property bool aiEnabled: (Config.options?.policies?.ai ?? 1) !== 0
     property bool translatorEnabled: Config.options?.sidebar?.translator?.enable ?? false
-    property bool dashboardEnabled: Config.options?.sidebar?.dashboard?.enable ?? true
     property var tabButtonList: [
-        ...(root.dashboardEnabled ? [{"id": "main", "icon": "dashboard", "name": "", "title": Translation.tr("Overview")}] : []),
         ...(root.aiEnabled ? [{"id": "ai", "icon": "hub", "name": "", "title": Translation.tr("AI")}] : []),
         ...(root.translatorEnabled ? [{"id": "translator", "icon": "translate", "name": "", "title": Translation.tr("Translator")}] : []),
         {"id": "calculator", "icon": "calculate", "name": "", "title": Translation.tr("Calculator")},
         {"id": "kde-connect", "icon": "smartphone", "name": "", "title": Translation.tr("KDE Connect")},
     ]
     property var tabPageComponents: [
-        ...(root.dashboardEnabled ? [dashboard] : []),
         ...(root.aiEnabled ? [aiHarness] : []),
         ...(root.translatorEnabled ? [translator] : []),
         calculatorTab,
@@ -186,10 +183,6 @@ Item {
             }
         }
 
-        Component {
-            id: dashboard
-            Dashboard {}
-        }
         Component {
             id: aiHarness
             AiHarness {}
