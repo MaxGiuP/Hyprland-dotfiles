@@ -8,6 +8,7 @@ import qs.modules.ii.bar
 import qs.modules.ii.cheatsheet
 import qs.modules.ii.dock
 import qs.modules.ii.lock
+import qs.modules.ii.layoutSwitcher
 import qs.modules.ii.liveCaptions
 import qs.modules.ii.mediaControls
 import qs.modules.ii.notificationPopup
@@ -32,6 +33,7 @@ Scope {
     PanelLoader { component: Cheatsheet {} }
     PanelLoader { extraCondition: Config.options.dock.enable; component: Dock {} }
     PanelLoader { component: Lock {} }
+    PanelLoader { component: LayoutSwitcher {} }
     PanelLoader { component: LiveCaptionsWindow {} }
     PanelLoader { component: MediaControls {} }
     PanelLoader { component: NotificationPopup {} }
