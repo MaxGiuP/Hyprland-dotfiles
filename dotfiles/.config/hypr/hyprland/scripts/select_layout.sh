@@ -28,9 +28,15 @@ case "$layout" in
     master|master-top|master-center)
         leave_monocle
         orientation="left"
+        smart_resizing="true"
         [[ "$layout" == "master-top" ]] && orientation="top"
-        [[ "$layout" == "master-center" ]] && orientation="center"
-        hyprctl eval "hl.config({ general = { layout = \"master\" }, master = { orientation = \"$orientation\" } })"
+        if [[ "$layout" == "master-center" ]]; then
+            orientation="center"
+            # Center Master has stacks on both sides, so the mouse-position-based
+            # resize edge can make keyboard resizing appear to go the wrong way.
+            smart_resizing="false"
+        fi
+        hyprctl eval "hl.config({ general = { layout = \"master\" }, master = { orientation = \"$orientation\", smart_resizing = $smart_resizing } })"
         ;;
     scroller)
         leave_monocle
