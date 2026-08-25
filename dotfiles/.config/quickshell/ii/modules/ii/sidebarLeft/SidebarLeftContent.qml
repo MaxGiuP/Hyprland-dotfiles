@@ -19,14 +19,12 @@ Item {
         ...(root.translatorEnabled ? [{"id": "translator", "icon": "translate", "name": "", "title": Translation.tr("Translator")}] : []),
         {"id": "calculator", "icon": "calculate", "name": "", "title": Translation.tr("Calculator")},
         {"id": "kde-connect", "icon": "smartphone", "name": "", "title": Translation.tr("KDE Connect")},
-        {"id": "console", "icon": "terminal", "name": "", "title": Translation.tr("Console")},
     ]
     property var tabPageComponents: [
         ...(root.aiEnabled ? [aiHarness] : []),
         ...(root.translatorEnabled ? [translator] : []),
         calculatorTab,
         kdeConnectTab,
-        consoleTab,
         ...(root.tabButtonList.length === 0 ? [placeholder] : []),
     ]
     property int tabCount: tabPageComponents.length
