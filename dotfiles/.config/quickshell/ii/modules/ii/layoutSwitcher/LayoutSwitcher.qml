@@ -8,6 +8,7 @@ import Quickshell.Hyprland
 
 Scope {
     id: root
+    property bool isOpen: false
 
     readonly property var layouts: [
         {
@@ -46,11 +47,13 @@ Scope {
 
     Loader {
         id: layoutSwitcherLoader
-        active: false
+        // Keep the full-screen surface alive so its dim backdrop does not
+        // animate its size whenever the picker is opened or closed.
+        active: true
 
         sourceComponent: PanelWindow {
             id: panelWindow
-            visible: layoutSwitcherLoader.active
+            visible: root.isOpen
             screen: Quickshell.screens.find(screen => screen.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
 
             anchors {
@@ -63,13 +66,13 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.namespace: "quickshell:layoutSwitcher"
             WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             color: "transparent"
 
             property int selectedIndex: 0
 
             function close() {
-                layoutSwitcherLoader.active = false;
+                root.isOpen = false;
             }
 
             function moveSelection(amount) {
@@ -253,12 +256,12 @@ Scope {
     }
 
     function open() {
-        layoutSwitcherLoader.active = true;
+        root.isOpen = true;
     }
 
     function toggle() {
-        if (layoutSwitcherLoader.active) {
-            layoutSwitcherLoader.active = false;
+        if (root.isOpen) {
+            root.isOpen = false;
         } else {
             open();
         }
@@ -268,7 +271,7 @@ Scope {
         target: "layoutSwitcher"
 
         function open(): void { root.open(); }
-        function close(): void { layoutSwitcherLoader.active = false; }
+        function close(): void { root.isOpen = false; }
         function toggle(): void { root.toggle(); }
     }
 
