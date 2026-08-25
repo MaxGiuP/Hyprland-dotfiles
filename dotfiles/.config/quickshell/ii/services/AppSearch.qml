@@ -115,7 +115,6 @@ Singleton {
     function shouldShowApp(app) {
         if (!app) return false;
         if (app.noDisplay) return false;
-        if (app.runInTerminal) return false;
         const normalizedName = normalizeText(app.name);
         if (normalizedName.length === 0) return false;
         const command = normalizedCommand(app);
