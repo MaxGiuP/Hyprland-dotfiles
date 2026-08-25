@@ -43,7 +43,7 @@ Singleton {
         return [
             "bash",
             "-lc",
-            `${Config.options.apps.terminal} -e '${StringUtils.shellSingleQuoteEscape(normalized.join(" "))}'`
+            `${Config.options.apps.terminal} -e ${normalized.map(part => `'${StringUtils.shellSingleQuoteEscape(part)}'`).join(" ")}`
         ];
     }
 
