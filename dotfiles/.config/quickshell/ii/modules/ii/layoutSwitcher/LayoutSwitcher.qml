@@ -21,12 +21,48 @@ Scope {
             ]
         },
         {
+            name: "Dwindle Columns", command: "dwindle-columns", icon: "splitscreen_vertical",
+            description: "Always split windows side by side",
+            preview: [
+                { x: 0.00, y: 0.00, w: 0.30, h: 1.00 },
+                { x: 0.34, y: 0.00, w: 0.30, h: 1.00 },
+                { x: 0.68, y: 0.00, w: 0.32, h: 1.00 }
+            ]
+        },
+        {
+            name: "Dwindle Rows", command: "dwindle-rows", icon: "splitscreen",
+            description: "Always split windows above and below",
+            preview: [
+                { x: 0.00, y: 0.00, w: 1.00, h: 0.30 },
+                { x: 0.00, y: 0.34, w: 1.00, h: 0.30 },
+                { x: 0.00, y: 0.68, w: 1.00, h: 0.32 }
+            ]
+        },
+        {
             name: "Master", command: "master", icon: "view_sidebar",
             description: "Primary pane with a stack",
             preview: [
                 { x: 0.00, y: 0.00, w: 0.62, h: 1.00 },
                 { x: 0.66, y: 0.00, w: 0.34, h: 0.46 },
                 { x: 0.66, y: 0.50, w: 0.34, h: 0.50 }
+            ]
+        },
+        {
+            name: "Top Master", command: "master-top", icon: "view_agenda",
+            description: "Primary pane above a lower stack",
+            preview: [
+                { x: 0.00, y: 0.00, w: 1.00, h: 0.58 },
+                { x: 0.00, y: 0.62, w: 0.46, h: 0.38 },
+                { x: 0.50, y: 0.62, w: 0.50, h: 0.38 }
+            ]
+        },
+        {
+            name: "Center Master", command: "master-center", icon: "view_column",
+            description: "Primary pane centered between stacks",
+            preview: [
+                { x: 0.00, y: 0.00, w: 0.22, h: 1.00 },
+                { x: 0.26, y: 0.00, w: 0.48, h: 1.00 },
+                { x: 0.78, y: 0.00, w: 0.22, h: 1.00 }
             ]
         },
         {

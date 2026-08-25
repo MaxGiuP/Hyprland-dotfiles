@@ -4,13 +4,37 @@ set -euo pipefail
 
 layout="${1:-}"
 
+leave_monocle() {
+    hyprctl dispatch fullscreenstate 0 0 unset >/dev/null || true
+}
+
+set_layout() {
+    hyprctl eval "hl.config({ general = { layout = \"$1\" } })"
+}
+
 case "$layout" in
-    dwindle|master|scroller)
-        # Leaving Monocle restores the tiled workspace before switching layout.
-        hyprctl dispatch fullscreenstate 0 0 unset >/dev/null || true
-        # This configuration uses Hyprland's Lua parser, where `keyword` is
-        # intentionally unavailable for dynamic config changes.
-        hyprctl eval "hl.config({ general = { layout = \"$layout\" } })"
+    dwindle)
+        leave_monocle
+        hyprctl eval 'hl.config({ general = { layout = "dwindle" }, dwindle = { force_split = 0 } })'
+        ;;
+    dwindle-columns)
+        leave_monocle
+        hyprctl eval 'hl.config({ general = { layout = "dwindle" }, dwindle = { force_split = 1 } })'
+        ;;
+    dwindle-rows)
+        leave_monocle
+        hyprctl eval 'hl.config({ general = { layout = "dwindle" }, dwindle = { force_split = 2 } })'
+        ;;
+    master|master-top|master-center)
+        leave_monocle
+        orientation="left"
+        [[ "$layout" == "master-top" ]] && orientation="top"
+        [[ "$layout" == "master-center" ]] && orientation="center"
+        hyprctl eval "hl.config({ general = { layout = \"master\" }, master = { orientation = \"$orientation\" } })"
+        ;;
+    scroller)
+        leave_monocle
+        set_layout scroller
         ;;
     monocle)
         # Hyprland has no native monocle layout; fullscreen is its focus-mode equivalent.
