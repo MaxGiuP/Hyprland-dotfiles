@@ -267,7 +267,7 @@ bind([[]], [[XF86AudioPause]], [[exec]], [[playerctl play-pause]], { locked = tr
 
 -- ##! Apps
 bind([[Super]], [[Return]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "kitty -1" "foot" "alacritty" "wezterm" "konsole" "kgx" "uxterm" "xterm"]], nil) -- Terminal
-bind([[Super]], [[T]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "gnome-text-editor" "kitty -1" "foot" "alacritty" "wezterm" "konsole" "kgx" "uxterm" "xterm"]], nil) -- [hidden] Kitty (terminal) (alt)
+bind([[Super]], [[T]], [[exec]], [[gtk-launch nvim]], { description = [[Open Neovim]] })
 bind([[Ctrl+Alt]], [[T]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "kitty -1" "foot" "alacritty" "wezterm" "konsole" "kgx" "uxterm" "xterm"]], nil) -- [hidden] Kitty (for Ubuntu people)
 bind([[Super]], [[E]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "dolphin" "org.kde.dolphin" "nautilus --new-window" "pcmanfm-qt" "nemo" "thunar" "kitty -1 fish -c yazi"]], nil) -- File manager
 bind([[Super]], [[W]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "brave" "google-chrome-stable" "zen-browser" "firefox" "chromium" "microsoft-edge-stable" "opera" "librewolf"]], nil) -- Browser
