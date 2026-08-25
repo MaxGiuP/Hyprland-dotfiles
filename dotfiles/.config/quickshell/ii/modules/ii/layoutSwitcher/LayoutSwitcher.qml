@@ -116,9 +116,11 @@ Scope {
                 anchors.centerIn: parent
                 width: 520
                 height: listColumn.implicitHeight + 34
-                color: Appearance.colors.colLayer2
+                // Use the same solid Material surface family as the workspace
+                // preview, independent of the global transparency preference.
+                color: Appearance.m3colors.m3surfaceContainer
                 border.width: 1
-                border.color: Appearance.colors.colOutlineVariant
+                border.color: Appearance.m3colors.m3outlineVariant
                 radius: Appearance.rounding.windowRounding
                 focus: true
                 opacity: root.isOpen ? 1 : 0
@@ -180,9 +182,9 @@ Scope {
                             width: listColumn.width
                             height: 76
                             radius: Appearance.rounding.small
-                            color: selected ? Appearance.colors.colLayer2Hover : "transparent"
+                            color: selected ? Appearance.m3colors.m3surfaceContainerHigh : "transparent"
                             border.width: selected ? 1 : 0
-                            border.color: Appearance.colors.colOutlineVariant
+                            border.color: Appearance.m3colors.m3outlineVariant
 
                             Behavior on color { ColorAnimation { duration: 100 } }
 
@@ -190,6 +192,7 @@ Scope {
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 onEntered: panelWindow.selectedIndex = index
+                                onPositionChanged: panelWindow.selectedIndex = index
                                 onClicked: panelWindow.applySelection()
                             }
 
@@ -202,7 +205,7 @@ Scope {
                                 width: 24
                                 text: "›"
                                 visible: selected
-                                color: Appearance.colors.colOnLayer2
+                                color: Appearance.m3colors.m3onSurface
                                 font.pixelSize: 31
                             }
 
@@ -213,7 +216,7 @@ Scope {
                                     verticalCenter: parent.verticalCenter
                                 }
                                 text: modelData.icon
-                                color: Appearance.colors.colOnLayer2
+                                color: Appearance.m3colors.m3onSurface
                                 font.pixelSize: 25
                             }
 
@@ -227,14 +230,14 @@ Scope {
 
                                 Text {
                                     text: modelData.name
-                                    color: Appearance.colors.colOnLayer2
+                                    color: Appearance.m3colors.m3onSurface
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.normal
                                     font.weight: Font.DemiBold
                                 }
                                 Text {
                                     text: modelData.description
-                                    color: selected ? Appearance.colors.colOnLayer2 : Appearance.colors.colSubtext
+                                    color: selected ? Appearance.m3colors.m3onSurface : Appearance.colors.colSubtext
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.small
                                 }
@@ -250,7 +253,7 @@ Scope {
                                 width: 105
                                 height: 52
                                 radius: 7
-                                color: Appearance.colors.colLayer1
+                                color: Appearance.m3colors.m3surfaceContainerLow
                                 clip: true
 
                                 Repeater {
