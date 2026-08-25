@@ -21,7 +21,7 @@ Scope {
             ]
         },
         {
-            name: "Dwindle Columns", command: "dwindle-columns", icon: "splitscreen_vertical",
+            name: "Dwindle Columns", command: "dwindle-columns", icon: "vertical_split",
             description: "Always split windows side by side",
             preview: [
                 { x: 0.00, y: 0.00, w: 0.30, h: 1.00 },
