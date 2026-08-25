@@ -24,6 +24,20 @@ Item {
     function refresh() { KdeConnectService.refresh() }
     function runAction(args) { KdeConnectService.runAction(args) }
 
+    Component.onCompleted: {
+        root.refresh();
+        smsWarmupRefresh.restart();
+    }
+
+    // The phone returns conversations asynchronously after the first DBus
+    // request, so make one short automatic follow-up refresh when this tab opens.
+    Timer {
+        id: smsWarmupRefresh
+        interval: 1400
+        repeat: false
+        onTriggered: root.refresh()
+    }
+
     function openStorageOrMount(deviceId, mountPoint) {
         root.pendingStorageDeviceId = deviceId || "";
         root.pendingStoragePath = mountPoint || "";

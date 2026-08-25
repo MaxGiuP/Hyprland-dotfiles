@@ -2,6 +2,7 @@
 import json
 import re
 import subprocess
+import time
 
 try:
     import dbus
@@ -90,7 +91,7 @@ def get_notifications_dbus(device_id):
 
 
 def get_sms_conversations(device_id):
-    """Query SMS conversations via DBus activeConversations(), sorted by timestamp desc."""
+    """Request SMS conversations and wait for KDE Connect to populate them."""
     if not _DBUS_OK:
         return []
     try:
@@ -101,7 +102,15 @@ def get_sms_conversations(device_id):
             iface.requestAllConversations()
         except Exception:
             pass
-        convs = iface.activeConversations()
+
+        # requestAllConversations is asynchronous. A fresh shell would otherwise
+        # return an empty list and not show messages until the next poll.
+        convs = []
+        for _ in range(4):
+            convs = iface.activeConversations()
+            if convs:
+                break
+            time.sleep(0.3)
     except Exception:
         return []
 
