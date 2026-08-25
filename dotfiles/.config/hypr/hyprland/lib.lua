@@ -159,10 +159,7 @@ function M.workspace_slot(mode, slot)
         local target = tostring(base + slot)
 
         if mode == "focus" then
-            if monitor then
-                hl.dispatch(hl.dsp.focus({ monitor = monitor }))
-            end
-            hl.dispatch(hl.dsp.focus({ workspace = target }))
+            hl.exec_cmd(shell_quote(HOME .. "/.config/hypr/hyprland/scripts/focus_workspace_with_cursor.sh") .. " " .. shell_quote(target))
         elseif mode == "move" then
             hl.dispatch(hl.dsp.window.move({ workspace = target }))
         elseif mode == "move-follow" then
