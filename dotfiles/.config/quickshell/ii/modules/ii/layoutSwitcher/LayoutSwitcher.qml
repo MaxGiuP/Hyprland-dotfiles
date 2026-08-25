@@ -70,6 +70,9 @@ Scope {
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             color: "transparent"
+            // A transparent full-screen layer still receives pointer events.
+            // Remove its input region entirely while the switcher is closed.
+            mask: Region { item: root.isOpen ? backdrop : null }
 
             property int selectedIndex: 0
 
