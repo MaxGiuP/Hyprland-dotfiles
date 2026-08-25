@@ -1018,145 +1018,126 @@ Item {
 
                             }
 
-                            // ── Send file ──
-                            Rectangle {
-                                visible: deviceCard.supports("share")
-                                Layout.fillWidth: true
-                                implicitHeight: 36
-                                radius: Appearance.rounding.small
-                                color: Appearance.colors.colLayer3
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 8
-                                    anchors.rightMargin: 4
-                                    anchors.topMargin: 4
-                                    anchors.bottomMargin: 4
-                                    spacing: 4
-
-                                    MaterialSymbol {
-                                        text: "attach_file"
-                                        iconSize: 15
-                                        color: Appearance.colors.colSubtext
-                                    }
-
-                                    TextField {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        text: root.sharePath
-                                        onTextChanged: root.sharePath = text
-                                        placeholderText: Translation.tr("File path…")
-                                        color: Appearance.colors.colOnLayer3
-                                        placeholderTextColor: Appearance.colors.colSubtext
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        leftPadding: 4; rightPadding: 4
-                                        topPadding: 0; bottomPadding: 0
-                                        font.pixelSize: Appearance.font.pixelSize.small
-                                        background: Item {}
-                                    }
-
-                                    RippleButton {
-                                        implicitWidth: 26; implicitHeight: 26
-                                        buttonRadius: 13
-                                        colBackground: Appearance.colors.colLayer2
-                                        colBackgroundHover: Appearance.colors.colLayer2Hover
-                                        onClicked: { filePickerProc.running = false; filePickerProc.running = true; }
-                                        contentItem: MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: "folder_open"; iconSize: 14
-                                            color: Appearance.colors.colOnLayer2
-                                        }
-                                    }
-
-                                    RippleButton {
-                                        implicitWidth: 26; implicitHeight: 26
-                                        buttonRadius: 13
-                                        enabled: deviceCard.deviceAvailable && root.sharePath.trim().length > 0
-                                        colBackground: Appearance.colors.colPrimary
-                                        colBackgroundHover: Qt.tint(Appearance.colors.colPrimary, "#18ffffff")
-                                        onClicked: root.sendFile(deviceCard.deviceId, root.sharePath)
-                                        contentItem: MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: "send"; iconSize: 14
-                                            color: Appearance.colors.colOnPrimary
-                                        }
-                                    }
-                                }
-                            }
-
-                            // ── Mini action strip ──
-                            Flow {
+                            // ── Device controls ──
+                            ColumnLayout {
+                                visible: deviceCard.quickActions.length > 0
                                 Layout.fillWidth: true
                                 spacing: 6
-
-                                Repeater {
-                                    model: deviceCard.quickActions
-                                    delegate: RippleButton {
-                                        required property var modelData
-                                        implicitWidth: 32; implicitHeight: 32
-                                        buttonRadius: 16
-                                        enabled: deviceCard.deviceAvailable
-                                        colBackground: Appearance.colors.colLayer3
-                                        colBackgroundHover: Appearance.colors.colLayer3Hover
-                                        onClicked: {
-                                            if (modelData.openPath) {
-                                                root.openStorageOrMount(deviceCard.deviceId, deviceCard.modelData.mountPoint ?? "");
-                                            } else {
-                                                root.runAction(modelData.args);
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    MaterialSymbol { text: "tune"; iconSize: 15; color: Appearance.colors.colPrimary }
+                                    StyledText { text: Translation.tr("Device controls"); font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; Layout.fillWidth: true }
+                                }
+                                GridLayout {
+                                    Layout.fillWidth: true
+                                    columns: 2
+                                    columnSpacing: 6
+                                    rowSpacing: 6
+                                    uniformCellWidths: true
+                                    Repeater {
+                                        model: deviceCard.quickActions
+                                        delegate: RippleButton {
+                                            required property var modelData
+                                            Layout.fillWidth: true
+                                            implicitHeight: 36
+                                            buttonRadius: Appearance.rounding.small
+                                            enabled: deviceCard.deviceAvailable
+                                            colBackground: Appearance.colors.colLayer3
+                                            colBackgroundHover: Appearance.colors.colLayer3Hover
+                                            onClicked: {
+                                                if (modelData.openPath)
+                                                    root.openStorageOrMount(deviceCard.deviceId, deviceCard.modelData.mountPoint ?? "");
+                                                else
+                                                    root.runAction(modelData.args);
+                                            }
+                                            contentItem: RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 9
+                                                anchors.rightMargin: 8
+                                                spacing: 6
+                                                MaterialSymbol { text: modelData.icon; iconSize: 16; color: Appearance.colors.colPrimary }
+                                                StyledText { text: modelData.tip; font.pixelSize: Appearance.font.pixelSize.smaller; color: Appearance.colors.colOnLayer3; Layout.fillWidth: true; elide: Text.ElideRight }
                                             }
                                         }
-                                        contentItem: MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: modelData.icon; iconSize: 15
-                                            color: Appearance.colors.colOnLayer3
-                                        }
-                                        StyledToolTip { text: modelData.tip }
                                     }
                                 }
                             }
 
-                            // ── Send text ──
-                            Rectangle {
+                            // ── Sharing ──
+                            ColumnLayout {
                                 visible: deviceCard.supports("share")
                                 Layout.fillWidth: true
-                                implicitHeight: 32
-                                radius: Appearance.rounding.small
-                                color: Appearance.colors.colLayer3
-
+                                spacing: 6
                                 RowLayout {
-                                    anchors.fill: parent
-                                    anchors.leftMargin: 8
-                                    anchors.rightMargin: 4
-                                    anchors.topMargin: 3
-                                    anchors.bottomMargin: 3
-                                    spacing: 4
-
-                                    TextField {
-                                        Layout.fillWidth: true
-                                        Layout.fillHeight: true
-                                        placeholderText: Translation.tr("Send text…")
-                                        text: deviceCard.keyPayload
-                                        onTextChanged: deviceCard.keyPayload = text
-                                        color: Appearance.colors.colOnLayer3
-                                        placeholderTextColor: Appearance.colors.colSubtext
-                                        verticalAlignment: TextInput.AlignVCenter
-                                        leftPadding: 0; rightPadding: 0
-                                        topPadding: 0; bottomPadding: 0
-                                        font.pixelSize: Appearance.font.pixelSize.smaller
-                                        background: Item {}
+                                    Layout.fillWidth: true
+                                    MaterialSymbol { text: "ios_share"; iconSize: 15; color: Appearance.colors.colPrimary }
+                                    StyledText { text: Translation.tr("Share with device"); font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; Layout.fillWidth: true }
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: 36
+                                    radius: Appearance.rounding.small
+                                    color: Appearance.colors.colLayer3
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 4
+                                        anchors.topMargin: 4
+                                        anchors.bottomMargin: 4
+                                        spacing: 4
+                                        MaterialSymbol { text: "attach_file"; iconSize: 15; color: Appearance.colors.colSubtext }
+                                        TextField {
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            text: root.sharePath
+                                            onTextChanged: root.sharePath = text
+                                            placeholderText: Translation.tr("Choose a file")
+                                            color: Appearance.colors.colOnLayer3; placeholderTextColor: Appearance.colors.colSubtext
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            leftPadding: 4; rightPadding: 4; topPadding: 0; bottomPadding: 0
+                                            font.pixelSize: Appearance.font.pixelSize.small
+                                            background: Item {}
+                                        }
+                                        RippleButton {
+                                            implicitWidth: 26; implicitHeight: 26; buttonRadius: 13
+                                            colBackground: Appearance.colors.colLayer2; colBackgroundHover: Appearance.colors.colLayer2Hover
+                                            onClicked: { filePickerProc.running = false; filePickerProc.running = true; }
+                                            contentItem: MaterialSymbol { anchors.centerIn: parent; text: "folder_open"; iconSize: 14; color: Appearance.colors.colOnLayer2 }
+                                        }
+                                        RippleButton {
+                                            implicitWidth: 26; implicitHeight: 26; buttonRadius: 13
+                                            enabled: deviceCard.deviceAvailable && root.sharePath.trim().length > 0
+                                            colBackground: Appearance.colors.colPrimary; colBackgroundHover: Qt.tint(Appearance.colors.colPrimary, "#18ffffff")
+                                            onClicked: root.sendFile(deviceCard.deviceId, root.sharePath)
+                                            contentItem: MaterialSymbol { anchors.centerIn: parent; text: "send"; iconSize: 14; color: Appearance.colors.colOnPrimary }
+                                        }
                                     }
-
-                                    RippleButton {
-                                        implicitWidth: 24; implicitHeight: 24
-                                        buttonRadius: 12
-                                        enabled: deviceCard.deviceAvailable && deviceCard.keyPayload.trim().length > 0
-                                        colBackground: Appearance.colors.colPrimary
-                                        colBackgroundHover: Qt.tint(Appearance.colors.colPrimary, "#18ffffff")
-                                        onClicked: root.runAction(["--device", deviceCard.deviceId, "--share-text", deviceCard.keyPayload.trim()])
-                                        contentItem: MaterialSymbol {
-                                            anchors.centerIn: parent
-                                            text: "send"; iconSize: 13
-                                            color: Appearance.colors.colOnPrimary
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    implicitHeight: 32
+                                    radius: Appearance.rounding.small
+                                    color: Appearance.colors.colLayer3
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.leftMargin: 8; anchors.rightMargin: 4; anchors.topMargin: 3; anchors.bottomMargin: 3
+                                        spacing: 4
+                                        TextField {
+                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            placeholderText: Translation.tr("Send a note")
+                                            text: deviceCard.keyPayload
+                                            onTextChanged: deviceCard.keyPayload = text
+                                            color: Appearance.colors.colOnLayer3; placeholderTextColor: Appearance.colors.colSubtext
+                                            verticalAlignment: TextInput.AlignVCenter
+                                            leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
+                                            font.pixelSize: Appearance.font.pixelSize.smaller
+                                            background: Item {}
+                                        }
+                                        RippleButton {
+                                            implicitWidth: 24; implicitHeight: 24; buttonRadius: 12
+                                            enabled: deviceCard.deviceAvailable && deviceCard.keyPayload.trim().length > 0
+                                            colBackground: Appearance.colors.colPrimary; colBackgroundHover: Qt.tint(Appearance.colors.colPrimary, "#18ffffff")
+                                            onClicked: root.runAction(["--device", deviceCard.deviceId, "--share-text", deviceCard.keyPayload.trim()])
+                                            contentItem: MaterialSymbol { anchors.centerIn: parent; text: "send"; iconSize: 13; color: Appearance.colors.colOnPrimary }
                                         }
                                     }
                                 }
