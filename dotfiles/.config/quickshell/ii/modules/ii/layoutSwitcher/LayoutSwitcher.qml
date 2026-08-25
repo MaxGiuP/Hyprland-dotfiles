@@ -84,6 +84,13 @@ Scope {
                 close();
             }
 
+            Rectangle {
+                anchors.fill: parent
+                // Keep the switcher legible even when the shell's content
+                // transparency is enabled.
+                color: "#A6000000"
+            }
+
             MouseArea {
                 anchors.fill: parent
                 onClicked: panelWindow.close()
@@ -94,7 +101,7 @@ Scope {
                 anchors.centerIn: parent
                 width: 520
                 height: listColumn.implicitHeight + 34
-                color: Appearance.colors.colLayer0
+                color: Appearance.m3colors.m3surfaceContainerHigh
                 border.width: 1
                 border.color: Appearance.colors.colLayer0Border
                 radius: Appearance.rounding.windowRounding
