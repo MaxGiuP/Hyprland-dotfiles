@@ -53,7 +53,9 @@ Scope {
 
         sourceComponent: PanelWindow {
             id: panelWindow
-            visible: root.isOpen
+            // Keep one fixed-size surface on the output. Opening and closing
+            // only fades its contents; the backdrop never resizes.
+            visible: true
             screen: Quickshell.screens.find(screen => screen.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
 
             anchors {
@@ -88,14 +90,24 @@ Scope {
             }
 
             Rectangle {
+                id: backdrop
                 anchors.fill: parent
                 // Keep the switcher legible even when the shell's content
                 // transparency is enabled.
                 color: "#A6000000"
+                opacity: root.isOpen ? 1 : 0
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 180
+                        easing.type: Easing.OutCubic
+                    }
+                }
             }
 
             MouseArea {
                 anchors.fill: parent
+                enabled: root.isOpen
                 onClicked: panelWindow.close()
             }
 
@@ -109,6 +121,14 @@ Scope {
                 border.color: Appearance.colors.colLayer0Border
                 radius: Appearance.rounding.windowRounding
                 focus: true
+                opacity: root.isOpen ? 1 : 0
+
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: 140
+                        easing.type: Easing.OutCubic
+                    }
+                }
 
                 Keys.onPressed: event => {
                     if (event.key === Qt.Key_Escape) {
