@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-MAX_TTY="${FIXLOCK_MAX_TTY:-12}"
-
-detect_active_vt() {
-    local active
-    active="$(cat /sys/class/tty/tty0/active 2>/dev/null || true)"
-    active="${active#tty}"
-
-    if [[ "$active" =~ ^[0-9]+$ ]]; then
-        printf '%s\n' "$active"
-    else
-        printf '1\n'
-    fi
-}
+# Recovery contract, learned from the 2026-08-26 TTY1 lock failure:
+# - never reset a VT while a live session may own it;
+# - if Hyprland is alive, restore the lock with hyprlock in that instance;
+# - if Hyprland died, stop stale shell services, start SDDM, and switch to it.
 
 detect_sddm_greeter_session() {
     loginctl list-sessions --no-legend 2>/dev/null |
@@ -44,117 +35,21 @@ detect_sddm_greeter_vt() {
     fi
 }
 
-detect_session_vts() {
-    loginctl list-sessions --no-legend 2>/dev/null |
-        awk '$7 ~ /^tty[0-9]+$/ {
-            sub(/^tty/, "", $7)
-            if (!seen[$7]++) print $7
-        }'
-}
-
-collect_reset_ttys() {
-    local active_vt="$1"
-    shift
-    local protected_vts=("$@")
-    local protected_vt
-    local vt
-
-    for ((vt = 1; vt <= MAX_TTY; vt++)); do
-        [[ "$vt" -eq "$active_vt" ]] && continue
-        [[ -e "/dev/tty$vt" ]] || continue
-
-        for protected_vt in "${protected_vts[@]}"; do
-            if [[ "$protected_vt" =~ ^[0-9]+$ && "$vt" -eq "$protected_vt" ]]; then
-                continue 2
-            fi
-        done
-
-        printf '%s\n' "$vt"
-    done
-}
-
-pick_fallback_vt() {
-    local active_vt="$1"
-    shift
-    local vt
-
-    while IFS= read -r vt; do
-        printf '%s\n' "$vt"
-        return 0
-    done < <(collect_reset_ttys "$active_vt" "$@")
-
-    printf '%s\n' "$active_vt"
-}
-
-reset_ttys_as_root() {
-    local active_vt="$1"
-    local fallback_vt="$2"
-    shift 2
-    local protected_vts=("$@")
-    local vt
-
-    echo "Resetting TTYs (active: tty${active_vt}, fallback: tty${fallback_vt})."
-    if ((${#protected_vts[@]} > 0)); then
-        echo "Protecting TTYs used by live sessions or the display manager: ${protected_vts[*]}."
-    fi
-
-    while IFS= read -r vt; do
-        systemctl reset-failed "getty@tty${vt}.service" >/dev/null 2>&1 || true
-        systemctl restart "getty@tty${vt}.service" >/dev/null 2>&1 || true
-
-        if [[ -w "/dev/tty${vt}" ]]; then
-            printf '\033c' >"/dev/tty${vt}" || true
-        fi
-
-        if command -v deallocvt >/dev/null 2>&1; then
-            deallocvt "$vt" >/dev/null 2>&1 || true
-        fi
-    done < <(collect_reset_ttys "$active_vt" "${protected_vts[@]}")
-
-    if [[ "$fallback_vt" != "$active_vt" ]]; then
-        chvt "$fallback_vt"
-        sleep 0.25
-    fi
-
-    chvt "$active_vt"
-    sleep 0.1
-}
-
-run_root_helper() {
-    local active_vt="$1"
-    local fallback_vt="$2"
-    shift 2
-    local protected_vts=("$@")
-
-    if [[ "${EUID}" -eq 0 ]]; then
-        reset_ttys_as_root "$active_vt" "$fallback_vt" "${protected_vts[@]}"
-        return 0
-    fi
-
-    if sudo -n true >/dev/null 2>&1; then
-        sudo -n "$0" --root-helper "$active_vt" "$fallback_vt" "${protected_vts[@]}"
-        return 0
-    fi
-
-    if [[ -t 0 && -t 1 ]]; then
-        sudo "$0" --root-helper "$active_vt" "$fallback_vt" "${protected_vts[@]}"
-        return 0
-    fi
-
-    echo "Warning: TTY reset needs sudo. Re-run 'sudo fixlock' if the VTs stay broken." >&2
-    return 1
-}
-
 activate_login_screen_as_root() {
     local target_vt="$1"
     local greeter_session="${2:-}"
 
     if [[ "$target_vt" == "restart" ]]; then
-        echo "Restarting sddm.service to restore the login screen."
-        systemctl restart sddm.service
-        sleep 1
-        target_vt="$(detect_sddm_greeter_vt)"
-        greeter_session="$(detect_sddm_greeter_session)"
+        echo "Starting sddm.service to restore the login screen."
+        systemctl reset-failed sddm.service >/dev/null 2>&1 || true
+        systemctl start sddm.service
+
+        for _ in {1..50}; do
+            target_vt="$(detect_sddm_greeter_vt)"
+            greeter_session="$(detect_sddm_greeter_session)"
+            [[ "$target_vt" =~ ^[0-9]+$ ]] && break
+            sleep 0.1
+        done
     fi
 
     if [[ -n "$greeter_session" ]]; then
@@ -169,6 +64,24 @@ activate_login_screen_as_root() {
 
     echo "Warning: unable to find the SDDM greeter VT." >&2
     return 1
+}
+
+cleanup_stale_user_services() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    echo "Stopping stale Quickshell and hypridle services."
+    systemctl --user stop quickshell.service hypridle.service >/dev/null 2>&1 || true
+    systemctl --user reset-failed quickshell.service hypridle.service >/dev/null 2>&1 || true
+}
+
+list_hyprland_instances() {
+    local output
+
+    command -v hyprctl >/dev/null 2>&1 || return 127
+    output="$(hyprctl instances 2>/dev/null)" || return $?
+    printf '%s\n' "$output" | awk '/^instance /{gsub(":", "", $2); print $2}'
 }
 
 run_login_screen_helper() {
@@ -195,9 +108,6 @@ run_login_screen_helper() {
 }
 
 recover_login_screen() {
-    local active_vt="$1"
-    local fallback_vt="$2"
-    local skip_root_helper="${3:-0}"
     local greeter_session
     local sddm_vt
 
@@ -208,10 +118,6 @@ recover_login_screen() {
         echo "No running Hyprland instances found."
         echo "SDDM greeter is on tty${sddm_vt}; switching there."
 
-        if [[ "$skip_root_helper" != "1" ]]; then
-            run_root_helper "$active_vt" "$fallback_vt" "$sddm_vt" || true
-        fi
-
         run_login_screen_helper "$sddm_vt" "$greeter_session"
         return $?
     fi
@@ -221,16 +127,19 @@ recover_login_screen() {
 }
 
 run_user_recovery() {
-    local active_vt="$1"
-    local fallback_vt="$2"
-    local skip_root_helper="${3:-0}"
     local instance
+    local instance_output
     local launched_hyprlock=0
 
-    mapfile -t instances < <(hyprctl instances 2>/dev/null | awk '/^instance /{gsub(":", "", $2); print $2}')
+    if ! instance_output="$(list_hyprland_instances)"; then
+        echo "Unable to inspect Hyprland instances; refusing unsafe recovery." >&2
+        return 1
+    fi
+    mapfile -t instances < <(printf '%s' "$instance_output")
 
     if ((${#instances[@]} == 0)); then
-        recover_login_screen "$active_vt" "$fallback_vt" "$skip_root_helper"
+        cleanup_stale_user_services
+        recover_login_screen
         exit $?
     fi
 
@@ -260,15 +169,6 @@ run_user_recovery() {
     fi
 }
 
-if [[ "${1:-}" == "--root-helper" ]]; then
-    shift
-    active_vt="${1:?missing active vt}"
-    fallback_vt="${2:?missing fallback vt}"
-    shift 2
-    reset_ttys_as_root "$active_vt" "$fallback_vt" "$@"
-    exit 0
-fi
-
 if [[ "${1:-}" == "--login-screen-helper" ]]; then
     shift
     activate_login_screen_as_root "${1:?missing target vt}" "${2:-}"
@@ -276,47 +176,47 @@ if [[ "${1:-}" == "--login-screen-helper" ]]; then
 fi
 
 if [[ "${1:-}" == "--user-recovery" ]]; then
-    shift
-    run_user_recovery "${1:?missing active vt}" "${2:?missing fallback vt}" 1
+    run_user_recovery
     exit 0
 fi
 
-active_vt="$(detect_active_vt)"
-sddm_vt="$(detect_sddm_greeter_vt)"
-mapfile -t protected_vts < <(detect_session_vts)
-if [[ -n "$sddm_vt" ]]; then
-    sddm_vt_seen=0
-    for protected_vt in "${protected_vts[@]}"; do
-        if [[ "$protected_vt" == "$sddm_vt" ]]; then
-            sddm_vt_seen=1
-            break
-        fi
-    done
-    if [[ "$sddm_vt_seen" -eq 0 ]]; then
-        protected_vts+=("$sddm_vt")
-    fi
+if [[ "${1:-}" == "--cleanup-user-services" ]]; then
+    cleanup_stale_user_services
+    exit 0
 fi
-fallback_vt="$(pick_fallback_vt "$active_vt" "${protected_vts[@]}")"
 
 if [[ "${EUID}" -eq 0 && -n "${SUDO_USER:-}" && -n "${SUDO_UID:-}" ]]; then
     user_home="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+    sddm_vt="$(detect_sddm_greeter_vt)"
 
-    mapfile -t root_seen_instances < <(runuser -u "$SUDO_USER" -- env \
+    if ! root_instance_output="$(runuser -u "$SUDO_USER" -- env \
         HOME="$user_home" \
         XDG_RUNTIME_DIR="/run/user/${SUDO_UID}" \
         PATH="$PATH" \
-        hyprctl instances 2>/dev/null |
-            awk '/^instance /{gsub(":", "", $2); print $2}')
+        hyprctl instances 2>/dev/null)"; then
+        echo "Unable to inspect Hyprland instances; refusing unsafe recovery." >&2
+        exit 1
+    fi
+    mapfile -t root_seen_instances < <(
+        printf '%s\n' "$root_instance_output" |
+            awk '/^instance /{gsub(":", "", $2); print $2}'
+    )
 
     if ((${#root_seen_instances[@]} > 0)); then
         exec runuser -u "$SUDO_USER" -- env \
             HOME="$user_home" \
             XDG_RUNTIME_DIR="/run/user/${SUDO_UID}" \
             PATH="$PATH" \
-            "$0" --user-recovery "$active_vt" "$fallback_vt"
+            "$0" --user-recovery
     fi
 
-    reset_ttys_as_root "$active_vt" "$fallback_vt" "${protected_vts[@]}"
+    runuser -u "$SUDO_USER" -- env \
+        HOME="$user_home" \
+        XDG_RUNTIME_DIR="/run/user/${SUDO_UID}" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${SUDO_UID}/bus" \
+        PATH="$PATH" \
+        "$0" --cleanup-user-services || true
+
     if [[ -n "$sddm_vt" ]]; then
         activate_login_screen_as_root "$sddm_vt" "$(detect_sddm_greeter_session)"
     else
@@ -325,4 +225,4 @@ if [[ "${EUID}" -eq 0 && -n "${SUDO_USER:-}" && -n "${SUDO_UID:-}" ]]; then
     exit $?
 fi
 
-run_user_recovery "$active_vt" "$fallback_vt"
+run_user_recovery
