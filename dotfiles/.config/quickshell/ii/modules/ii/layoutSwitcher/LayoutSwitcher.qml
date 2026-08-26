@@ -85,34 +85,59 @@ Scope {
         }
     ]
 
+    // Transparent dismissal surfaces cover the whole desktop while the dialog
+    // is open, so a click outside the center card closes it on any monitor.
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            id: backdropWindow
+            required property ShellScreen modelData
+
+            visible: root.isOpen
+            screen: modelData
+            anchors { top: true; bottom: true; left: true; right: true }
+            exclusionMode: ExclusionMode.Ignore
+            WlrLayershell.namespace: "quickshell:layoutSwitcherBackdrop"
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            color: "transparent"
+            mask: Region { item: root.isOpen ? dismissArea : null }
+
+            MouseArea {
+                id: dismissArea
+                anchors.fill: parent
+                enabled: root.isOpen
+                onClicked: root.isOpen = false
+            }
+        }
+    }
+
     Loader {
         id: layoutSwitcherLoader
-        // Keep the full-screen surface alive so its dim backdrop does not
-        // animate its size whenever the picker is opened or closed.
+        // Keep the small dialog surface alive across opens.
         active: true
 
         sourceComponent: PanelWindow {
             id: panelWindow
-            // Keep one fixed-size surface on the output. Opening and closing
-            // only fades its contents; the backdrop never resizes.
+            // This surface is only the dialog card, leaving the transparent
+            // dismissal surfaces to catch clicks elsewhere on the desktop.
             visible: true
             screen: Quickshell.screens.find(screen => screen.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
 
-            anchors {
-                top: true
-                bottom: true
-                left: true
-                right: true
+            anchors { top: true; left: true }
+            margins {
+                top: Math.round((screen?.height - implicitHeight) / 2)
+                left: Math.round((screen?.width - implicitWidth) / 2)
             }
+            implicitWidth: 520
+            implicitHeight: listColumn.implicitHeight + 34
 
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.namespace: "quickshell:layoutSwitcher"
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             color: "transparent"
-            // A transparent full-screen layer still receives pointer events.
-            // Remove its input region entirely while the switcher is closed.
-            mask: Region { item: root.isOpen ? backdrop : null }
 
             property int selectedIndex: 0
 
@@ -132,39 +157,9 @@ Scope {
                 close();
             }
 
-            Rectangle {
-                id: backdrop
-                anchors.fill: parent
-                // Match the overview/workspace-preview scrim instead of using
-                // a hard black overlay.
-                color: Appearance.colors.colScrim
-                opacity: root.isOpen ? 1 : 0
-
-                Behavior on opacity {
-                    NumberAnimation {
-                        duration: 180
-                        easing.type: Easing.OutCubic
-                    }
-                }
-            }
-
-            MouseArea {
-                anchors.fill: parent
-                enabled: root.isOpen
-                onClicked: panelWindow.close()
-            }
-
-            Rectangle {
+            Item {
                 id: content
-                anchors.centerIn: parent
-                width: 520
-                height: listColumn.implicitHeight + 34
-                // A bar-tinted, translucent surface lets the compositor blur
-                // the workspace behind it into a frosted-glass backdrop.
-                color: ColorUtils.applyAlpha(Appearance.colors.colLayer0Base, root.frostedOpacity)
-                border.width: 1
-                border.color: Appearance.colors.colLayer0Border
-                radius: Appearance.rounding.windowRounding
+                anchors.fill: parent
                 focus: true
                 opacity: root.isOpen ? 1 : 0
 
@@ -173,6 +168,14 @@ Scope {
                         duration: 140
                         easing.type: Easing.OutCubic
                     }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: ColorUtils.applyAlpha(Appearance.colors.colLayer0Base, root.frostedOpacity)
+                    border.width: 1
+                    border.color: Appearance.colors.colLayer0Border
+                    radius: Appearance.rounding.windowRounding
                 }
 
                 Keys.onPressed: event => {
