@@ -30,14 +30,31 @@ Scope {
             LazyLoader {
                 id: barLoader
                 active: GlobalStates.barOpen
-                component: PanelWindow { // Bar window
+                component: Scope {
+                PanelWindow { // Exclusive-zone carrier; intentionally not visible or interactive.
+                    id: barReservation
+                    screen: screenScope.modelData
+                    visible: barRoot.visible
+                    exclusiveZone: barRoot.desiredExclusiveZone
+                    implicitHeight: barRoot.implicitHeight
+                    WlrLayershell.namespace: "quickshell:bar-reservation"
+                    color: "transparent"
+
+                    anchors {
+                        top: !Config.options.bar.bottom
+                        bottom: Config.options.bar.bottom
+                        left: true
+                        right: true
+                    }
+
+                    mask: Region {}
+                }
+
+                PanelWindow { // Bar window
                 id: barRoot
                 screen: screenScope.modelData
                 readonly property string screenName: screenScope.modelData?.name ?? ""
                 readonly property bool tvOutput: screenName === "HDMI-A-2"
-                readonly property var monitorData: HyprlandData.monitors.find(candidate => candidate.name === screenName) ?? null
-                readonly property real leftReserved: monitorData?.reserved?.[0] ?? 0
-                readonly property real rightReserved: monitorData?.reserved?.[2] ?? 0
                 readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(screenName)
                 readonly property bool tvSpecialVisible: tvOutput && HyprlandData.monitorShowsTvSpecialWorkspace(screenName)
                 readonly property bool hideWhenFullscreen: Config.options.bar.hideWhenFullscreen ?? false
@@ -74,9 +91,11 @@ Scope {
                 property bool superShow: false
                 readonly property bool launchpadOnThisScreen: GlobalStates.drawerOpen && screenScope.modelData.name === GlobalStates.drawerScreen
                 property bool mustShow: (hoverRegion.containsMouse || superShow) && !launchpadOnThisScreen
-                exclusionMode: ExclusionMode.Normal
-                exclusiveZone: ((!visible) || launchpadOnThisScreen || (hideWhenFullscreen && fullscreenOnMonitor) || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
+                readonly property int desiredExclusiveZone: ((!visible) || launchpadOnThisScreen || (hideWhenFullscreen && fullscreenOnMonitor) || (Config?.options.bar.autoHide.enable && (!mustShow || !Config?.options.bar.autoHide.pushWindows))) ? 0 :
                     Appearance.sizes.baseBarHeight + (Config.options.bar.cornerStyle === 1 ? Appearance.sizes.hyprlandGapsOut : 0)
+                // Keep the bar fixed to the monitor edges while side panels
+                // add or remove their own exclusive zones.
+                exclusionMode: ExclusionMode.Ignore
                 WlrLayershell.namespace: "quickshell:bar"
                 implicitHeight: Appearance.sizes.barHeight + Appearance.rounding.screenRounding
                 mask: Region {
@@ -93,7 +112,6 @@ Scope {
                 }
 
                 margins {
-                    left: -barRoot.leftReserved
                     right: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.right) * -1
                     bottom: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.bottom) * -1
                 }
@@ -142,10 +160,9 @@ Scope {
                             top: parent.top
                             bottom: undefined
                             leftMargin: 0
-                            topMargin: ((Config?.options.bar.autoHide.enable && !mustShow) || launchpadOnThisScreen) ? -Appearance.sizes.barHeight : 0
+                            topMargin: ((Config?.options.bar.autoHide.enable && !barRoot.mustShow) || barRoot.launchpadOnThisScreen) ? -Appearance.sizes.barHeight : 0
                             bottomMargin: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.bottom) * -1
                             rightMargin: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.right) * -1
-                                - barRoot.rightReserved
                         }
                         Behavior on anchors.topMargin {
                             animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
@@ -170,9 +187,8 @@ Scope {
                                 target: barContent
                                 anchors.leftMargin: 0
                                 anchors.topMargin: 0
-                                anchors.bottomMargin: ((Config?.options.bar.autoHide.enable && !mustShow) || launchpadOnThisScreen) ? -Appearance.sizes.barHeight : 0
+                                anchors.bottomMargin: ((Config?.options.bar.autoHide.enable && !barRoot.mustShow) || barRoot.launchpadOnThisScreen) ? -Appearance.sizes.barHeight : 0
                                 anchors.rightMargin: (Config.options.interactions.deadPixelWorkaround.enable && barRoot.anchors.right) * -1
-                                    - barRoot.rightReserved
                             }
                         }
                     }
@@ -186,7 +202,7 @@ Scope {
                             top: barContent.bottom
                             bottom: undefined
                             leftMargin: 0
-                            rightMargin: -barRoot.rightReserved
+                            rightMargin: 0
                         }
                         height: Appearance.rounding.screenRounding
                         active: showBarBackground && Config.options.bar.cornerStyle === 0 // Hug
@@ -249,6 +265,7 @@ Scope {
                         }
                     }
                 }
+            }
             }
         }
         }
