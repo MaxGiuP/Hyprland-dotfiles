@@ -674,4 +674,22 @@ Scope {
             root.toggleDetach();
         }
     }
+
+    GlobalShortcut {
+        name: "sidebarLeftToggleExtend"
+        description: "Toggle the expanded left sidebar width"
+
+        onPressed: {
+            root.toggleExtend();
+        }
+    }
+
+    GlobalShortcut {
+        name: "sidebarLeftTogglePin"
+        description: "Pin the left sidebar/return it to a flyout"
+
+        onPressed: {
+            root.togglePin();
+        }
+    }
 }

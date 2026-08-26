@@ -68,7 +68,11 @@ bind([[Super]], [[Super_R]], [[global]], [[quickshell:workspaceNumber]], { trans
 bind([[Super]], [[V]], [[global]], [[quickshell:overviewClipboardToggle]], { description = [[Clipboard history >> clipboard]] }) -- Clipboard history >> clipboard
 -- #bindd = Super, Period, Emoji >> clipboard, global, quickshell:overviewEmojiToggle # Emoji >> clipboard
 bind([[Super]], [[A]], [[global]], [[quickshell:sidebarLeftToggle]], nil) -- Toggle left sidebar
-bind([[Super+Alt]], [[A]], [[global]], [[quickshell:sidebarLeftToggleDetach]], nil) -- [hidden]
+bind([[Super+Shift]], [[A]], [[global]], [[quickshell:sidebarLeftToggleExtend]], nil) -- Toggle left sidebar width
+-- Modifiers are swapped by bind() above: these become Super+Shift+Ctrl and
+-- Super+Alt respectively when registered with Hyprland.
+bind([[Super+Shift+Alt]], [[A]], [[global]], [[quickshell:sidebarLeftToggleDetach]], nil) -- Detach left sidebar
+bind([[Ctrl+Super]], [[A]], [[global]], [[quickshell:sidebarLeftTogglePin]], nil) -- Pin left sidebar
 bind([[Super]], [[B]], [[global]], [[quickshell:sidebarLeftToggle]], nil) -- [hidden]
 bind([[Super]], [[O]], [[global]], [[quickshell:sidebarLeftToggle]], nil) -- [hidden]
 bind([[Super]], [[N]], [[global]], [[quickshell:sidebarRightToggle]], { description = [[Toggle right sidebar]] }) -- Toggle right sidebar
