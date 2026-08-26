@@ -1,5 +1,29 @@
 local h = require("hyprland.lib")
-local bind = h.bind
+local raw_bind = h.bind
+
+-- Swap Alt and Ctrl in every Super-modified bind.  Bindings containing both
+-- modifiers are intentionally left alone: exchanging them would be a no-op.
+local function bind(modifiers, ...)
+    local has_super = modifiers:match("Super") ~= nil
+    local has_alt = modifiers:match("Alt") ~= nil
+    local has_ctrl = modifiers:match("Ctrl") ~= nil or modifiers:match("CTRL") ~= nil
+
+    if has_super and has_alt ~= has_ctrl then
+        local swapped = {}
+        for token in modifiers:gmatch("[^+%s]+") do
+            local modifier = token
+            if modifier == "Alt" then
+                modifier = "Ctrl"
+            elseif modifier == "Ctrl" or modifier == "CTRL" then
+                modifier = "Alt"
+            end
+            table.insert(swapped, modifier)
+        end
+        modifiers = table.concat(swapped, "+")
+    end
+
+    return raw_bind(modifiers, ...)
+end
 local superSearchMenu = [[~/.config/hypr/hyprland/scripts/super_search_menu.sh]]
 
 -- # Lines ending with `# [hidden]` won't be shown on cheatsheet
