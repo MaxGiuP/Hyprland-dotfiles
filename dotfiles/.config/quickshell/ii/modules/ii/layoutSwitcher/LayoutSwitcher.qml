@@ -12,7 +12,7 @@ Scope {
     property bool isOpen: false
     property string currentLayoutCommand: ""
     // Deliberately translucent while testing the compositor's layer blur.
-    readonly property real frostedOpacity: 0.85
+    readonly property real frostedOpacity: 0.65
 
     readonly property var layouts: [
         {
