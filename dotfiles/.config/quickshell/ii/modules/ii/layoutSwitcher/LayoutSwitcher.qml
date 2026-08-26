@@ -13,7 +13,7 @@ Scope {
     property string currentLayoutCommand: ""
     // Keep a near-solid tint while allowing Hyprland's layer blur to soften
     // the workspace behind the picker.
-    readonly property real frostedOpacity: 0.98
+    readonly property real frostedOpacity: 0.95
 
     readonly property var layouts: [
         {
