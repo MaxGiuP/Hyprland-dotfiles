@@ -98,7 +98,7 @@ bind([[Alt]], [[XF86AudioMute]], [[exec]], [[wpctl set-mute @DEFAULT_SOURCE@ tog
 bind([[]], [[XF86AudioMicMute]], [[exec]], [[wpctl set-mute @DEFAULT_SOURCE@ toggle]], { locked = true }) -- [hidden]
 bind([[Super+Alt]], [[M]], [[exec]], [[wpctl set-mute @DEFAULT_SOURCE@ toggle]], { locked = true, description = [[Toggle mic]] }) -- [hidden]
 bind([[Ctrl+Super]], [[T]], [[exec]], [[~/.config/quickshell/$qsConfig/scripts/colors/switchwall.sh]], { description = [[Change wallpaper]] }) -- Change wallpaper
-bind([[Ctrl+Super]], [[R]], [[exec]], [[killall ags agsv1 gjs ydotool qs quickshell; qs -c $qsConfig &]], nil) -- Restart widgets
+bind([[Ctrl+Super]], [[R]], [[exec]], [[~/.config/hypr/hyprland/scripts/restart_quickshell.sh $qsConfig]], nil) -- Restart widgets
 
 -- ##! Utilities
 -- # Screenshot, Record, OCR, Color picker, Clipboard history

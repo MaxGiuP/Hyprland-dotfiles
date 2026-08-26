@@ -10,6 +10,17 @@ SERVICE_NAME="${QS_SERVICE_NAME:-quickshell.service}"
 EVENT_LOG="$SCRIPT_DIR/quickshell_event_log.sh"
 QS_BIN="${QS_BIN:-}"
 
+# Layer-shell surfaces can temporarily become the keyboard target while
+# Quickshell is replaced. Remember the focused client and reassert it once the
+# replacement shell has had time to register its panels.
+FOCUSED_WINDOW_ADDRESS="$(hyprctl -j activewindow 2>/dev/null | jq -r '.address // empty' 2>/dev/null || true)"
+
+restore_focused_window() {
+  [ -n "$FOCUSED_WINDOW_ADDRESS" ] || return 0
+  sleep 1
+  "$SCRIPT_DIR/hypr_dispatch.sh" focuswindow "address:$FOCUSED_WINDOW_ADDRESS" >/dev/null 2>&1 || true
+}
+
 "$EVENT_LOG" restart-invoked "config=$QS_CONFIG" "service=$SERVICE_NAME" "argv=$*" || true
 
 if [ -z "$QS_BIN" ]; then
@@ -27,6 +38,7 @@ fi
 
 if systemctl --user restart "$SERVICE_NAME" >/dev/null 2>&1; then
   "$EVENT_LOG" restart-systemd-ok "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
+  restore_focused_window &
   echo "Riavviato: $SERVICE_NAME"
   exit 0
 fi
@@ -40,5 +52,6 @@ pgrep -x qs >/dev/null 2>&1 && pkill -KILL -x qs || true
 
 "$EVENT_LOG" restart-manual-start "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
 setsid -f "$SCRIPT_DIR/start_quickshell.sh" "$QS_CONFIG" >/dev/null 2>&1 &
+restore_focused_window &
 
 echo "Riavviato: quickshell manuale ($QS_CONFIG)"
