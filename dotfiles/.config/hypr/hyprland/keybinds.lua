@@ -81,7 +81,6 @@ bind([[Super]], [[S]], [[global]], [[quickshell:sidebarRightToggle]], { descript
 -- Super+Ctrl+Shift+N respectively.
 bind([[Super+Alt]], [[N]], [[global]], [[quickshell:sidebarRightOpen]], { description = [[Open right sidebar]] })
 bind([[Super+Shift+Alt]], [[N]], [[global]], [[quickshell:sidebarRightClose]], { description = [[Close right sidebar]] })
-bind([[Super]], [[H]], [[global]], [[quickshell:drawerToggle]], { description = [[Toggle app drawer]] })
 bind([[Super]], [[Slash]], [[global]], [[quickshell:cheatsheetToggle]], { description = [[Toggle cheatsheet]] }) -- Toggle cheatsheet
 bind([[Super]], [[K]], [[global]], [[quickshell:oskToggle]], { description = [[Toggle on-screen keyboard]] }) -- Toggle on-screen keyboard
 

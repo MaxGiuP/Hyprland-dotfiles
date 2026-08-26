@@ -253,6 +253,10 @@ Scope {
                 Synchronizer on searchingText {
                     property alias source: panelWindow.searchingText
                 }
+                onEmptySearchDownPressed: {
+                    GlobalStates.overviewDrawerMode = true
+                    Qt.callLater(() => drawerAppList.activateFirstApp())
+                }
             }
 
             Loader {
@@ -328,8 +332,13 @@ Scope {
             }
 
             DrawerAppList {
+                id: drawerAppList
                 anchors.fill: parent
                 onAppLaunched: GlobalStates.overviewOpen = false
+                returnToSearchAction: () => {
+                    GlobalStates.overviewDrawerMode = false
+                    Qt.callLater(() => searchWidget.focusSearchInput())
+                }
             }
         }
     }

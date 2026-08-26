@@ -15,10 +15,58 @@ Item {
     id: root
 
     signal appLaunched()
+    property var returnToSearchAction: null
 
     readonly property int columns: 8
     readonly property int cellHeight: 108
     readonly property int iconSize: 52
+    property int selectedAppIndex: 0
+    readonly property var navigationApps: root.recentApps.concat(root.sortedApps)
+
+    function activateFirstApp() {
+        if (root.navigationApps.length === 0)
+            return
+        root.selectedAppIndex = 0
+        root.forceActiveFocus()
+    }
+
+    function moveSelection(delta) {
+        const count = root.navigationApps.length
+        if (count === 0)
+            return
+        root.selectedAppIndex = Math.max(0, Math.min(count - 1, root.selectedAppIndex + delta))
+    }
+
+    function launchSelectedApp() {
+        const app = root.navigationApps[root.selectedAppIndex]
+        if (!app)
+            return
+        AppLaunch.launchDesktopEntry(app)
+        root.appLaunched()
+    }
+
+    focus: GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_Right) {
+            root.moveSelection(1)
+        } else if (event.key === Qt.Key_Left) {
+            root.moveSelection(-1)
+        } else if (event.key === Qt.Key_Down) {
+            root.moveSelection(root.columns)
+        } else if (event.key === Qt.Key_Up) {
+            if (root.selectedAppIndex < root.columns)
+                root.returnToSearchAction?.()
+            else
+                root.moveSelection(-root.columns)
+        } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            root.launchSelectedApp()
+        } else if (event.key === Qt.Key_Escape) {
+            root.returnToSearchAction?.()
+        } else {
+            return
+        }
+        event.accepted = true
+    }
 
     // All apps sorted A-Z
     readonly property var sortedApps: {
@@ -43,12 +91,14 @@ Item {
         const rows = [
             { type: "section", label: Translation.tr("Recently used") },
             recentApps.length > 0
-                ? { type: "apps", apps: recentApps.slice(0, COLS) }
+                ? { type: "apps", apps: recentApps.slice(0, COLS), navigationOffset: 0 }
                 : { type: "emptyRecent" },
             { type: "section", label: Translation.tr("All applications") }
         ]
         let currentLetter = null
         let currentRow = []
+        let currentRowOffset = recentApps.length
+        let navigationIndex = recentApps.length
 
         for (const app of apps) {
             const firstChar = (app?.name ?? "").charAt(0).toUpperCase()
@@ -56,21 +106,24 @@ Item {
 
             if (letter !== currentLetter) {
                 if (currentRow.length > 0) {
-                    rows.push({ type: "apps", apps: currentRow.slice() })
+                    rows.push({ type: "apps", apps: currentRow.slice(), navigationOffset: currentRowOffset })
                     currentRow = []
                 }
                 rows.push({ type: "header", letter: letter })
                 currentLetter = letter
             }
 
+            if (currentRow.length === 0)
+                currentRowOffset = navigationIndex
             currentRow.push(app)
+            navigationIndex += 1
             if (currentRow.length >= COLS) {
-                rows.push({ type: "apps", apps: currentRow.slice() })
+                rows.push({ type: "apps", apps: currentRow.slice(), navigationOffset: currentRowOffset })
                 currentRow = []
             }
         }
         if (currentRow.length > 0)
-            rows.push({ type: "apps", apps: currentRow.slice() })
+            rows.push({ type: "apps", apps: currentRow.slice(), navigationOffset: currentRowOffset })
 
         return rows
     }
@@ -242,7 +295,9 @@ Item {
             bottomMargin: 12
         }
         clip: true
-        reuseItems: true
+        // Reusing delegates backed by this JavaScript row model can crash Qt's
+        // QML model bridge when the drawer is exposed. Keep delegates stable.
+        reuseItems: false
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
         model: root.buildRowModel(root.sortedApps, root.recentApps)
@@ -314,7 +369,9 @@ Item {
                     delegate: Item {
                         id: appCell
                         required property var modelData
+                        required property int index
                         property var app: appCell.modelData
+                        readonly property int navigationIndex: (rowItem.modelData.navigationOffset ?? 0) + appCell.index
                         width: appList.width / root.columns
                         height: root.cellHeight
 
@@ -322,7 +379,14 @@ Item {
                             anchors.fill: parent
                             anchors.margins: 6
                             radius: Appearance.rounding.normal
-                            color: appArea.containsMouse
+                            color: appCell.navigationIndex === root.selectedAppIndex
+                                ? Qt.rgba(
+                                    Appearance.colors.colPrimary.r,
+                                    Appearance.colors.colPrimary.g,
+                                    Appearance.colors.colPrimary.b,
+                                    0.24
+                                  )
+                                : appArea.containsMouse
                                 ? Qt.rgba(
                                     Appearance.colors.colPrimary.r,
                                     Appearance.colors.colPrimary.g,
@@ -365,6 +429,7 @@ Item {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
+                            onEntered: root.selectedAppIndex = appCell.navigationIndex
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
                             onClicked: (mouse) => {
                                 if (mouse.button === Qt.RightButton) {

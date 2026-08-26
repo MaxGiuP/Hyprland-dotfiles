@@ -14,6 +14,7 @@ RowLayout {
     property bool animateWidth: false
     property alias searchInput: searchInput
     property string searchingText
+    signal emptySearchDownPressed()
 
     function forceFocus() {
         searchInput.forceActiveFocus();
@@ -91,7 +92,10 @@ RowLayout {
         }
 
         Keys.onPressed: event => {
-            if (event.key === Qt.Key_Tab) {
+            if (event.key === Qt.Key_Down && searchInput.text.length === 0) {
+                root.emptySearchDownPressed()
+                event.accepted = true
+            } else if (event.key === Qt.Key_Tab) {
                 if (LauncherSearch.results.length === 0) return;
                 const tabbedText = LauncherSearch.results[0].name;
                 LauncherSearch.query = tabbedText;
