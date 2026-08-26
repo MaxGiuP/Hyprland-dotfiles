@@ -87,6 +87,116 @@ end
 
 local focus_cursor_timer = nil
 
+local function center_cursor_on_monitor(monitor)
+    if not monitor then
+        return false
+    end
+
+    local monitor_x = tonumber(monitor.x)
+    local monitor_y = tonumber(monitor.y)
+    local monitor_width = tonumber(monitor.width)
+    local monitor_height = tonumber(monitor.height)
+    if not monitor_x or not monitor_y or not monitor_width or not monitor_height then
+        return false
+    end
+
+    hl.dispatch(hl.dsp.cursor.move({
+        x = math.floor(monitor_x + monitor_width / 2),
+        y = math.floor(monitor_y + monitor_height / 2),
+    }))
+    return true
+end
+
+local function directional_monitor(source, direction)
+    if not source then
+        return nil
+    end
+
+    local source_x = tonumber(source.x)
+    local source_y = tonumber(source.y)
+    local source_width = tonumber(source.width)
+    local source_height = tonumber(source.height)
+    if not source_x or not source_y or not source_width or not source_height then
+        return nil
+    end
+
+    local source_cx = source_x + source_width / 2
+    local source_cy = source_y + source_height / 2
+    local nearest = nil
+    local nearest_distance = nil
+
+    for _, candidate in ipairs(hl.get_monitors()) do
+        if candidate.id ~= source.id then
+            local candidate_x = tonumber(candidate.x)
+            local candidate_y = tonumber(candidate.y)
+            local candidate_width = tonumber(candidate.width)
+            local candidate_height = tonumber(candidate.height)
+            if candidate_x and candidate_y and candidate_width and candidate_height then
+                local candidate_cx = candidate_x + candidate_width / 2
+                local candidate_cy = candidate_y + candidate_height / 2
+                local in_direction = (direction == "l" and candidate_cx < source_cx)
+                    or (direction == "r" and candidate_cx > source_cx)
+                    or (direction == "u" and candidate_cy < source_cy)
+                    or (direction == "d" and candidate_cy > source_cy)
+
+                if in_direction then
+                    local dx = candidate_cx - source_cx
+                    local dy = candidate_cy - source_cy
+                    local distance = dx * dx + dy * dy
+                    if not nearest_distance or distance < nearest_distance then
+                        nearest = candidate
+                        nearest_distance = distance
+                    end
+                end
+            end
+        end
+    end
+
+    return nearest
+end
+
+local function window_in_direction(window, monitor, direction)
+    local workspace = monitor and hl.get_active_workspace(monitor) or nil
+    if not window or not workspace or not window.workspace
+        or window.workspace.id ~= workspace.id then
+        return false
+    end
+
+    local window_x, window_y = vector_xy(window.at)
+    local window_width, window_height = vector_xy(window.size)
+    if not window_x or not window_y or not window_width or not window_height then
+        return false
+    end
+
+    local window_cx = window_x + window_width / 2
+    local window_cy = window_y + window_height / 2
+    for _, candidate in ipairs(hl.get_workspace_windows(workspace)) do
+        if candidate.address ~= window.address and candidate.mapped and not candidate.hidden then
+            local candidate_x, candidate_y = vector_xy(candidate.at)
+            local candidate_width, candidate_height = vector_xy(candidate.size)
+            if candidate_x and candidate_y and candidate_width and candidate_height then
+                local candidate_cx = candidate_x + candidate_width / 2
+                local candidate_cy = candidate_y + candidate_height / 2
+                if (direction == "l" and candidate_cx < window_cx)
+                    or (direction == "r" and candidate_cx > window_cx)
+                    or (direction == "u" and candidate_cy < window_cy)
+                    or (direction == "d" and candidate_cy > window_cy) then
+                    return true
+                end
+            end
+        end
+    end
+
+    return false
+end
+
+local function focus_monitor_by_cursor(monitor)
+    -- Moving the pointer lets follow_mouse focus the workspace that is
+    -- actually visible. Explicit monitor/workspace focus can instead recall
+    -- the monitor's last busy workspace when the visible one is empty.
+    center_cursor_on_monitor(monitor)
+end
+
 local function center_cursor_on_focus_target()
     local monitor = hl.get_active_monitor()
     local window = hl.get_active_window()
@@ -95,16 +205,7 @@ local function center_cursor_on_focus_target()
     -- still report the last window from the monitor we just left; warping to
     -- that window would let follow_mouse immediately steal focus back.
     if monitor and (not window or not window.monitor or window.monitor.id ~= monitor.id) then
-        local monitor_x = tonumber(monitor.x)
-        local monitor_y = tonumber(monitor.y)
-        local monitor_width = tonumber(monitor.width)
-        local monitor_height = tonumber(monitor.height)
-        if monitor_x and monitor_y and monitor_width and monitor_height then
-            hl.dispatch(hl.dsp.cursor.move({
-                x = math.floor(monitor_x + monitor_width / 2),
-                y = math.floor(monitor_y + monitor_height / 2),
-            }))
-        end
+        center_cursor_on_monitor(monitor)
         return
     end
 
@@ -126,16 +227,50 @@ end
 
 function M.focus_and_center_cursor(direction)
     return function()
-        hl.dispatch(hl.dsp.focus({ direction = direction }))
+        local source_monitor = hl.get_active_monitor()
+        local source_window = hl.get_active_window()
+        local source_window_address = source_window and source_window.address or nil
 
         if focus_cursor_timer then
             focus_cursor_timer:set_enabled(false)
         end
 
+        -- Directional window focus may select a window from a hidden workspace
+        -- on the neighbouring monitor when its visible workspace is empty.
+        -- Cross monitors explicitly so their currently visible workspace wins.
+        local target_monitor = directional_monitor(source_monitor, direction)
+        if target_monitor and not window_in_direction(source_window, source_monitor, direction) then
+            focus_monitor_by_cursor(target_monitor)
+            focus_cursor_timer = hl.timer(function()
+                center_cursor_on_focus_target()
+                focus_cursor_timer = nil
+            end, { timeout = 32, type = "oneshot" })
+            return
+        end
+
+        hl.dispatch(hl.dsp.focus({ direction = direction }))
+
         -- Focus dispatch is asynchronous.  Waiting two frames ensures the
         -- active-window query below sees the keyboard-selected window before
         -- follow_mouse evaluates the cursor position.
         focus_cursor_timer = hl.timer(function()
+            local current_monitor = hl.get_active_monitor()
+            local current_window = hl.get_active_window()
+            local current_window_address = current_window and current_window.address or nil
+            local monitor_changed = source_monitor and current_monitor
+                and source_monitor.id ~= current_monitor.id
+            local window_changed = source_window_address ~= current_window_address
+
+            -- movefocus has no window to select on an empty neighbouring
+            -- workspace. Fall back to the nearest monitor in that direction.
+            if not monitor_changed and not window_changed then
+                if target_monitor then
+                    focus_monitor_by_cursor(target_monitor)
+                    focus_cursor_timer = nil
+                    return
+                end
+            end
+
             center_cursor_on_focus_target()
             focus_cursor_timer = nil
         end, { timeout = 32, type = "oneshot" })
