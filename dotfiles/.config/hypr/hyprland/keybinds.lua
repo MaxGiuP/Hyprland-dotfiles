@@ -130,6 +130,10 @@ bind([[Super+Shift+Alt]], [[mouse:273]], [[exec]], [[~/.config/hypr/hyprland/scr
 -- Interactive mouse binds are registered at the root in hyprland.lua.
 -- Hyprland 0.55 does not run these dispatchers correctly from a named submap.
 -- #/# bind = Super, ←/↑/→/↓,, # Focus in direction
+-- Drop bindings left behind by older Lua reloads before replacing them.
+for _, direction_key in ipairs({ "Left", "Right", "Up", "Down" }) do
+    hl.unbind("SUPER + " .. direction_key)
+end
 bind([[Super]], [[Left]], h.focus_and_center_cursor([[l]]), nil, nil) -- [hidden]
 bind([[Super]], [[Right]], h.focus_and_center_cursor([[r]]), nil, nil) -- [hidden]
 bind([[Super]], [[Up]], h.focus_and_center_cursor([[u]]), nil, nil) -- [hidden]

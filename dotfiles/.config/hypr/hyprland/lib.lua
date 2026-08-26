@@ -87,8 +87,27 @@ end
 
 local focus_cursor_timer = nil
 
-local function center_cursor_on_active_window()
+local function center_cursor_on_focus_target()
+    local monitor = hl.get_active_monitor()
     local window = hl.get_active_window()
+
+    -- An empty focused workspace has no active window of its own. Hyprland can
+    -- still report the last window from the monitor we just left; warping to
+    -- that window would let follow_mouse immediately steal focus back.
+    if monitor and (not window or not window.monitor or window.monitor.id ~= monitor.id) then
+        local monitor_x = tonumber(monitor.x)
+        local monitor_y = tonumber(monitor.y)
+        local monitor_width = tonumber(monitor.width)
+        local monitor_height = tonumber(monitor.height)
+        if monitor_x and monitor_y and monitor_width and monitor_height then
+            hl.dispatch(hl.dsp.cursor.move({
+                x = math.floor(monitor_x + monitor_width / 2),
+                y = math.floor(monitor_y + monitor_height / 2),
+            }))
+        end
+        return
+    end
+
     if not window then
         return
     end
@@ -117,7 +136,7 @@ function M.focus_and_center_cursor(direction)
         -- active-window query below sees the keyboard-selected window before
         -- follow_mouse evaluates the cursor position.
         focus_cursor_timer = hl.timer(function()
-            center_cursor_on_active_window()
+            center_cursor_on_focus_target()
             focus_cursor_timer = nil
         end, { timeout = 32, type = "oneshot" })
     end
