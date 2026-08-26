@@ -27,6 +27,7 @@ Singleton {
     property string liveCaptionsScreen: ""
     property bool overviewDrawerMode: false
     property bool overviewOpen: false
+    property bool layoutSwitcherOpen: false
     property string overviewScreen: ""
     property bool regionSelectorOpen: false
     property bool searchOpen: false

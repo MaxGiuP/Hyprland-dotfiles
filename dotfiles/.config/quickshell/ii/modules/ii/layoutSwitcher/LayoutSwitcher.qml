@@ -1,3 +1,4 @@
+import qs
 import qs.modules.common
 import qs.modules.common.widgets
 import QtQuick
@@ -9,7 +10,7 @@ import qs.modules.common.functions
 
 Scope {
     id: root
-    property bool isOpen: false
+    readonly property bool isOpen: GlobalStates.layoutSwitcherOpen
     property string currentLayoutCommand: ""
     // Deliberately translucent while testing the compositor's layer blur.
     readonly property real frostedOpacity: 0.65
@@ -85,44 +86,16 @@ Scope {
         }
     ]
 
-    // Transparent dismissal surfaces cover the whole desktop while the dialog
-    // is open, so a click outside the center card closes it on any monitor.
-    Variants {
-        model: Quickshell.screens
-
-        PanelWindow {
-            id: backdropWindow
-            required property ShellScreen modelData
-
-            visible: root.isOpen
-            screen: modelData
-            anchors { top: true; bottom: true; left: true; right: true }
-            exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.namespace: "quickshell:layoutSwitcherBackdrop"
-            WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-            color: "transparent"
-            mask: Region { item: root.isOpen ? dismissArea : null }
-
-            MouseArea {
-                id: dismissArea
-                anchors.fill: parent
-                enabled: root.isOpen
-                onClicked: root.isOpen = false
-            }
-        }
-    }
-
     Loader {
         id: layoutSwitcherLoader
-        // Keep the small dialog surface alive across opens.
+        // Keep the component loaded, but unmap its Wayland surface while closed
+        // so it cannot leave an invisible pointer-input region behind.
         active: true
 
         sourceComponent: PanelWindow {
             id: panelWindow
-            // This surface is only the dialog card, leaving the transparent
-            // dismissal surfaces to catch clicks elsewhere on the desktop.
-            visible: true
+            // This surface is only the dialog card.
+            visible: root.isOpen
             screen: Quickshell.screens.find(screen => screen.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
 
             anchors { top: true; left: true }
@@ -138,11 +111,12 @@ Scope {
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             color: "transparent"
+            mask: Region { item: root.isOpen ? content : null }
 
             property int selectedIndex: 0
 
             function close() {
-                root.isOpen = false;
+                GlobalStates.layoutSwitcherOpen = false;
             }
 
             function moveSelection(amount) {
@@ -367,12 +341,12 @@ Scope {
 
     function open() {
         refreshCurrentLayout();
-        root.isOpen = true;
+        GlobalStates.layoutSwitcherOpen = true;
     }
 
     function toggle() {
         if (root.isOpen) {
-            root.isOpen = false;
+            GlobalStates.layoutSwitcherOpen = false;
         } else {
             open();
         }
@@ -382,7 +356,7 @@ Scope {
         target: "layoutSwitcher"
 
         function open(): void { root.open(); }
-        function close(): void { root.isOpen = false; }
+        function close(): void { GlobalStates.layoutSwitcherOpen = false; }
         function toggle(): void { root.toggle(); }
     }
 

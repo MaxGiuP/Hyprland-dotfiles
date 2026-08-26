@@ -589,6 +589,10 @@ Scope {
                             desktopWindow.menuY = mouse.y
                             root.openDesktopContextMenu(desktopWindow.screen.name)
                         } else {
+                            // Dismiss the layout chooser through shared state.
+                            // This desktop window already owns background clicks,
+                            // so no full-screen overlay needs to grab the pointer.
+                            GlobalStates.layoutSwitcherOpen = false
                             screenScope.selectedFileNames = []
                             root.closeDesktopContextMenu()
                         }
