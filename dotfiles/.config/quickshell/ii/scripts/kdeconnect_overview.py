@@ -55,6 +55,22 @@ def dbus_prop(device_id, iface, prop):
     return rc, out, err
 
 
+def notification_property(path, iface, prop):
+    """Read a KDE Connect notification property without treating it as a method."""
+    if not _DBUS_OK:
+        return ""
+    try:
+        bus = dbus.SessionBus()
+        obj = bus.get_object("org.kde.kdeconnect", path)
+        properties = dbus.Interface(obj, "org.freedesktop.DBus.Properties")
+        value = properties.Get(iface, prop)
+        if isinstance(value, bool):
+            return "true" if value else "false"
+        return str(value)
+    except Exception:
+        return ""
+
+
 def get_notifications_dbus(device_id):
     """Query active notifications via DBus, returning structured objects."""
     rc, out, _ = run([
@@ -70,10 +86,10 @@ def get_notifications_dbus(device_id):
     result = []
     for notif_id in notif_ids[:8]:
         path = f"/modules/kdeconnect/devices/{device_id}/notifications/{notif_id}"
-        props = {}
-        for prop in ["appName", "title", "text", "ticker", "hasIcon", "iconPath"]:
-            rc_p, val, _ = run(["qdbus", "org.kde.kdeconnect", path, f"{iface}.{prop}"])
-            props[prop] = val.strip() if rc_p == 0 else ""
+        props = {
+            prop: notification_property(path, iface, prop).strip()
+            for prop in ["appName", "title", "text", "ticker", "hasIcon", "iconPath"]
+        }
 
         app_name = props.get("appName", "")
         ticker = props.get("ticker", "")

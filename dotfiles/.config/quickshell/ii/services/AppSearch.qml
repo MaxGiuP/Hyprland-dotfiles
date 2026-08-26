@@ -201,7 +201,7 @@ Singleton {
     Timer {
         // This still picks up desktop-file changes promptly, while avoiding a
         // full index rebuild on every transient DesktopEntries notification.
-        interval: root.appListCache.length > 0 ? 5000 : 1000
+        interval: root.appListCache.length > 0 ? 30000 : 1000
         repeat: true
         running: true
         triggeredOnStart: true

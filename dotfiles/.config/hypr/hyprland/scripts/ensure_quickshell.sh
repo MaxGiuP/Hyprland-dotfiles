@@ -9,8 +9,16 @@ QS_BIN="${QS_BIN:-}"
 WAIT_FOR_IPC_TENTHS="${WAIT_FOR_IPC_TENTHS:-30}"
 QS_IPC_TIMEOUT="${QS_IPC_TIMEOUT:-0.25}"
 EVENT_LOG="$SCRIPT_DIR/quickshell_event_log.sh"
+QS_CRASH_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/quickshell/crashes"
 
 "$EVENT_LOG" ensure-invoked "config=$QS_CONFIG" "service=$SERVICE_NAME" "argv=$*" || true
+
+# Quickshell crash reports contain a full executable snapshot and can be
+# hundreds of megabytes each. Keep recent diagnostics without allowing years
+# of stale reports to consume the home filesystem.
+if [ -d "$QS_CRASH_DIR" ]; then
+  find "$QS_CRASH_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf -- {} +
+fi
 
 resolve_qs_bin() {
   if [ -n "$QS_BIN" ]; then

@@ -111,7 +111,7 @@ check_and_prompt_upscale() {
             img_height=$(identify -format "%h" "$img" 2>/dev/null)
         fi
         if [[ "$img_width" -lt "$min_width_desired" || "$img_height" -lt "$min_height_desired" ]]; then
-            action=$(notify-send "Upscale?" \
+            action=$(timeout 30 notify-send -t 30000 "Upscale?" \
                 "Image resolution (${img_width}x${img_height}) is lower than screen resolution (${min_width_desired}x${min_height_desired})" \
                 -A "open_upscayl=Open Upscayl"\
                 -a "Wallpaper switcher")
