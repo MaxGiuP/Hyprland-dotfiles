@@ -217,7 +217,10 @@ switch() {
             exit 0
         fi
 
-        check_and_prompt_upscale "$imgpath" &
+        # notify-send waits for an action/close event. Detach it so an ignored
+        # upscale prompt cannot keep this wallpaper-switch process alive.
+        check_and_prompt_upscale "$imgpath" >/dev/null 2>&1 &
+        disown
         kill_existing_mpvpaper
 
         if is_video "$imgpath"; then

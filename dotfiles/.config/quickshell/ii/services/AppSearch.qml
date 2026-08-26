@@ -2,6 +2,7 @@ pragma Singleton
 
 import qs.modules.common
 import qs.modules.common.functions
+import QtQuick
 import Quickshell
 
 /**
@@ -12,6 +13,7 @@ Singleton {
     id: root
     property bool sloppySearch: Config.options?.search.sloppy ?? false
     property real scoreThreshold: 0.2
+    property var appListCache: []
     // Keep this cache in a stable Map. Updating a plain QML object can invalidate
     // bindings which read it, causing the full application index to be rebuilt.
     readonly property var resolvedIconPaths: new Map()
@@ -174,7 +176,11 @@ Singleton {
     }
 
     // Filter hidden/non-GUI entries and collapse duplicate desktop files for the same app.
-    readonly property list<DesktopEntry> list: {
+    // DesktopEntries can emit frequent internal updates, so keep consumers on a
+    // stable snapshot instead of rebuilding this index for every notification.
+    readonly property var list: root.appListCache
+
+    function refreshAppList() {
         const entries = Array.from(DesktopEntries.applications.values).filter(app => shouldShowApp(app));
         const deduped = {};
         const orderedKeys = [];
@@ -189,7 +195,17 @@ Singleton {
             }
         }
 
-        return orderedKeys.map(key => deduped[key]).filter(Boolean);
+        root.appListCache = orderedKeys.map(key => deduped[key]).filter(Boolean);
+    }
+
+    Timer {
+        // This still picks up desktop-file changes promptly, while avoiding a
+        // full index rebuild on every transient DesktopEntries notification.
+        interval: root.appListCache.length > 0 ? 5000 : 1000
+        repeat: true
+        running: true
+        triggeredOnStart: true
+        onTriggered: root.refreshAppList()
     }
     
     readonly property var preppedSearchTexts: list.map(a => ({
