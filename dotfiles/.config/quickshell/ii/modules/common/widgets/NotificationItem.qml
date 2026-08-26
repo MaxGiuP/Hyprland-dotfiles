@@ -11,7 +11,24 @@ import Quickshell.Services.Notifications
 
 Item { // Notification item area
     id: root
-    property var notificationObject
+    readonly property var emptyNotificationObject: ({
+        notificationId: 0,
+        popup: false,
+        summary: "",
+        body: "",
+        appName: "",
+        image: "",
+        urgency: NotificationUrgency.Normal,
+        actions: [],
+    })
+    property var notificationObject: root.emptyNotificationObject
+    // Notification services can clear a model entry one binding turn before
+    // ListView destroys its delegate. Preserve a harmless empty value during
+    // that turn instead of evaluating every visual binding against null.
+    onNotificationObjectChanged: {
+        if (!notificationObject)
+            notificationObject = root.emptyNotificationObject;
+    }
     property bool expanded: false
     property bool onlyNotification: false
     property real fontSize: Appearance.font.pixelSize.small

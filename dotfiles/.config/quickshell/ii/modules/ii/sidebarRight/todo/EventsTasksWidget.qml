@@ -14,8 +14,8 @@ Item {
         {"name": Translation.tr("Tasks"), "icon": "assignment"}
     ]
     readonly property int dayMs: 24 * 60 * 60 * 1000
-    property var thunderbirdTasks: RemoteCalendarBridge.thunderbirdTasks
-    property var thunderbirdEvents: RemoteCalendarBridge.thunderbirdEvents
+    property var thunderbirdTasks: RemoteCalendarBridge.thunderbirdTasks ?? []
+    property var thunderbirdEvents: RemoteCalendarBridge.thunderbirdEvents ?? []
     property string lastError: RemoteCalendarBridge.lastError
     readonly property bool loading: RemoteCalendarBridge.loading
     readonly property bool hasAnyData: root.thunderbirdEvents.length > 0 || root.thunderbirdTasks.length > 0

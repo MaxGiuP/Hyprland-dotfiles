@@ -55,6 +55,12 @@ Item { // Player instance
         ? Quickshell.iconPath(fallbackIconName, "image-missing")
         : ""
     readonly property string preferredPlayerThumbnail: fallbackArtPath.length > 0 ? fallbackArtPath : ""
+    // Do not pass an image-missing fallback URL to ColorQuantizer: it retries a
+    // nonexistent icon source on each player update. The visible artwork keeps
+    // its existing fallback; colour extraction only uses real image files.
+    readonly property string quantizerSource: root.downloaded
+        ? Qt.resolvedUrl(artFilePath)
+        : AppSearch.resolvedIconPath(fallbackIconName)
     readonly property bool matchesActiveTrack: {
         if (!root.player || !MprisController.activePlayer)
             return false;
@@ -169,7 +175,7 @@ Item { // Player instance
 
     ColorQuantizer {
         id: colorQuantizer
-        source: root.displayedArtFilePath
+        source: root.quantizerSource
         depth: 0 // 2^0 = 1 color
         rescaleSize: 1 // Rescale to 1x1 pixel for faster processing
     }

@@ -266,8 +266,8 @@ MouseArea { // Notification group area
                         animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
                     }
                     model: ScriptModel {
-                        values: root.expanded ? root.notifications.slice().reverse() : 
-                            root.notifications.slice().reverse().slice(0, 2)
+                        values: root.expanded ? root.notifications.filter(Boolean).slice().reverse() :
+                            root.notifications.filter(Boolean).slice().reverse().slice(0, 2)
                     }
                     delegate: NotificationItem {
                         required property int index
