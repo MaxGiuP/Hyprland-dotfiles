@@ -323,6 +323,12 @@ Scope {
     IpcHandler {
         target: "lock"
 
+        function status() {
+            return (GlobalStates.screenLocked || root.sessionLockActive || root.releaseInProgress)
+                ? "locked"
+                : "unlocked";
+        }
+
         function activate(): void {
             root.lock();
         }

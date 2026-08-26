@@ -18,6 +18,7 @@ QS_CRASH_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/quickshell/crashes"
 # of stale reports to consume the home filesystem.
 if [ -d "$QS_CRASH_DIR" ]; then
   find "$QS_CRASH_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +7 -exec rm -rf -- {} +
+  find "$QS_CRASH_DIR" -mindepth 1 -maxdepth 1 -type f -mtime +7 -delete
 fi
 
 resolve_qs_bin() {
@@ -35,10 +36,6 @@ resolve_qs_bin() {
   return 1
 }
 
-has_quickshell() {
-  pgrep -x quickshell >/dev/null 2>&1 || pgrep -x qs >/dev/null 2>&1
-}
-
 quickshell_ready() {
   resolve_qs_bin || return 1
 
@@ -50,18 +47,15 @@ quickshell_ready() {
 }
 
 start_quickshell_service() {
-  if command -v systemctl >/dev/null 2>&1 && systemctl --user start "$SERVICE_NAME" >/dev/null 2>&1; then
+  if command -v systemctl >/dev/null 2>&1 \
+      && systemctl --user start "$SERVICE_NAME" >/dev/null 2>&1 \
+      && systemctl --user is-active --quiet "$SERVICE_NAME"; then
     "$EVENT_LOG" ensure-systemd-started "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
     return 0
   fi
 
   "$EVENT_LOG" ensure-systemd-start-failed "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
   return 1
-}
-
-start_quickshell_manual() {
-  "$EVENT_LOG" ensure-manual-start "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
-  setsid -f "$SCRIPT_DIR/start_quickshell.sh" "$QS_CONFIG" >/dev/null 2>&1 &
 }
 
 wait_for_quickshell_ready() {
@@ -87,30 +81,24 @@ resolve_qs_bin || {
 
 "$SCRIPT_DIR/quickshell_compat_check.sh" "$QS_BIN" "$QS_CONFIG" || exit $?
 
-if ! has_quickshell; then
-  start_quickshell_service || start_quickshell_manual
-fi
-
-if wait_for_quickshell_ready; then
-  exit 0
-fi
-
-if systemctl --user restart "$SERVICE_NAME" >/dev/null 2>&1; then
-  "$EVENT_LOG" ensure-systemd-restarted "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
+if systemctl --user is-active --quiet "$SERVICE_NAME"; then
   if wait_for_quickshell_ready; then
     exit 0
   fi
-fi
 
-if has_quickshell; then
-  "$EVENT_LOG" ensure-process-present-but-ipc-unready "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
+  "$EVENT_LOG" ensure-active-ipc-unready "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
+  echo "Errore: $SERVICE_NAME è attivo ma IPC non risponde; riavvio annullato per proteggere il blocco schermo." >&2
+  exit 1
+else
+  start_quickshell_service || {
+    echo "Errore: impossibile avviare $SERVICE_NAME." >&2
+    exit 1
+  }
 fi
-
-start_quickshell_manual
 
 if wait_for_quickshell_ready; then
   exit 0
 fi
 
-echo "Errore: quickshell non è pronto dopo l'avvio." >&2
+echo "Errore: $SERVICE_NAME è stato avviato ma quickshell non è pronto." >&2
 exit 1

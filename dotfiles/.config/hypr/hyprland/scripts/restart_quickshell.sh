@@ -36,22 +36,35 @@ if [ -n "$QS_BIN" ]; then
   "$SCRIPT_DIR/quickshell_compat_check.sh" "$QS_BIN" "$QS_CONFIG" || exit $?
 fi
 
-if systemctl --user restart "$SERVICE_NAME" >/dev/null 2>&1; then
+# Replacing the process that owns ext-session-lock leaves Hyprland securely
+# locked with no UI. Never restart Quickshell until its lock has fully released.
+LOCK_STATUS=""
+if [ -n "$QS_BIN" ]; then
+  if command -v timeout >/dev/null 2>&1; then
+    LOCK_STATUS="$(timeout 1 "$QS_BIN" -c "$QS_CONFIG" ipc call lock status 2>/dev/null || true)"
+  else
+    LOCK_STATUS="$("$QS_BIN" -c "$QS_CONFIG" ipc call lock status 2>/dev/null || true)"
+  fi
+fi
+
+case "$LOCK_STATUS" in
+  *unlocked*) ;;
+  *locked*)
+    "$EVENT_LOG" restart-blocked-session-lock "config=$QS_CONFIG" "service=$SERVICE_NAME" "status=$LOCK_STATUS" || true
+    echo "Errore: impossibile riavviare Quickshell mentre il blocco schermo è attivo." >&2
+    exit 1
+    ;;
+esac
+
+if systemctl --user restart "$SERVICE_NAME" >/dev/null 2>&1 \
+    && systemctl --user is-active --quiet "$SERVICE_NAME" \
+    && WAIT_FOR_IPC_TENTHS=50 "$SCRIPT_DIR/ensure_quickshell.sh" "$QS_CONFIG"; then
   "$EVENT_LOG" restart-systemd-ok "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
   restore_focused_window &
   echo "Riavviato: $SERVICE_NAME"
   exit 0
 fi
 
-"$EVENT_LOG" restart-systemd-failed-manual-kill "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
-pkill -TERM -x quickshell 2>/dev/null || true
-pkill -TERM -x qs 2>/dev/null || true
-sleep 0.5
-pgrep -x quickshell >/dev/null 2>&1 && pkill -KILL -x quickshell || true
-pgrep -x qs >/dev/null 2>&1 && pkill -KILL -x qs || true
-
-"$EVENT_LOG" restart-manual-start "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
-setsid -f "$SCRIPT_DIR/start_quickshell.sh" "$QS_CONFIG" >/dev/null 2>&1 &
-restore_focused_window &
-
-echo "Riavviato: quickshell manuale ($QS_CONFIG)"
+"$EVENT_LOG" restart-systemd-failed "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
+echo "Errore: impossibile riavviare $SERVICE_NAME." >&2
+exit 1
