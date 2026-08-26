@@ -5,11 +5,15 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Hyprland
+import qs.modules.common.functions
 
 Scope {
     id: root
     property bool isOpen: false
     property string currentLayoutCommand: ""
+    // Keep the picker slightly more transparent than the bar so Hyprland's
+    // layer blur reads as frosted glass even when global transparency is low.
+    readonly property real frostedTransparency: Math.max(Appearance.backgroundTransparency, 0.24)
 
     readonly property var layouts: [
         {
@@ -156,9 +160,9 @@ Scope {
                 anchors.centerIn: parent
                 width: 520
                 height: listColumn.implicitHeight + 34
-                // Match the bar surface instead of using the neutral Material
-                // container, so the picker feels part of the same shell.
-                color: Appearance.colors.colLayer0
+                // A bar-tinted, translucent surface lets the compositor blur
+                // the workspace behind it into a frosted-glass backdrop.
+                color: ColorUtils.transparentize(Appearance.colors.colLayer0Base, root.frostedTransparency)
                 border.width: 1
                 border.color: Appearance.colors.colLayer0Border
                 radius: Appearance.rounding.windowRounding
@@ -224,8 +228,10 @@ Scope {
                             height: 76
                             radius: Appearance.rounding.small
                             color: selected
-                                ? Appearance.colors.colLayer1Hover
-                                : (current ? Appearance.m3colors.m3secondaryContainer : "transparent")
+                                ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 0.08)
+                                : (current
+                                    ? ColorUtils.transparentize(Appearance.colors.colSecondaryContainer, 0.18)
+                                    : "transparent")
                             border.width: (selected || current) ? 1 : 0
                             border.color: current ? Appearance.colors.colPrimary : Appearance.colors.colLayer0Border
 
@@ -309,7 +315,7 @@ Scope {
                                 width: 105
                                 height: 52
                                 radius: 7
-                                color: Appearance.colors.colLayer1
+                                color: ColorUtils.transparentize(Appearance.colors.colLayer1, 0.12)
                                 clip: true
 
                                 Repeater {
