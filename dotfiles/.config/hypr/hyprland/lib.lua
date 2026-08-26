@@ -113,10 +113,13 @@ function M.focus_and_center_cursor(direction)
             focus_cursor_timer:set_enabled(false)
         end
 
+        -- Focus dispatch is asynchronous.  Waiting two frames ensures the
+        -- active-window query below sees the keyboard-selected window before
+        -- follow_mouse evaluates the cursor position.
         focus_cursor_timer = hl.timer(function()
             center_cursor_on_active_window()
             focus_cursor_timer = nil
-        end, { timeout = 16, type = "oneshot" })
+        end, { timeout = 32, type = "oneshot" })
     end
 end
 
