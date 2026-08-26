@@ -66,11 +66,11 @@ Scope {
 
         WlrLayershell.namespace: "quickshell:overview"
         WlrLayershell.layer: WlrLayer.Top
-        WlrLayershell.keyboardFocus: !GlobalStates.overviewOpen
-            ? WlrKeyboardFocus.None
-            : GlobalStates.overviewDrawerMode
-                ? WlrKeyboardFocus.OnDemand
-                : WlrKeyboardFocus.Exclusive
+        // The drawer is keyboard-first: it must receive the next arrow key
+        // without requiring a pointer click or hover to claim the surface.
+        WlrLayershell.keyboardFocus: GlobalStates.overviewOpen
+            ? WlrKeyboardFocus.Exclusive
+            : WlrKeyboardFocus.None
         color: "transparent"
 
         mask: Region {
