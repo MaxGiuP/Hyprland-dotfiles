@@ -77,6 +77,12 @@ bind([[Super]], [[B]], [[global]], [[quickshell:sidebarLeftToggle]], nil) -- [hi
 bind([[Super]], [[O]], [[global]], [[quickshell:sidebarLeftToggle]], nil) -- [hidden]
 bind([[Super]], [[N]], [[global]], [[quickshell:sidebarRightToggle]], { description = [[Toggle right sidebar]] }) -- Toggle right sidebar
 bind([[Super]], [[S]], [[global]], [[quickshell:sidebarRightToggle]], { description = [[Toggle right sidebar]] })
+-- Modifiers are swapped by bind() above: these register as Super+Ctrl+N and
+-- Super+Ctrl+Shift+N respectively.
+bind([[Super+Alt]], [[N]], [[global]], [[quickshell:sidebarRightOpen]], { description = [[Open right sidebar]] })
+bind([[Super+Shift+Alt]], [[N]], [[global]], [[quickshell:sidebarRightClose]], { description = [[Close right sidebar]] })
+bind([[Super+Shift]], [[Space]], [[global]], [[quickshell:drawerToggle]], { description = [[Toggle app drawer]] })
+bind([[Super+Shift+Alt]], [[Space]], [[global]], [[quickshell:drawerClose]], { description = [[Close app drawer]] })
 bind([[Super]], [[Slash]], [[global]], [[quickshell:cheatsheetToggle]], { description = [[Toggle cheatsheet]] }) -- Toggle cheatsheet
 bind([[Super]], [[K]], [[global]], [[quickshell:oskToggle]], { description = [[Toggle on-screen keyboard]] }) -- Toggle on-screen keyboard
 

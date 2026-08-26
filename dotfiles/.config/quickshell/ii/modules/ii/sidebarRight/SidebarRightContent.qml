@@ -34,6 +34,29 @@ Item {
     property bool showIdleLockDialog: false
     property bool editMode: false
 
+    function focusSidebarControl(forward) {
+        const next = root.nextItemInFocusChain(forward);
+        if (next && next !== root)
+            next.forceActiveFocus();
+    }
+
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_Right || event.key === Qt.Key_Down) {
+            root.focusSidebarControl(true);
+            event.accepted = true;
+        } else if (event.key === Qt.Key_Left || event.key === Qt.Key_Up) {
+            root.focusSidebarControl(false);
+            event.accepted = true;
+        } else if (event.key === Qt.Key_Home) {
+            root.forceActiveFocus();
+            root.focusSidebarControl(true);
+            event.accepted = true;
+        } else if (event.key === Qt.Key_Escape) {
+            GlobalStates.closeSidebarRight();
+            event.accepted = true;
+        }
+    }
+
     Connections {
         target: GlobalStates
         function onSidebarRightOpenChanged() {

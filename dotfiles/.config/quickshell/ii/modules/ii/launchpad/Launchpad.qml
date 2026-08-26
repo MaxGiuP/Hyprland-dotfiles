@@ -24,6 +24,22 @@ Scope {
     readonly property int cellHeight: 148
     readonly property int iconSize: 76
     readonly property int maxContentWidth: 1280
+    property int selectedAppIndex: 0
+
+    function moveSelectedApp(delta) {
+        const count = appListView.displayApps.length
+        if (count === 0)
+            return
+        selectedAppIndex = Math.max(0, Math.min(count - 1, selectedAppIndex + delta))
+    }
+
+    function launchSelectedApp() {
+        const app = appListView.displayApps[selectedAppIndex]
+        if (!app)
+            return
+        AppLaunch.launchDesktopEntry(app)
+        GlobalStates.closeDrawer()
+    }
 
     // All apps sorted A-Z
     readonly property var sortedApps: {
@@ -77,7 +93,7 @@ Scope {
 
         WlrLayershell.namespace: "quickshell:drawer"
         WlrLayershell.layer: WlrLayer.Overlay
-        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.OnDemand
         color: "transparent"
         anchors { top: true; bottom: true; left: true; right: true }
 
@@ -96,6 +112,7 @@ Scope {
             interval: 1; repeat: false
             onTriggered: {
                 if (!GlobalStates.drawerOpen) return
+                drawerScope.selectedAppIndex = 0
                 searchField.forceActiveFocus()
                 GlobalFocusGrab.addDismissable(panelWindow)
             }
@@ -242,8 +259,30 @@ Scope {
                                         else
                                             GlobalStates.closeDrawer()
                                         event.accepted = true
+                                    } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                                        drawerScope.launchSelectedApp()
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_Right) {
+                                        drawerScope.moveSelectedApp(1)
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_Left) {
+                                        drawerScope.moveSelectedApp(-1)
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_Down) {
+                                        drawerScope.moveSelectedApp(drawerScope.columns)
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_Up) {
+                                        drawerScope.moveSelectedApp(-drawerScope.columns)
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_PageDown) {
+                                        drawerScope.moveSelectedApp(drawerScope.columns * 4)
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_PageUp) {
+                                        drawerScope.moveSelectedApp(-drawerScope.columns * 4)
+                                        event.accepted = true
                                     }
                                 }
+                                onTextChanged: drawerScope.selectedAppIndex = 0
                             }
 
                             MaterialSymbol {
@@ -309,6 +348,7 @@ Scope {
                                     id: appCell
                                     required property var modelData
                                     property var app: appCell.modelData
+                                    readonly property int appIndex: appListView.displayApps.indexOf(appCell.app)
                                     width: appListView.width / drawerScope.columns
                                     height: drawerScope.cellHeight
 
@@ -317,7 +357,9 @@ Scope {
                                         anchors.fill: parent
                                         anchors.margins: 8
                                         radius: Appearance.rounding.normal
-                                        color: appArea.containsMouse
+                                        color: appCell.appIndex === drawerScope.selectedAppIndex
+                                            ? Qt.rgba(1, 1, 1, 0.20)
+                                            : appArea.containsMouse
                                             ? Qt.rgba(1, 1, 1, 0.12)
                                             : "transparent"
                                         Behavior on color { ColorAnimation { duration: 110 } }
@@ -357,6 +399,7 @@ Scope {
                                         anchors.fill: parent
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
+                                        onEntered: drawerScope.selectedAppIndex = appCell.appIndex
                                         onClicked: {
                                             AppLaunch.launchDesktopEntry(appCell.app)
                                             GlobalStates.closeDrawer()
@@ -369,5 +412,17 @@ Scope {
                 }
             }
         }
+    }
+
+    GlobalShortcut {
+        name: "drawerToggle"
+        description: "Toggle the app drawer"
+        onPressed: GlobalStates.toggleDrawer()
+    }
+
+    GlobalShortcut {
+        name: "drawerClose"
+        description: "Close the app drawer"
+        onPressed: GlobalStates.closeDrawer()
     }
 }
