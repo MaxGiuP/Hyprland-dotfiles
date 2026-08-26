@@ -5,14 +5,14 @@ local raw_bind = h.bind
 -- modifiers are intentionally left alone: exchanging them would be a no-op.
 local function bind(modifiers, ...)
     local has_super = modifiers:match("Super") ~= nil
-    local has_alt = modifiers:match("Alt") ~= nil
+    local has_alt = modifiers:match("Alt") ~= nil or modifiers:match("ALT") ~= nil
     local has_ctrl = modifiers:match("Ctrl") ~= nil or modifiers:match("CTRL") ~= nil
 
     if has_super and has_alt ~= has_ctrl then
         local swapped = {}
         for token in modifiers:gmatch("[^+%s]+") do
             local modifier = token
-            if modifier == "Alt" then
+            if modifier == "Alt" or modifier == "ALT" then
                 modifier = "Ctrl"
             elseif modifier == "Ctrl" or modifier == "CTRL" then
                 modifier = "Alt"
