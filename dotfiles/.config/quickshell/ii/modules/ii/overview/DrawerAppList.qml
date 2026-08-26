@@ -45,26 +45,32 @@ Item {
         root.appLaunched()
     }
 
-    focus: GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode
-    Keys.onPressed: event => {
-        if (event.key === Qt.Key_Right) {
+    function handleKey(key) {
+        if (key === Qt.Key_Right) {
             root.moveSelection(1)
-        } else if (event.key === Qt.Key_Left) {
+        } else if (key === Qt.Key_Left) {
             root.moveSelection(-1)
-        } else if (event.key === Qt.Key_Down) {
+        } else if (key === Qt.Key_Down) {
             root.moveSelection(root.columns)
-        } else if (event.key === Qt.Key_Up) {
+        } else if (key === Qt.Key_Up) {
             if (root.selectedAppIndex < root.columns)
                 root.returnToSearchAction?.()
             else
                 root.moveSelection(-root.columns)
-        } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+        } else if (key === Qt.Key_Return || key === Qt.Key_Enter) {
             root.launchSelectedApp()
-        } else if (event.key === Qt.Key_Escape) {
+        } else if (key === Qt.Key_Escape) {
             root.returnToSearchAction?.()
         } else {
-            return
+            return false
         }
+        return true
+    }
+
+    focus: GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode
+    Keys.onPressed: event => {
+        if (!root.handleKey(event.key))
+            return
         event.accepted = true
     }
 

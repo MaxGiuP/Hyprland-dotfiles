@@ -15,6 +15,7 @@ RowLayout {
     property alias searchInput: searchInput
     property string searchingText
     signal emptySearchDownPressed()
+    signal drawerKeyPressed(int key)
 
     function forceFocus() {
         searchInput.forceActiveFocus();
@@ -92,7 +93,14 @@ RowLayout {
         }
 
         Keys.onPressed: event => {
-            if (event.key === Qt.Key_Down && searchInput.text.length === 0) {
+            if (GlobalStates.overviewDrawerMode
+                    && (event.key === Qt.Key_Left || event.key === Qt.Key_Right
+                        || event.key === Qt.Key_Up || event.key === Qt.Key_Down
+                        || event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                        || event.key === Qt.Key_Escape)) {
+                root.drawerKeyPressed(event.key)
+                event.accepted = true
+            } else if (event.key === Qt.Key_Down && searchInput.text.length === 0) {
                 root.emptySearchDownPressed()
                 event.accepted = true
             } else if (event.key === Qt.Key_Tab) {

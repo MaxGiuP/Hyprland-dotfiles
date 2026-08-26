@@ -257,6 +257,7 @@ Scope {
                     GlobalStates.overviewDrawerMode = true
                     Qt.callLater(() => drawerAppList.activateFirstApp())
                 }
+                onDrawerKeyPressed: key => drawerAppList.handleKey(key)
             }
 
             Loader {
