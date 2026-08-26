@@ -272,9 +272,9 @@ bind([[Ctrl+Alt]], [[T]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_fir
 bind([[Super]], [[E]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "dolphin" "org.kde.dolphin" "nautilus --new-window" "pcmanfm-qt" "nemo" "thunar" "kitty -1 fish -c yazi"]], nil) -- File manager
 bind([[Super]], [[W]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "brave" "google-chrome-stable" "zen-browser" "firefox" "chromium" "microsoft-edge-stable" "opera" "librewolf"]], nil) -- Browser
 bind([[Super+Shift]], [[G]], [[exec]], [[~/.config/hypr/hyprland/scripts/tv_mode/start.sh]], { description = [[Start TV mode]] }) -- Start TV mode
-bind([[Super]], [[C]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "codium" "code" "cursor" "zed" "zedit" "zeditor" "kate" "gnome-text-editor" "emacs" "command -v nvim && kitty -1 nvim"]], nil) -- Code editor
+bind([[Super]], [[C]], [[exec]], [[gtk-launch nvim]], { description = [[Open Neovim]] })
 bind([[Super+Shift]], [[W]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "wps" "onlyoffice-desktopeditors"]], nil) -- Office software
-bind([[Super]], [[X]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "kate" "gnome-text-editor" "emacs"]], nil) -- Text editor
+bind([[Super]], [[X]], [[exec]], [[code]], { description = [[Open VS Code]] })
 bind([[Ctrl+Super]], [[V]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "pavucontrol-qt" "pavucontrol"]], nil) -- Volume mixer
 bind([[Super]], [[I]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_quickshell_settings.sh]], nil) -- Settings app
 bind([[Ctrl+Shift]], [[Escape]], [[exec]], [[~/.config/hypr/hyprland/scripts/launch_first_available.sh "plasma-systemmonitor" "gnome-system-monitor --page-name Processes" "command -v btop && kitty -1 fish -c btop"]], nil) -- Task manager
