@@ -11,9 +11,9 @@ Scope {
     id: root
     property bool isOpen: false
     property string currentLayoutCommand: ""
-    // Keep the picker slightly more transparent than the bar so Hyprland's
-    // layer blur reads as frosted glass even when global transparency is low.
-    readonly property real frostedTransparency: Math.max(Appearance.backgroundTransparency, 0.24)
+    // Keep a near-solid tint while allowing Hyprland's layer blur to soften
+    // the workspace behind the picker.
+    readonly property real frostedOpacity: 0.98
 
     readonly property var layouts: [
         {
@@ -162,7 +162,7 @@ Scope {
                 height: listColumn.implicitHeight + 34
                 // A bar-tinted, translucent surface lets the compositor blur
                 // the workspace behind it into a frosted-glass backdrop.
-                color: ColorUtils.transparentize(Appearance.colors.colLayer0Base, root.frostedTransparency)
+                color: ColorUtils.applyAlpha(Appearance.colors.colLayer0Base, root.frostedOpacity)
                 border.width: 1
                 border.color: Appearance.colors.colLayer0Border
                 radius: Appearance.rounding.windowRounding
