@@ -9,6 +9,7 @@ import Quickshell.Hyprland
 Scope {
     id: root
     property bool isOpen: false
+    property string currentLayoutCommand: ""
 
     readonly property var layouts: [
         {
@@ -80,6 +81,10 @@ Scope {
             preview: [ { x: 0.00, y: 0.00, w: 1.00, h: 1.00 } ]
         }
     ]
+
+    function layoutName(command) {
+        return layouts.find(layout => layout.command === command)?.name ?? "";
+    }
 
     Loader {
         id: layoutSwitcherLoader
@@ -195,7 +200,9 @@ Scope {
                     spacing: 8
 
                     Text {
-                        text: "Choose layout"
+                        text: root.currentLayoutCommand
+                            ? `Choose layout · Current: ${root.layoutName(root.currentLayoutCommand)}`
+                            : "Choose layout"
                         color: Appearance.colors.colOnLayer0
                         font.family: Appearance.font.family.main
                         font.pixelSize: Appearance.font.pixelSize.title
@@ -218,6 +225,7 @@ Scope {
                             required property var modelData
                             required property int index
                             readonly property bool selected: index === panelWindow.selectedIndex
+                            readonly property bool current: modelData.command === root.currentLayoutCommand
                             width: listColumn.width
                             height: 76
                             radius: Appearance.rounding.small
@@ -268,7 +276,7 @@ Scope {
                                 spacing: 3
 
                                 Text {
-                                    text: modelData.name
+                                    text: current ? `${modelData.name} · Current` : modelData.name
                                     color: Appearance.m3colors.m3onSurface
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.normal
@@ -317,7 +325,31 @@ Scope {
         }
     }
 
+    Process {
+        id: currentLayoutProcess
+        command: ["/home/linmax/.config/hypr/hyprland/scripts/current_layout.sh"]
+
+        stdout: StdioCollector {
+            id: currentLayoutCollector
+            onStreamFinished: {
+                const command = currentLayoutCollector.text.trim();
+                const index = root.layouts.findIndex(layout => layout.command === command);
+                if (index < 0)
+                    return;
+
+                root.currentLayoutCommand = command;
+                layoutSwitcherLoader.item.selectedIndex = index;
+            }
+        }
+    }
+
+    function refreshCurrentLayout() {
+        if (!currentLayoutProcess.running)
+            currentLayoutProcess.running = true;
+    }
+
     function open() {
+        refreshCurrentLayout();
         root.isOpen = true;
     }
 
