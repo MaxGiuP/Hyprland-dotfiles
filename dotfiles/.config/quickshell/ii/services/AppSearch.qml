@@ -12,7 +12,9 @@ Singleton {
     id: root
     property bool sloppySearch: Config.options?.search.sloppy ?? false
     property real scoreThreshold: 0.2
-    property var resolvedIconPaths: ({})
+    // Keep this cache in a stable Map. Updating a plain QML object can invalidate
+    // bindings which read it, causing the full application index to be rebuilt.
+    readonly property var resolvedIconPaths: new Map()
     property var substitutions: ({
         "code-url-handler": "visual-studio-code",
         "Code": "visual-studio-code",
@@ -104,11 +106,11 @@ Singleton {
     function resolvedIconPath(iconName) {
         const name = String(iconName ?? "");
         if (name.length === 0) return "";
-        if (Object.prototype.hasOwnProperty.call(root.resolvedIconPaths, name))
-            return root.resolvedIconPaths[name];
+        if (root.resolvedIconPaths.has(name))
+            return root.resolvedIconPaths.get(name);
 
         const path = Quickshell.iconPath(name, true);
-        root.resolvedIconPaths[name] = path;
+        root.resolvedIconPaths.set(name, path);
         return path;
     }
 
