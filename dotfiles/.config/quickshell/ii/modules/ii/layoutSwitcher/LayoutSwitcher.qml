@@ -156,11 +156,11 @@ Scope {
                 anchors.centerIn: parent
                 width: 520
                 height: listColumn.implicitHeight + 34
-                // Use the same solid Material surface family as the workspace
-                // preview, independent of the global transparency preference.
-                color: Appearance.m3colors.m3surfaceContainer
+                // Match the bar surface instead of using the neutral Material
+                // container, so the picker feels part of the same shell.
+                color: Appearance.colors.colLayer0
                 border.width: 1
-                border.color: Appearance.m3colors.m3outlineVariant
+                border.color: Appearance.colors.colLayer0Border
                 radius: Appearance.rounding.windowRounding
                 focus: true
                 opacity: root.isOpen ? 1 : 0
@@ -224,10 +224,10 @@ Scope {
                             height: 76
                             radius: Appearance.rounding.small
                             color: selected
-                                ? Appearance.m3colors.m3surfaceContainerHigh
+                                ? Appearance.colors.colLayer1Hover
                                 : (current ? Appearance.m3colors.m3secondaryContainer : "transparent")
                             border.width: (selected || current) ? 1 : 0
-                            border.color: current ? Appearance.colors.colPrimary : Appearance.m3colors.m3outlineVariant
+                            border.color: current ? Appearance.colors.colPrimary : Appearance.colors.colLayer0Border
 
                             Behavior on color { ColorAnimation { duration: 100 } }
 
@@ -261,7 +261,7 @@ Scope {
                                 width: 24
                                 text: "›"
                                 visible: selected
-                                color: Appearance.m3colors.m3onSurface
+                                color: Appearance.colors.colOnLayer0
                                 font.pixelSize: 31
                             }
 
@@ -272,7 +272,7 @@ Scope {
                                     verticalCenter: parent.verticalCenter
                                 }
                                 text: modelData.icon
-                                color: Appearance.m3colors.m3onSurface
+                                color: Appearance.colors.colOnLayer0
                                 font.pixelSize: 25
                             }
 
@@ -286,14 +286,14 @@ Scope {
 
                                 Text {
                                     text: modelData.name
-                                    color: current ? Appearance.colors.colPrimary : Appearance.m3colors.m3onSurface
+                                    color: current ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer0
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.normal
                                     font.weight: Font.DemiBold
                                 }
                                 Text {
                                     text: modelData.description
-                                    color: selected ? Appearance.m3colors.m3onSurface : Appearance.colors.colSubtext
+                                    color: selected ? Appearance.colors.colOnLayer0 : Appearance.colors.colSubtext
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.small
                                 }
@@ -309,7 +309,7 @@ Scope {
                                 width: 105
                                 height: 52
                                 radius: 7
-                                color: Appearance.m3colors.m3surfaceContainerLow
+                                color: Appearance.colors.colLayer1
                                 clip: true
 
                                 Repeater {
