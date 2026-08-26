@@ -71,6 +71,10 @@ error=$(get_color "error" "#f2b8b5")
 on_error=$(get_color "on_error" "#601410")
 error_container=$(get_color "error_container" "#8c1d18")
 on_error_container=$(get_color "on_error_container" "#f9dedc")
+# Keep destructive controls (including GNOME close/exit buttons) dark enough
+# for their label to remain readable with every generated wallpaper palette.
+destructive="#b3261e"
+on_destructive="#ffffff"
 
 # ── Outlines ──────────────────────────────────────────────────────────────────
 outline=$(get_color "outline" "#938f99")
@@ -169,9 +173,9 @@ colors_css=$(cat <<CSS
   --accent-fg-color:                 ${accent_fg};
 
   /* ── Status ────────────────────────────────────────────────────────────── */
-  --destructive-color:               ${error};
-  --destructive-bg-color:            ${error};
-  --destructive-fg-color:            ${on_error};
+  --destructive-color:               ${destructive};
+  --destructive-bg-color:            ${destructive};
+  --destructive-fg-color:            ${on_destructive};
 
   --success-color:                   ${success_color};
   --success-bg-color:                ${success_container};
@@ -203,9 +207,9 @@ colors_css=$(cat <<CSS
 @define-color accent_fg_color        ${accent_fg};
 
 /* Destructive */
-@define-color destructive_color      ${error};
-@define-color destructive_bg_color   ${error};
-@define-color destructive_fg_color   ${on_error};
+@define-color destructive_color      ${destructive};
+@define-color destructive_bg_color   ${destructive};
+@define-color destructive_fg_color   ${on_destructive};
 
 /* Success (tertiary = greener tone) */
 @define-color success_color          ${success_color};
@@ -712,17 +716,17 @@ button.suggested-action:active,
 /* Destructive action — error filled */
 button.destructive-action,
 .destructive-action {
-  background-color: ${error};
-  color: ${on_error};
+  background-color: ${destructive};
+  color: ${on_destructive};
   border-color: transparent;
   font-weight: 600;
 }
 button.destructive-action:hover {
-  background-color: mix(${error}, white, 0.08);
-  box-shadow: 0 2px 6px alpha(${error}, 0.35);
+  background-color: mix(${destructive}, white, 0.08);
+  box-shadow: 0 2px 6px alpha(${destructive}, 0.35);
 }
 button.destructive-action:active {
-  background-color: mix(${error}, ${outline_variant}, 0.08);
+  background-color: mix(${destructive}, ${outline_variant}, 0.08);
   box-shadow: none;
 }
 
@@ -2663,9 +2667,9 @@ gtk3_colors_css=$(cat <<GTK3CSS
 @define-color accent_color              ${primary};
 @define-color accent_bg_color           ${accent_bg};
 @define-color accent_fg_color           ${accent_fg};
-@define-color destructive_color         ${error};
-@define-color destructive_bg_color      ${error};
-@define-color destructive_fg_color      ${on_error};
+@define-color destructive_color         ${destructive};
+@define-color destructive_bg_color      ${destructive};
+@define-color destructive_fg_color      ${on_destructive};
 @define-color success_color             ${success_color};
 @define-color warning_color             ${warning_color};
 @define-color error_color               ${error};
@@ -3222,8 +3226,8 @@ button.suggested-action {
   border-color: ${accent_bg};
 }
 button.destructive-action {
-  background-color: ${error};
-  color: ${on_error};
+  background-color: ${destructive};
+  color: ${on_destructive};
 }
 button.flat,
 button.flat:hover,
