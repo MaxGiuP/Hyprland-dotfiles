@@ -82,10 +82,6 @@ Scope {
         }
     ]
 
-    function layoutName(command) {
-        return layouts.find(layout => layout.command === command)?.name ?? "";
-    }
-
     Loader {
         id: layoutSwitcherLoader
         // Keep the full-screen surface alive so its dim backdrop does not
@@ -200,9 +196,7 @@ Scope {
                     spacing: 8
 
                     Text {
-                        text: root.currentLayoutCommand
-                            ? `Choose layout · Current: ${root.layoutName(root.currentLayoutCommand)}`
-                            : "Choose layout"
+                        text: "Choose layout"
                         color: Appearance.colors.colOnLayer0
                         font.family: Appearance.font.family.main
                         font.pixelSize: Appearance.font.pixelSize.title
@@ -229,11 +223,26 @@ Scope {
                             width: listColumn.width
                             height: 76
                             radius: Appearance.rounding.small
-                            color: selected ? Appearance.m3colors.m3surfaceContainerHigh : "transparent"
-                            border.width: selected ? 1 : 0
-                            border.color: Appearance.m3colors.m3outlineVariant
+                            color: selected
+                                ? Appearance.m3colors.m3surfaceContainerHigh
+                                : (current ? Appearance.m3colors.m3secondaryContainer : "transparent")
+                            border.width: (selected || current) ? 1 : 0
+                            border.color: current ? Appearance.colors.colPrimary : Appearance.m3colors.m3outlineVariant
 
                             Behavior on color { ColorAnimation { duration: 100 } }
+
+                            Rectangle {
+                                anchors {
+                                    left: parent.left
+                                    leftMargin: 5
+                                    verticalCenter: parent.verticalCenter
+                                }
+                                width: 4
+                                height: 36
+                                radius: width / 2
+                                color: Appearance.colors.colPrimary
+                                visible: current
+                            }
 
                             MouseArea {
                                 anchors.fill: parent
@@ -276,8 +285,8 @@ Scope {
                                 spacing: 3
 
                                 Text {
-                                    text: current ? `${modelData.name} · Current` : modelData.name
-                                    color: Appearance.m3colors.m3onSurface
+                                    text: modelData.name
+                                    color: current ? Appearance.colors.colPrimary : Appearance.m3colors.m3onSurface
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.normal
                                     font.weight: Font.DemiBold
