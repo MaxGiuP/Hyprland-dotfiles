@@ -1,6 +1,7 @@
 import qs
 import qs.modules.common
 import qs.modules.common.widgets
+import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -87,7 +88,7 @@ Scope {
     ]
 
     // Visual-only dimming surfaces sit below the selector's Overlay layer.
-    // Their empty input regions leave desktop pointer handling untouched.
+    // Their empty input regions leave all pointer handling to the compositor.
     Variants {
         model: Quickshell.screens
 
@@ -130,13 +131,19 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.namespace: "quickshell:layoutSwitcher"
             WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+            WlrLayershell.keyboardFocus: root.isOpen ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
             color: "transparent"
             mask: Region { item: root.isOpen ? content : null }
 
             property int selectedIndex: 0
 
-            function close() {
+            function syncFocusGrab() {
+                GlobalFocusGrab.removeDismissable(panelWindow);
+                if (root.isOpen)
+                    GlobalFocusGrab.addDismissable(panelWindow);
+            }
+
+            function dismiss() {
                 GlobalStates.layoutSwitcherOpen = false;
             }
 
@@ -149,7 +156,7 @@ Scope {
                     "/home/linmax/.config/hypr/hyprland/scripts/select_layout.sh",
                     root.layouts[selectedIndex].command
                 ]);
-                close();
+                dismiss();
             }
 
             Item {
@@ -175,7 +182,7 @@ Scope {
 
                 Keys.onPressed: event => {
                     if (event.key === Qt.Key_Escape) {
-                        panelWindow.close();
+                        panelWindow.dismiss();
                     } else if (event.key === Qt.Key_Up || event.key === Qt.Key_Left) {
                         panelWindow.moveSelection(-1);
                     } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Right) {
@@ -333,7 +340,21 @@ Scope {
                 }
             }
 
-            Component.onCompleted: Qt.callLater(() => content.forceActiveFocus())
+            onVisibleChanged: syncFocusGrab()
+
+            Connections {
+                target: GlobalFocusGrab
+                function onDismissed() {
+                    if (root.isOpen)
+                        GlobalStates.layoutSwitcherOpen = false;
+                }
+            }
+
+            Component.onCompleted: {
+                syncFocusGrab();
+                Qt.callLater(() => content.forceActiveFocus());
+            }
+            Component.onDestruction: GlobalFocusGrab.removeDismissable(panelWindow)
         }
     }
 
