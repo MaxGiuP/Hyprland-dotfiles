@@ -79,12 +79,12 @@ LazyLoader {
                         : (root.hoverTarget.width - popupBackground.implicitWidth) / 2,
                     0
                 );
-                    const winWidth = root.QsWindow?.width ?? 0;
+                    const screenWidth = root.QsWindow?.window?.screen?.width ?? 0;
                     const rawLeft = root.alignRightToWindow
-                        ? winWidth - popupWindow.implicitWidth + root.horizontalOffset
+                        ? screenWidth - popupWindow.implicitWidth + root.horizontalOffset
                         : (mapped?.x ?? 0) + root.horizontalOffset;
-                    if (winWidth <= 0 || popupWindow.implicitWidth <= 0) return Math.max(0, rawLeft);
-                    const maxLeft = Math.max(0, winWidth - popupWindow.implicitWidth);
+                    if (screenWidth <= 0 || popupWindow.implicitWidth <= 0) return Math.max(0, rawLeft);
+                    const maxLeft = Math.max(0, screenWidth - popupWindow.implicitWidth);
                     return root.clamp(rawLeft, 0, maxLeft);
                 }
                 return Appearance.sizes.verticalBarWidth
@@ -96,9 +96,9 @@ LazyLoader {
                     (root.hoverTarget.height - popupBackground.implicitHeight) / 2, 0
                 );
                 const rawTop = mapped?.y ?? 0;
-                const winHeight = root.QsWindow?.height ?? 0;
-                if (winHeight <= 0 || popupWindow.implicitHeight <= 0) return Math.max(0, rawTop);
-                const maxTop = Math.max(0, winHeight - popupWindow.implicitHeight);
+                const screenHeight = root.QsWindow?.window?.screen?.height ?? 0;
+                if (screenHeight <= 0 || popupWindow.implicitHeight <= 0) return Math.max(0, rawTop);
+                const maxTop = Math.max(0, screenHeight - popupWindow.implicitHeight);
                 return root.clamp(rawTop, 0, maxTop);
             }
             right: Appearance.sizes.verticalBarWidth
