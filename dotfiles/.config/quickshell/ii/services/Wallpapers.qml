@@ -189,7 +189,10 @@ Singleton {
 
     Timer {
         id: deferredSwitchwallTimer
-        interval: 6000
+        // Let the reveal finish, then update the generated palette in a
+        // low-priority worker. Keeping this close to the visual transition
+        // avoids the old, conspicuous second hitch several seconds later.
+        interval: 1600
         repeat: false
         onTriggered: root.runPendingSwitchwall()
     }

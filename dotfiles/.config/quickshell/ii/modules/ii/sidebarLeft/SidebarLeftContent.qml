@@ -73,6 +73,14 @@ Item {
         }
     }
 
+    Connections {
+        target: Persistent.states.sidebar
+        function onLeftTabChanged() {
+            if (Persistent.ready)
+                root.restorePersistedTab();
+        }
+    }
+
     Keys.onPressed: (event) => {
         if (event.modifiers === Qt.ControlModifier) {
             if (event.key === Qt.Key_PageDown) {

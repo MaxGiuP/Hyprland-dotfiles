@@ -362,6 +362,12 @@ Singleton {
         root.sidebarLeftOpen = true
     }
 
+    function openCalculator(preferredScreen = "") {
+        if (Persistent.ready)
+            Persistent.states.sidebar.leftTab = "calculator"
+        root.openSidebarLeft(preferredScreen)
+    }
+
     function resolvedSidebarRightScreen(preferredScreen = "") {
         return preferredScreen
             || root.sidebarRightScreen
@@ -390,6 +396,14 @@ Singleton {
 
         root.sidebarRightScreen = targetScreen
         root.sidebarRightOpen = true
+    }
+
+    function openTimer(preferredScreen = "") {
+        if (Persistent.ready) {
+            Persistent.states.sidebar.bottomGroup.tab = 3
+            Persistent.states.sidebar.bottomGroup.collapsed = false
+        }
+        root.openSidebarRight(preferredScreen)
     }
 
     function resolvedOverviewScreen(preferredScreen = "") {

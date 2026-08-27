@@ -136,6 +136,10 @@ Scope {
         function open(): void {
             GlobalStates.openSidebarRight();
         }
+
+        function timer(): void {
+            GlobalStates.openTimer();
+        }
     }
 
     GlobalShortcut {

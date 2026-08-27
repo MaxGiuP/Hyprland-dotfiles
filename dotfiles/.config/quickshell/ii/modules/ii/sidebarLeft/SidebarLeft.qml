@@ -604,6 +604,10 @@ Scope {
             GlobalStates.openSidebarLeft();
         }
 
+        function calculator(): void {
+            GlobalStates.openCalculator();
+        }
+
         function togglePin(): void {
             root.togglePin();
         }

@@ -118,6 +118,33 @@ Singleton {
     // Combined built-in and user actions
     property var allActions: searchActions.concat(userActionScripts)
 
+    readonly property var shellDestinations: [
+        {
+            name: Translation.tr("Calculator"),
+            keywords: ["calculator", "calculate", "arithmetic", "math"],
+            icon: "calculate",
+            execute: () => GlobalStates.openCalculator()
+        },
+        {
+            name: Translation.tr("Timer"),
+            keywords: ["timer", "countdown", "stopwatch", "pomodoro"],
+            icon: "schedule",
+            execute: () => GlobalStates.openTimer()
+        }
+    ]
+
+    function fuzzyShellDestinations(query) {
+        const needle = String(query ?? "").trim().toLowerCase();
+        if (needle.length === 0)
+            return [];
+
+        return root.shellDestinations.filter(destination => {
+            const terms = [destination.name, ...(destination.keywords ?? [])]
+                .map(term => String(term).toLowerCase());
+            return terms.some(term => term.includes(needle) || needle.includes(term));
+        });
+    }
+
     property string mathResult: ""
     property bool clipboardWorkSafetyActive: {
         const enabled = Config.options.workSafety.enable.clipboard;
@@ -273,6 +300,16 @@ Singleton {
             .fuzzyQuery(StringUtils.cleanPrefix(root.query, Config.options.search.prefix.app))
             .slice(0, root.appResultLimit)
             .map(entry => root.createAppResultObject(entry));
+        const shellDestinationObjects = root.fuzzyShellDestinations(root.query).map(destination => {
+            return resultComp.createObject(null, {
+                name: destination.name,
+                verb: Translation.tr("Open"),
+                type: Translation.tr("System"),
+                iconName: destination.icon,
+                iconType: LauncherSearchResult.IconType.Material,
+                execute: destination.execute
+            });
+        });
         const commandResultObject = resultComp.createObject(null, {
             name: StringUtils.cleanPrefix(root.query, Config.options.search.prefix.shellCommand).replace("file://", ""),
             verb: Translation.tr("Run"),
@@ -336,7 +373,7 @@ Singleton {
         }
 
         //////////////// Apps //////////////////
-        result = result.concat(appResultObjects);
+        result = result.concat(shellDestinationObjects, appResultObjects);
 
         ////////// Launcher actions ////////////
         result = result.concat(launcherActionObjects);

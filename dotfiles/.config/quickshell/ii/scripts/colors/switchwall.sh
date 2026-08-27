@@ -11,11 +11,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHELL_CONFIG_FILE="$XDG_CONFIG_HOME/illogical-impulse/config.json"
 MATUGEN_DIR="$XDG_CONFIG_HOME/matugen"
 terminalscheme="$SCRIPT_DIR/terminal/scheme-base.json"
+SCHEME_DETECTOR_SOURCE="$SCRIPT_DIR/scheme_for_image.rs"
+SCHEME_DETECTOR_BIN="$CACHE_DIR/bin/scheme-for-image"
 WALLPAPER_ANIMATION_DELAY="${II_WALLPAPER_ANIMATION_DELAY:-4.0}"
 WALLPAPER_SWITCH_TOKEN_FILE="$STATE_DIR/user/generated/wallpaper/switch.token"
 animation_settled_flag=""
 visual_switch_done=""
 wallpaper_switch_token=""
+
+# Colour extraction and application can briefly saturate CPU and storage. Run
+# the worker below the interactive desktop so wallpaper animation and input keep
+# priority. The guard prevents the re-exec from recurring.
+if [[ "${II_WALLPAPER_WORKER_NICED:-0}" != "1" ]]; then
+    export II_WALLPAPER_WORKER_NICED=1
+    if command -v ionice >/dev/null 2>&1; then
+        exec nice -n 12 ionice -c 3 "$0" "$@"
+    fi
+    exec nice -n 12 "$0" "$@"
+fi
 
 should_defer_heavy_work() {
     [[ "$visual_switch_done" == "1" && -z "$animation_settled_flag" && "${II_WALLPAPER_DEFER_HEAVY:-1}" != "0" ]]
@@ -86,11 +99,23 @@ post_process() {
     handle_kde_material_you_colors &
     "$SCRIPT_DIR/code/material-code-set-color.sh" &
 
-    # Reload Hyprland so generated border/background colors from matugen apply
-    # immediately. This covers both the legacy colors.conf path and the Lua
-    # colors.lua path used by the migrated config.
-    if command -v hyprctl >/dev/null 2>&1; then
-        hyprctl reload >/dev/null 2>&1 || true
+    # A full Hyprland reload produces a visible input/rendering hitch. Matugen
+    # still writes colors.lua/colors.conf for the next normal reload, while the
+    # currently running compositor receives the three live values directly.
+    if command -v hyprctl >/dev/null 2>&1 \
+            && command -v jq >/dev/null 2>&1 \
+            && [ -f "$STATE_DIR/user/generated/colors.json" ]; then
+        local active_border inactive_border background
+        active_border=$(jq -r '.outline // empty' "$STATE_DIR/user/generated/colors.json")
+        inactive_border=$(jq -r '.outline_variant // empty' "$STATE_DIR/user/generated/colors.json")
+        background=$(jq -r '.background // empty' "$STATE_DIR/user/generated/colors.json")
+        if [[ "$active_border" =~ ^#[A-Fa-f0-9]{6}$ \
+                && "$inactive_border" =~ ^#[A-Fa-f0-9]{6}$ \
+                && "$background" =~ ^#[A-Fa-f0-9]{6}$ ]]; then
+            hyprctl --batch \
+                "keyword general:col.active_border rgba(${active_border#\#}77); keyword general:col.inactive_border rgba(${inactive_border#\#}55); keyword misc:background_color rgba(${background#\#}FF)" \
+                >/dev/null 2>&1 || true
+        fi
     fi
 }
 
@@ -385,9 +410,24 @@ main() {
 
     detect_scheme_type_from_image() {
         local img="$1"
-        source "$(eval echo $ILLOGICAL_IMPULSE_VIRTUAL_ENV)/bin/activate"
-        "$SCRIPT_DIR"/scheme_for_image.py "$img" 2>/dev/null | tr -d '\n'
-        deactivate
+        if [[ ! -x "$SCHEME_DETECTOR_BIN" || "$SCHEME_DETECTOR_SOURCE" -nt "$SCHEME_DETECTOR_BIN" ]]; then
+            if ! command -v rustc >/dev/null 2>&1 || ! command -v magick >/dev/null 2>&1; then
+                echo "[switchwall] Rust scheme detector unavailable; using tonal spot" >&2
+                printf '%s' 'scheme-tonal-spot'
+                return
+            fi
+            mkdir -p "$(dirname "$SCHEME_DETECTOR_BIN")"
+            local detector_tmp="${SCHEME_DETECTOR_BIN}.tmp.$$"
+            if rustc --edition=2024 -O "$SCHEME_DETECTOR_SOURCE" -o "$detector_tmp"; then
+                mv "$detector_tmp" "$SCHEME_DETECTOR_BIN"
+            else
+                rm -f "$detector_tmp"
+                echo "[switchwall] Could not build Rust scheme detector; using tonal spot" >&2
+                printf '%s' 'scheme-tonal-spot'
+                return
+            fi
+        fi
+        "$SCHEME_DETECTOR_BIN" "$img" 2>/dev/null | tr -d '\n'
     }
 
     while [[ $# -gt 0 ]]; do
