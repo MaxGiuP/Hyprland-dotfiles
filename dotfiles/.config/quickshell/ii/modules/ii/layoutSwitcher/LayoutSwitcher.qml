@@ -86,6 +86,27 @@ Scope {
         }
     ]
 
+    // Visual-only dimming surfaces sit below the selector's Overlay layer.
+    // Their empty input regions leave desktop pointer handling untouched.
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            id: dimWindow
+            required property ShellScreen modelData
+
+            visible: root.isOpen
+            screen: modelData
+            anchors { top: true; bottom: true; left: true; right: true }
+            exclusionMode: ExclusionMode.Ignore
+            WlrLayershell.namespace: "quickshell:layoutSwitcherDim"
+            WlrLayershell.layer: WlrLayer.Top
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            color: Qt.rgba(0, 0, 0, 0.42)
+            mask: Region {}
+        }
+    }
+
     Loader {
         id: layoutSwitcherLoader
         // Keep the component loaded, but unmap its Wayland surface while closed
