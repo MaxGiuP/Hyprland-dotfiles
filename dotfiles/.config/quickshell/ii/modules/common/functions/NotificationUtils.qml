@@ -86,7 +86,7 @@ Singleton {
     }
 
     function processNotificationBody(body, appName) {
-        let processedBody = body
+        let processedBody = body || ""
         
         // Clean Chromium-based browsers notifications - remove first line
         if (appName) {
@@ -96,13 +96,33 @@ Singleton {
             ]
 
             if (chromiumBrowsers.some(name => lowerApp.includes(name))) {
-                const lines = body.split('\n\n')
+                const lines = processedBody.split('\n\n')
 
                 if (lines.length > 1 && lines[0].startsWith('<a')) {
                     processedBody = lines.slice(1).join('\n\n')
                 }
             }
         }
+
+        // KDE Connect and some Android apps escape notification markup one
+        // extra time. Qt then renders tags such as </b> as text instead of
+        // applying them. Peel off only that extra entity layer and only turn
+        // notification-safe tags back into markup, leaving arbitrary escaped
+        // HTML as literal text.
+        processedBody = processedBody.replace(
+            /&amp;(?=(?:lt|gt|quot|apos|amp|#39|#x27);)/gi,
+            "&"
+        )
+        processedBody = processedBody.replace(
+            /&lt;((?:\/\s*)?(?:b|strong|i|em|u|s|a|br|img)\b.*?)&gt;/gi,
+            function(match, tag) {
+                const decodedTag = tag
+                    .replace(/&quot;/gi, '"')
+                    .replace(/&(?:apos|#39|#x27);/gi, "'")
+                    .replace(/&amp;/gi, "&")
+                return `<${decodedTag}>`
+            }
+        )
 
         processedBody = processedBody.replace(/<img/gi, '\n\n<img');
         
