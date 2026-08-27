@@ -8,83 +8,12 @@ import qs.modules.common.functions
 Singleton {
     id: root
     property string filePath: Directories.shellConfigPath
-    property string runtimeFilePath: FileUtils.trimFileProtocol(`${Directories.cache}/quickshell/runtime-config.json`)
     property alias options: configOptionsJsonAdapter
     property bool ready: false
     property int readWriteDelay: 50 // milliseconds
-    property bool blockWrites: false
-    property bool bootstrapping: true
-    property bool hydratingAdapter: false
+    property bool blockWrites: true
     property bool localWriteInFlight: false
-    property string launcherFolderNamesCache: "{}"
-    property string launcherLayoutCache: "[]"
-    property string lastAppliedRuntimeConfigText: ""
-
-    function parseConfigText(text) {
-        if (!text || !text.trim())
-            return ({})
-
-        try {
-            const parsed = JSON.parse(text)
-            return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : ({})
-        } catch (error) {
-            console.warn(`[Config] Failed to parse ${root.filePath}: ${error}`)
-            return ({})
-        }
-    }
-
-    function captureRuntimeOnlyFields(configData) {
-        const launcher = configData?.launcher
-        // Support new format (folderNamesJson: string) and old format (folderNames: object)
-        if (typeof launcher?.folderNamesJson === "string") {
-            root.launcherFolderNamesCache = launcher.folderNamesJson
-        } else if (launcher?.folderNames && typeof launcher.folderNames === "object" && !Array.isArray(launcher.folderNames)) {
-            root.launcherFolderNamesCache = JSON.stringify(launcher.folderNames)
-        } else {
-            root.launcherFolderNamesCache = "{}"
-        }
-        // Support new format (layoutJson: string) and old format (layout: array)
-        if (typeof launcher?.layoutJson === "string") {
-            root.launcherLayoutCache = launcher.layoutJson
-        } else if (Array.isArray(launcher?.layout)) {
-            root.launcherLayoutCache = JSON.stringify(launcher.layout)
-        } else {
-            root.launcherLayoutCache = "[]"
-        }
-    }
-
-    function sanitizeForJsonAdapter(configData) {
-        const clone = JSON.parse(JSON.stringify(configData ?? {}))
-
-        // Strip old-format object/array keys that no longer exist as adapter properties.
-        // The adapter now uses folderNamesJson/layoutJson (string types) instead of
-        // folderNames (object) / layout (array). Old keys are silently ignored by the
-        // adapter but we strip them here to keep runtime-config.json clean.
-        if (clone.launcher && typeof clone.launcher === "object" && !Array.isArray(clone.launcher)) {
-            delete clone.launcher.folderNames
-            delete clone.launcher.layout
-        }
-
-        return clone
-    }
-
-    function bootstrapRuntimeConfig(text) {
-        const configData = root.parseConfigText(text)
-        const sanitized = root.sanitizeForJsonAdapter(configData)
-
-        root.captureRuntimeOnlyFields(configData)
-        runtimeConfigView.setText(JSON.stringify(sanitized, null, 4))
-        root.bootstrapping = false
-    }
-
-    function hydrateRuntimeOnlyFields() {
-        root.hydratingAdapter = true
-        configOptionsJsonAdapter.launcher.folderNamesJson = root.launcherFolderNamesCache
-        configOptionsJsonAdapter.launcher.layoutJson = root.launcherLayoutCache
-        root.ready = true
-        root.blockWrites = false
-        Qt.callLater(() => root.hydratingAdapter = false)
-    }
+    property string lastAppliedConfigText: ""
 
     function setNestedValue(nestedKey, value) {
         let keys = nestedKey.split(".");
@@ -130,69 +59,33 @@ Singleton {
         interval: root.readWriteDelay
         repeat: false
         onTriggered: {
+            if (!root.ready || root.blockWrites)
+                return
+
             root.localWriteInFlight = true
             configFileView.writeAdapter()
         }
     }
 
-    Timer {
-        id: externalConfigSyncTimer
-        interval: 500
-        repeat: true
-        running: root.ready && !root.bootstrapping
-        onTriggered: {
-            if (root.localWriteInFlight || root.blockWrites || root.hydratingAdapter)
-                return
-
-            externalRuntimeConfigView.reload()
-        }
-    }
-
     FileView {
-        id: sourceConfigView
+        id: externalConfigView
         path: root.filePath
-        blockLoading: true
         blockWrites: true
-        watchChanges: false
-        onLoaded: root.bootstrapRuntimeConfig(text())
-        onLoadFailed: error => {
-            root.captureRuntimeOnlyFields({})
-
-            if (error == FileViewError.FileNotFound) {
-                runtimeConfigView.setText("{}")
-            } else {
-                console.warn(`[Config] Failed to load ${root.filePath}; using in-memory defaults`)
-                runtimeConfigView.setText("{}")
-            }
-
-            root.bootstrapping = false
-        }
-    }
-
-    FileView {
-        id: runtimeConfigView
-        path: root.runtimeFilePath
-        blockWrites: true
-    }
-
-    FileView {
-        id: externalRuntimeConfigView
-        path: root.bootstrapping ? "" : root.runtimeFilePath
-        blockWrites: true
-        watchChanges: false
+        watchChanges: true
+        onFileChanged: reload()
         onLoaded: {
             const latestText = text()
 
             if (!root.ready) {
-                root.lastAppliedRuntimeConfigText = latestText
+                root.lastAppliedConfigText = latestText
                 return
             }
 
-            if (root.localWriteInFlight || root.blockWrites || root.hydratingAdapter)
+            if (root.localWriteInFlight || root.blockWrites)
                 return
 
-            if (latestText !== root.lastAppliedRuntimeConfigText) {
-                root.lastAppliedRuntimeConfigText = latestText
+            if (latestText !== root.lastAppliedConfigText) {
+                root.lastAppliedConfigText = latestText
                 root.blockWrites = true
                 fileReloadTimer.restart()
             }
@@ -200,44 +93,34 @@ Singleton {
     }
 
     FileView {
-        id: persistedConfigView
-        path: root.filePath
-        blockWrites: false
-        watchChanges: false
-    }
-
-    FileView {
         id: configFileView
-        path: root.bootstrapping ? "" : root.runtimeFilePath
-        // watchChanges: false — same fix as Persistent.qml. The self-watch causes
-        // a crash in the quickshell engine when the FileView detects its own write
-        // and immediately tries to reload. Cross-instance edits are synced by the
-        // externalRuntimeConfigView polling loop above instead.
+        path: root.filePath
+        // A separate read-only FileView watches for edits. Keeping the adapter's
+        // own watcher disabled avoids treating its writes as external changes.
         watchChanges: false
         blockWrites: root.blockWrites
-        onFileChanged: {
-            root.blockWrites = true  // block writes while reloading to prevent write-reload loops
-            fileReloadTimer.restart()
-        }
         onAdapterUpdated: {
-            if (!root.hydratingAdapter)
+            if (root.ready && !root.blockWrites)
                 fileWriteTimer.restart()
         }
         onLoaded: {
-            root.lastAppliedRuntimeConfigText = text()
-            root.hydrateRuntimeOnlyFields()
+            root.lastAppliedConfigText = text()
+            root.ready = true
+            root.blockWrites = false
         }
         onLoadFailed: error => {
             root.localWriteInFlight = false
             root.blockWrites = false
             if (error == FileViewError.FileNotFound) {
+                root.ready = true
                 fileWriteTimer.restart();
+            } else {
+                console.warn(`[Config] Failed to load ${root.filePath}; using in-memory defaults`)
             }
         }
         onSaved: {
-            root.lastAppliedRuntimeConfigText = text()
+            root.lastAppliedConfigText = text()
             root.localWriteInFlight = false
-            persistedConfigView.setText(text())
         }
 
         adapter: JsonAdapter {

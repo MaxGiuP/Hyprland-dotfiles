@@ -9,8 +9,6 @@ CACHE_DIR="$XDG_CACHE_HOME/quickshell"
 STATE_DIR="$XDG_STATE_HOME/quickshell"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SHELL_CONFIG_FILE="$XDG_CONFIG_HOME/illogical-impulse/config.json"
-RUNTIME_CONFIG_FILE="$CACHE_DIR/runtime-config.json"
-RUNTIME_CONFIG_FILE_ALT="$CACHE_DIR/quickshell/runtime-config.json"
 MATUGEN_DIR="$XDG_CONFIG_HOME/matugen"
 terminalscheme="$SCRIPT_DIR/terminal/scheme-base.json"
 WALLPAPER_ANIMATION_DELAY="${II_WALLPAPER_ANIMATION_DELAY:-4.0}"
@@ -181,14 +179,12 @@ EOF
 update_config_path() {
     local jq_expr="$1"
     local path="$2"
-    local config_file
 
-    for config_file in "$SHELL_CONFIG_FILE" "$RUNTIME_CONFIG_FILE" "$RUNTIME_CONFIG_FILE_ALT"; do
-        if [ -f "$config_file" ]; then
-            mkdir -p "$(dirname "$config_file")"
-            jq --arg path "$path" "$jq_expr" "$config_file" > "$config_file.tmp" && mv "$config_file.tmp" "$config_file"
-        fi
-    done
+    if [ -f "$SHELL_CONFIG_FILE" ]; then
+        mkdir -p "$(dirname "$SHELL_CONFIG_FILE")"
+        jq --arg path "$path" "$jq_expr" "$SHELL_CONFIG_FILE" > "$SHELL_CONFIG_FILE.tmp" \
+            && mv "$SHELL_CONFIG_FILE.tmp" "$SHELL_CONFIG_FILE"
+    fi
 }
 
 set_wallpaper_path() {
