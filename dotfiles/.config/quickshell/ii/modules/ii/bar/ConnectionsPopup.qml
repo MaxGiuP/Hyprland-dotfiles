@@ -14,7 +14,7 @@ StyledPopup {
     id: root
 
     keepOpenOnPopupHover: true
-    alignRightToHoverTarget: true
+    alignRightToWindow: true
     property real contentWidth: 390
     property real maxListHeight: 150
 

@@ -14,8 +14,8 @@ LazyLoader {
     property real popupBackgroundMargin: 0
     property real horizontalOffset: 0
     property bool alignLeftToHoverTarget: false
-    // Align the popup's right edge to the hover target's right edge.
-    property bool alignRightToHoverTarget: false
+    // Align the popup's right edge to the bar's screen edge.
+    property bool alignRightToWindow: false
     property bool keepOpenOnPopupHover: false
     property bool popupHovered: false
     property bool hoverHeld: false
@@ -74,15 +74,15 @@ LazyLoader {
                 if (!Config.options.bar.vertical) {
                     const mapped = root.QsWindow?.mapFromItem(
                     root.hoverTarget, 
-                    root.alignRightToHoverTarget
-                        ? root.hoverTarget.width - popupWindow.implicitWidth
-                        : root.alignLeftToHoverTarget
-                            ? 0
-                            : (root.hoverTarget.width - popupBackground.implicitWidth) / 2,
+                    root.alignLeftToHoverTarget
+                        ? 0
+                        : (root.hoverTarget.width - popupBackground.implicitWidth) / 2,
                     0
                 );
-                    const rawLeft = (mapped?.x ?? 0) + root.horizontalOffset;
                     const winWidth = root.QsWindow?.width ?? 0;
+                    const rawLeft = root.alignRightToWindow
+                        ? winWidth - popupWindow.implicitWidth + root.horizontalOffset
+                        : (mapped?.x ?? 0) + root.horizontalOffset;
                     if (winWidth <= 0 || popupWindow.implicitWidth <= 0) return Math.max(0, rawLeft);
                     const maxLeft = Math.max(0, winWidth - popupWindow.implicitWidth);
                     return root.clamp(rawLeft, 0, maxLeft);
