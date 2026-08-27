@@ -1,0 +1,11 @@
+# Packages used by local desktop integrations even when Pacman sees no reverse dependency.
+alsa-utils
+dotnet-sdk
+go
+kde-material-you-colors
+netstandard-targeting-pack
+pavucontrol
+python-beautifulsoup4
+python-readability-lxml
+ttf-gabarito-git
+webp-pixbuf-loader

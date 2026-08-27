@@ -35,6 +35,7 @@ MANAGED=(
     hypr
     quickshell
     illogical-impulse
+    pkgtrim
     rofi
     kitty
     foot
