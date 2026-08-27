@@ -107,6 +107,24 @@ local function center_cursor_on_monitor(monitor)
     return true
 end
 
+local function center_cursor_on_window(window)
+    if not window then
+        return false
+    end
+
+    local window_x, window_y = vector_xy(window.at)
+    local window_width, window_height = vector_xy(window.size)
+    if not window_x or not window_y or not window_width or not window_height then
+        return false
+    end
+
+    hl.dispatch(hl.dsp.cursor.move({
+        x = math.floor(window_x + window_width / 2),
+        y = math.floor(window_y + window_height / 2),
+    }))
+    return true
+end
+
 local function directional_monitor(source, direction)
     if not source then
         return nil
@@ -190,10 +208,46 @@ local function window_in_direction(window, monitor, direction)
     return false
 end
 
-local function focus_monitor_by_cursor(monitor)
-    -- Moving the pointer lets follow_mouse focus the workspace that is
-    -- actually visible. Explicit monitor/workspace focus can instead recall
-    -- the monitor's last busy workspace when the visible one is empty.
+local function workspace_focus_target(monitor)
+    local workspace = monitor and hl.get_active_workspace(monitor) or nil
+    if not workspace then
+        return nil
+    end
+
+    local function is_target(window)
+        return window and window.mapped and not window.hidden and window.workspace
+            and window.workspace.id == workspace.id
+    end
+
+    if is_target(workspace.last_window) then
+        return workspace.last_window
+    end
+
+    local target = nil
+    for _, candidate in ipairs(hl.get_workspace_windows(workspace)) do
+        if is_target(candidate) and (not target
+            or candidate.focus_history_id < target.focus_history_id) then
+            target = candidate
+        end
+    end
+
+    return target
+end
+
+local function focus_monitor_target(monitor)
+    local window = workspace_focus_target(monitor)
+    if window then
+        -- Focus the window explicitly instead of using the monitor center as a
+        -- probe. The cursor dispatcher does not always make follow_mouse update
+        -- the active window before the next Lua callback.
+        hl.dispatch(hl.dsp.focus({ window = "address:" .. window.address }))
+        center_cursor_on_window(window)
+        return
+    end
+
+    -- An empty visible workspace has no focus target. Moving the pointer is
+    -- still required so follow_mouse activates that monitor without recalling
+    -- one of its hidden, occupied workspaces.
     center_cursor_on_monitor(monitor)
 end
 
@@ -213,16 +267,7 @@ local function center_cursor_on_focus_target()
         return
     end
 
-    local window_x, window_y = vector_xy(window.at)
-    local window_width, window_height = vector_xy(window.size)
-    if not window_x or not window_y or not window_width or not window_height then
-        return
-    end
-
-    hl.dispatch(hl.dsp.cursor.move({
-        x = math.floor(window_x + window_width / 2),
-        y = math.floor(window_y + window_height / 2),
-    }))
+    center_cursor_on_window(window)
 end
 
 function M.focus_and_center_cursor(direction)
@@ -240,11 +285,7 @@ function M.focus_and_center_cursor(direction)
         -- Cross monitors explicitly so their currently visible workspace wins.
         local target_monitor = directional_monitor(source_monitor, direction)
         if target_monitor and not window_in_direction(source_window, source_monitor, direction) then
-            focus_monitor_by_cursor(target_monitor)
-            focus_cursor_timer = hl.timer(function()
-                center_cursor_on_focus_target()
-                focus_cursor_timer = nil
-            end, { timeout = 32, type = "oneshot" })
+            focus_monitor_target(target_monitor)
             return
         end
 
@@ -265,7 +306,7 @@ function M.focus_and_center_cursor(direction)
             -- workspace. Fall back to the nearest monitor in that direction.
             if not monitor_changed and not window_changed then
                 if target_monitor then
-                    focus_monitor_by_cursor(target_monitor)
+                    focus_monitor_target(target_monitor)
                     focus_cursor_timer = nil
                     return
                 end
