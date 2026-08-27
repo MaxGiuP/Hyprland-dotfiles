@@ -10,7 +10,8 @@ Singleton {
     id: root
     property var devices: []
     property string lastError: ""
-    readonly property bool loading: fetchProc.running
+    property bool loading: true
+    readonly property string statePath: `${Quickshell.env("XDG_RUNTIME_DIR")}/linmax-desktop-bridge/kdeconnect.json`
 
     function normalizedString(value) {
         return String(value ?? "").trim();
@@ -128,8 +129,9 @@ Singleton {
     }
 
     function refresh() {
-        fetchProc.running = false;
-        fetchProc.running = true;
+        root.loading = true;
+        stateFile.reload();
+        loadingFallback.restart();
     }
 
     function runAction(args) {
@@ -140,28 +142,31 @@ Singleton {
     }
 
     Timer {
-        interval: 15000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root.refresh()
+        id: loadingFallback
+        interval: 750
+        repeat: false
+        onTriggered: root.loading = false
     }
 
-    Process {
-        id: fetchProc
-        command: ["python3", `${Directories.scriptPath}/kdeconnect_overview.py`.replace(/file:\/\//, "")]
-        stdout: StdioCollector {
-            id: collector
-            onStreamFinished: {
-                if (!collector.text || collector.text.trim().length === 0) return;
-                try {
-                    const payload = JSON.parse(collector.text.trim());
-                    root.devices = payload.devices ?? [];
-                    root.lastError = payload.error ?? "";
-                } catch (e) {
-                    root.lastError = `${e}`;
-                }
+    FileView {
+        id: stateFile
+        path: root.statePath
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: {
+            try {
+                const payload = JSON.parse(stateFile.text() || "{}");
+                root.devices = payload.devices ?? [];
+                root.lastError = payload.error ?? "";
+            } catch (e) {
+                root.lastError = `${e}`;
             }
+            root.loading = false;
+        }
+        onLoadFailed: error => {
+            if (error !== FileViewError.FileNotFound)
+                root.lastError = `Could not load KDE Connect state: ${error}`;
+            root.loading = false;
         }
     }
 

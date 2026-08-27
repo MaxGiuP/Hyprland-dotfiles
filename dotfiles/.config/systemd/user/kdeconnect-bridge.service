@@ -1,0 +1,13 @@
+[Unit]
+Description=Publish KDE Connect state for Quickshell
+After=dbus.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/kdeconnect-bridge
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target
