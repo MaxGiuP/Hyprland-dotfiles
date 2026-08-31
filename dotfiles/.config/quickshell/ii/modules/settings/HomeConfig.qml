@@ -17,6 +17,28 @@ ContentPage {
 
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
+    readonly property var dashboardAgenda: UnifiedAgenda.agendaItems.slice(0, 7)
+    readonly property var dashboardMail: UnifiedAgenda.recentMail.slice(0, 6)
+
+    function formatAgendaTime(timestamp, allDay = false) {
+        if (!timestamp) return Translation.tr("Any time")
+        const date = new Date(timestamp)
+        const today = new Date()
+        const sameDay = date.getFullYear() === today.getFullYear()
+            && date.getMonth() === today.getMonth()
+            && date.getDate() === today.getDate()
+        const day = sameDay ? Translation.tr("Today") : Translation.locale.toString(date, "ddd d MMM")
+        return allDay ? day : `${day} • ${Translation.locale.toString(date, "HH:mm")}`
+    }
+
+    function formatMailTime(timestamp) {
+        if (!timestamp) return ""
+        const date = new Date(timestamp)
+        const age = Date.now() - timestamp
+        return age < 24 * 60 * 60 * 1000
+            ? Translation.locale.toString(date, "HH:mm")
+            : Translation.locale.toString(date, "d MMM")
+    }
 
     function navigate(page, subTab = -1, sectionId = "") {
         const host = root.settingsHost ?? Window.window
@@ -29,6 +51,227 @@ ContentPage {
 
     PwObjectTracker {
         objects: root.trackedOutputDevices
+    }
+
+    ContentSection {
+        icon: "space_dashboard"
+        title: Translation.tr("Dashboard")
+        description: `${DateTime.longDate} • ${DateTime.time}`
+
+        ConfigRow {
+            preferredColumns: 4
+            collapseWidth: 720
+            uniform: true
+
+            HomeStatusButton {
+                iconName: SystemHealth.healthy ? "check_circle" : "monitor_heart"
+                label: Translation.tr("System")
+                value: SystemHealth.healthy ? Translation.tr("Healthy") : Translation.tr("Needs attention")
+                onClicked: root.navigate(10)
+            }
+
+            HomeStatusButton {
+                iconName: "event"
+                label: Translation.tr("Agenda")
+                value: Translation.tr("%1 upcoming").arg(UnifiedAgenda.agendaItems.length)
+                onClicked: UnifiedAgenda.openCalendar()
+            }
+
+            HomeStatusButton {
+                iconName: UnifiedAgenda.unreadCount > 0 ? "mark_email_unread" : "mail"
+                label: Translation.tr("Mail")
+                value: Translation.tr("%1 unread").arg(UnifiedAgenda.unreadCount)
+                onClicked: UnifiedAgenda.openMail()
+            }
+
+            HomeStatusButton {
+                iconName: "task_alt"
+                label: Translation.tr("Tasks")
+                value: Translation.tr("%1 open").arg(UnifiedAgenda.openLocalTaskCount + UnifiedAgenda.openRemoteTaskCount)
+                onClicked: quickTaskInput.forceActiveFocus()
+            }
+        }
+
+        GridLayout {
+            Layout.fillWidth: true
+            columns: width < 740 ? 1 : 2
+            columnSpacing: 10
+            rowSpacing: 10
+            uniformCellWidths: true
+
+            DashboardPanel {
+                title: Translation.tr("Unified agenda")
+                iconName: "calendar_month"
+
+                Repeater {
+                    model: root.dashboardAgenda
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        implicitHeight: 48
+                        radius: Appearance.rounding.small
+                        color: Appearance.colors.colLayer2
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 6
+                            spacing: 8
+
+                            MaterialSymbol {
+                                text: modelData.kind === "event" ? "event" : modelData.source === "mail" ? "forward_to_inbox" : "check_box_outline_blank"
+                                iconSize: 18
+                                color: modelData.kind === "event" ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer1
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                StyledText { Layout.fillWidth: true; text: modelData.title; color: Appearance.colors.colOnLayer1; elide: Text.ElideRight; font.weight: Font.Medium }
+                                StyledText { Layout.fillWidth: true; text: `${root.formatAgendaTime(modelData.timestamp, modelData.allDay)}${modelData.account ? ` • ${modelData.account}` : ""}`; color: Appearance.colors.colSubtext; font.pixelSize: Appearance.font.pixelSize.smaller; elide: Text.ElideRight }
+                            }
+
+                            RippleButton {
+                                visible: modelData.kind === "event" && !UnifiedAgenda.hasTaskForExternalId(`event:${modelData.externalId}`)
+                                implicitWidth: 32
+                                implicitHeight: 32
+                                buttonRadius: Appearance.rounding.full
+                                onClicked: UnifiedAgenda.addEventAsTask(modelData)
+                                contentItem: MaterialSymbol { anchors.centerIn: parent; text: "playlist_add"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
+                            }
+                        }
+                    }
+                }
+
+                StyledText {
+                    visible: root.dashboardAgenda.length === 0
+                    Layout.fillWidth: true
+                    text: UnifiedAgenda.loading ? Translation.tr("Refreshing agenda…") : Translation.tr("Nothing upcoming")
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Appearance.colors.colSubtext
+                }
+            }
+
+            DashboardPanel {
+                title: Translation.tr("Unified inbox")
+                iconName: "all_inbox"
+
+                Repeater {
+                    model: root.dashboardMail
+                    delegate: Rectangle {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        implicitHeight: 48
+                        radius: Appearance.rounding.small
+                        color: modelData.read ? Appearance.colors.colLayer1 : Appearance.colors.colSecondaryContainer
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 6
+                            spacing: 8
+
+                            MaterialSymbol { text: modelData.starred ? "star" : modelData.read ? "mail" : "mark_email_unread"; iconSize: 18; color: modelData.read ? Appearance.colors.colSubtext : Appearance.colors.colOnSecondaryContainer }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                StyledText { Layout.fillWidth: true; text: modelData.title; color: modelData.read ? Appearance.colors.colOnLayer1 : Appearance.colors.colOnSecondaryContainer; elide: Text.ElideRight; font.weight: modelData.read ? Font.Normal : Font.DemiBold }
+                                StyledText { Layout.fillWidth: true; text: `${modelData.author || modelData.provider} • ${modelData.account}`; color: modelData.read ? Appearance.colors.colSubtext : Appearance.colors.colOnSecondaryContainer; font.pixelSize: Appearance.font.pixelSize.smaller; elide: Text.ElideRight }
+                            }
+
+                            StyledText { text: root.formatMailTime(modelData.timestamp); color: Appearance.colors.colSubtext; font.pixelSize: Appearance.font.pixelSize.smaller }
+
+                            RippleButton {
+                                implicitWidth: 32
+                                implicitHeight: 32
+                                buttonRadius: Appearance.rounding.full
+                                enabled: !UnifiedAgenda.hasTaskForExternalId(`mail:${modelData.accountId}:${modelData.id}`)
+                                onClicked: UnifiedAgenda.addMailAsTask(modelData)
+                                contentItem: MaterialSymbol { anchors.centerIn: parent; text: parent.enabled ? "add_task" : "task_alt"; iconSize: 18; color: Appearance.colors.colOnLayer1 }
+                            }
+                        }
+                    }
+                }
+
+                StyledText {
+                    visible: root.dashboardMail.length === 0
+                    Layout.fillWidth: true
+                    text: UnifiedAgenda.mailError || Translation.tr("No indexed messages")
+                    horizontalAlignment: Text.AlignHCenter
+                    color: UnifiedAgenda.mailError ? Appearance.colors.colError : Appearance.colors.colSubtext
+                    wrapMode: Text.Wrap
+                }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            MaterialTextField {
+                id: quickTaskInput
+                Layout.fillWidth: true
+                placeholderText: Translation.tr("Add a task to the unified agenda")
+                onAccepted: {
+                    if (text.trim().length > 0) {
+                        Todo.addTask(text.trim())
+                        text = ""
+                    }
+                }
+            }
+
+            DialogButton {
+                buttonText: Translation.tr("Add")
+                enabled: quickTaskInput.text.trim().length > 0
+                onClicked: {
+                    Todo.addTask(quickTaskInput.text.trim())
+                    quickTaskInput.text = ""
+                }
+            }
+
+            DialogButton { buttonText: Translation.tr("Refresh all"); onClicked: UnifiedAgenda.refresh() }
+        }
+
+        ConfigRow {
+            uniform: true
+            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open mail"); onClicked: UnifiedAgenda.openMail() }
+            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "calendar_month"; mainText: Translation.tr("Open calendar"); onClicked: UnifiedAgenda.openCalendar() }
+            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "manage_accounts"; mainText: Translation.tr("Connected accounts"); onClicked: root.navigate(6) }
+        }
+    }
+
+    ContentSection {
+        icon: "tune"
+        title: Translation.tr("Desktop modes and privacy")
+        description: Translation.tr("Apply a scene or change interruption controls without leaving Settings")
+
+        GridLayout {
+            Layout.fillWidth: true
+            columns: width < 700 ? 2 : 3
+            columnSpacing: 8
+            rowSpacing: 8
+            uniformCellWidths: true
+
+            Repeater {
+                model: DesktopModes.modes
+                delegate: RippleButtonWithIcon {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    materialIcon: modelData.icon
+                    mainText: modelData.name
+                    toggled: DesktopModes.currentMode === modelData.id
+                    onClicked: DesktopModes.apply(modelData.id)
+                }
+            }
+        }
+
+        ConfigRow {
+            uniform: true
+            ConfigSwitch { Layout.fillWidth: true; buttonIcon: Notifications.silent ? "notifications_off" : "notifications"; text: Translation.tr("Do not disturb"); checked: Notifications.silent; onClicked: Notifications.silent = !Notifications.silent }
+            ConfigSwitch { Layout.fillWidth: true; buttonIcon: Audio.micMuted ? "mic_off" : "mic"; text: Translation.tr("Mute microphone"); checked: Audio.micMuted; onClicked: Audio.toggleMicMute() }
+            ConfigSwitch { Layout.fillWidth: true; buttonIcon: Idle.inhibit ? "bedtime_off" : "bedtime"; text: Translation.tr("Keep awake"); checked: Idle.inhibit; onClicked: Idle.toggleInhibit() }
+        }
     }
 
     ContentSection {
@@ -597,6 +840,34 @@ ContentPage {
                 text: "chevron_right"
                 iconSize: 18
                 color: Appearance.colors.colSubtext
+            }
+        }
+    }
+
+    component DashboardPanel: Rectangle {
+        id: dashboardPanel
+        required property string title
+        required property string iconName
+        default property alias panelContent: panelColumn.data
+
+        Layout.fillWidth: true
+        Layout.alignment: Qt.AlignTop
+        implicitHeight: panelColumn.implicitHeight + 20
+        radius: Appearance.rounding.normal
+        color: Appearance.colors.colLayer1
+        border.width: 1
+        border.color: Appearance.colors.colOutlineVariant
+
+        ColumnLayout {
+            id: panelColumn
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 6
+
+            RowLayout {
+                Layout.fillWidth: true
+                MaterialSymbol { text: dashboardPanel.iconName; iconSize: 20; color: Appearance.colors.colPrimary }
+                StyledText { Layout.fillWidth: true; text: dashboardPanel.title; color: Appearance.colors.colOnLayer1; font.weight: Font.DemiBold }
             }
         }
     }

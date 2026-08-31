@@ -18,14 +18,18 @@ Singleton {
     function normalizeItem(item) {
         const title = `${item?.title ?? item?.content ?? ""}`.trim();
         const description = `${item?.description ?? ""}`.trim();
+        const createdAt = Math.max(0, parseInt(item?.createdAt ?? Date.now()) || Date.now());
         return {
+            "id": `${item?.id ?? `${createdAt}-${title}`}`,
             "title": title,
             "description": description,
             "content": title,
             "done": !!item?.done,
-            "dueAt": 0,
-            "createdAt": Math.max(0, parseInt(item?.createdAt ?? Date.now()) || Date.now()),
-            "source": "local",
+            "dueAt": Math.max(0, parseInt(item?.dueAt ?? 0) || 0),
+            "createdAt": createdAt,
+            "source": `${item?.source ?? "local"}`,
+            "externalId": `${item?.externalId ?? ""}`,
+            "account": `${item?.account ?? ""}`,
         };
     }
     
@@ -38,13 +42,18 @@ Singleton {
         todoFileView.setText(JSON.stringify(root.list))
     }
 
-    function addTask(title, description = "") {
+    function addTask(title, description = "", dueAt = 0, source = "local", metadata = ({})) {
+        const createdAt = Date.now();
         const item = {
+            "id": `${createdAt}-${title}`,
             "title": title,
             "description": description,
             "done": false,
-            "createdAt": Date.now(),
-            "source": "local",
+            "dueAt": Math.max(0, parseInt(dueAt) || 0),
+            "createdAt": createdAt,
+            "source": source,
+            "externalId": `${metadata?.externalId ?? ""}`,
+            "account": `${metadata?.account ?? ""}`,
         }
         addItem(item)
     }

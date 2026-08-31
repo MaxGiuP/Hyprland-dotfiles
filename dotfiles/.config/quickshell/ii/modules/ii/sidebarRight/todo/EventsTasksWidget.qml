@@ -10,15 +10,16 @@ import Quickshell.Io
 Item {
     id: root
     property var tabButtonList: [
-        {"icon": "event", "name": Translation.tr("Events")},
-        {"name": Translation.tr("Tasks"), "icon": "assignment"}
+        {"icon": "event_upcoming", "name": Translation.tr("Agenda")},
+        {"name": Translation.tr("Tasks"), "icon": "assignment"},
+        {"name": Translation.tr("Mail"), "icon": "mail"}
     ]
     readonly property int dayMs: 24 * 60 * 60 * 1000
     property var thunderbirdTasks: RemoteCalendarBridge.thunderbirdTasks ?? []
     property var thunderbirdEvents: RemoteCalendarBridge.thunderbirdEvents ?? []
     property string lastError: RemoteCalendarBridge.lastError
-    readonly property bool loading: RemoteCalendarBridge.loading
-    readonly property bool hasAnyData: root.thunderbirdEvents.length > 0 || root.thunderbirdTasks.length > 0
+    readonly property bool loading: UnifiedAgenda.loading
+    readonly property bool hasAnyData: UnifiedAgenda.agendaItems.length > 0 || UnifiedAgenda.recentMail.length > 0
     property real focusedDayStartMs: RemoteCalendarBridge.focusedDayStartMs
     property real focusedDayEndMs: RemoteCalendarBridge.focusedDayEndMs
     property string selectedEventExternalId: RemoteCalendarBridge.selectedEventExternalId
@@ -36,13 +37,20 @@ Item {
         }
     }
 
-    readonly property var sortedImportedTaskList: {
-        return root.thunderbirdTasks
+    readonly property var sortedTaskList: {
+        const localTasks = Todo.list.map((item, index) => Object.assign({}, item, {
+            originalIndex: index,
+            readOnly: false,
+            source: item.source || "local",
+        }));
+        const importedTasks = root.thunderbirdTasks
             .map(item => Object.assign({}, item, {
                 originalIndex: -1,
                 readOnly: true,
-                source: "thunderbird",
-            }))
+                source: "calendar-task",
+                kind: "task",
+            }));
+        return localTasks.concat(importedTasks)
             .sort((a, b) => {
                 const aDue = parseInt(a?.dueAt ?? 0) || 0;
                 const bDue = parseInt(b?.dueAt ?? 0) || 0;
@@ -52,6 +60,49 @@ Item {
                 if (aDue !== bDue) return aDue - bDue;
                 return `${a.content}`.localeCompare(`${b.content}`);
             });
+    }
+
+    readonly property var unifiedAgendaList: UnifiedAgenda.agendaItems.map(item => ({
+        content: item.title,
+        title: item.title,
+        description: item.description || "",
+        dueAt: Number(item.timestamp) || 0,
+        endAt: Number(item.endAt) || 0,
+        allDay: !!item.allDay,
+        done: !!item.done,
+        readOnly: !!item.readOnly,
+        source: item.source,
+        kind: item.kind,
+        originalIndex: item.originalIndex,
+        externalId: item.externalId || "",
+        calId: item.calId || "",
+        calendarName: item.account || "",
+        account: item.account || "",
+    }))
+
+    readonly property var mailList: UnifiedAgenda.recentMail.map(message => ({
+        content: message.title || Translation.tr("Untitled message"),
+        title: message.title || Translation.tr("Untitled message"),
+        description: message.author ? Translation.tr("From %1").arg(message.author) : "",
+        dueAt: Number(message.timestamp) || 0,
+        done: !!message.read,
+        readOnly: true,
+        source: "mail",
+        kind: "mail",
+        originalIndex: -1,
+        externalId: `mail:${message.accountId}:${message.id}`,
+        account: message.account || message.provider || "Thunderbird",
+        mailMessage: message,
+    }))
+
+    function importReadOnlyItem(item) {
+        if (item.kind === "event") {
+            UnifiedAgenda.addEventAsTask(item);
+            return;
+        }
+        const externalId = `task:${item.externalId}`;
+        if (!UnifiedAgenda.hasTaskForExternalId(externalId))
+            Todo.addTask(item.title, item.calendarName ? Translation.tr("From %1").arg(item.calendarName) : "", item.dueAt, "calendar", { externalId, account: item.calendarName || "" });
     }
 
     readonly property var mergedEventList: {
@@ -122,15 +173,15 @@ Item {
         StyledText {
             Layout.fillWidth: true
             Layout.topMargin: 6
-            visible: root.lastError.length > 0
-            text: root.lastError
+            visible: root.lastError.length > 0 || UnifiedAgenda.mailError.length > 0
+            text: root.lastError.length > 0 ? root.lastError : UnifiedAgenda.mailError
             wrapMode: Text.Wrap
             color: Appearance.colors.colError
             font.pixelSize: Appearance.font.pixelSize.smaller
         }
 
         RowLayout {
-            Layout.topMargin: root.lastError.length > 0 ? 6 : 0
+            Layout.topMargin: (root.lastError.length > 0 || UnifiedAgenda.mailError.length > 0) ? 6 : 0
             Layout.alignment: Qt.AlignHCenter
             spacing: 10
             visible: root.loading
@@ -141,7 +192,7 @@ Item {
             }
 
             StyledText {
-                text: root.hasAnyData ? Translation.tr("Refreshing calendar data") : Translation.tr("Loading calendar data")
+                text: root.hasAnyData ? Translation.tr("Refreshing agenda and mail") : Translation.tr("Loading agenda and mail")
                 color: Appearance.colors.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
             }
@@ -159,24 +210,40 @@ Item {
 
             TaskList {
                 listBottomPadding: 16
-                emptyPlaceholderIcon: "event"
-                emptyPlaceholderText: Translation.tr("No calendar events")
-                taskList: root.mergedEventList
+                emptyPlaceholderIcon: "event_available"
+                emptyPlaceholderText: Translation.tr("Your agenda is clear")
+                taskList: root.unifiedAgendaList
                 highlightDayStartMs: root.focusedDayStartMs
                 highlightDayEndMs: root.focusedDayEndMs
                 autoScrollToHighlight: true
                 accentHighlightMatches: true
                 selectionEnabled: true
+                readOnlyActionIcon: "add_task"
                 selectedExternalId: root.selectedEventExternalId
                 selectedCalId: root.selectedEventCalId
-                onItemActivated: item => RemoteCalendarBridge.selectEvent(item)
+                onItemActivated: item => {
+                    if (item.kind === "event")
+                        RemoteCalendarBridge.selectEvent(item);
+                }
+                onReadOnlyAction: item => root.importReadOnlyItem(item)
             }
 
             TaskList {
                 listBottomPadding: 16
                 emptyPlaceholderIcon: "assignment"
-                emptyPlaceholderText: Translation.tr("No calendar tasks")
-                taskList: root.sortedImportedTaskList
+                emptyPlaceholderText: Translation.tr("No tasks")
+                taskList: root.sortedTaskList
+                readOnlyActionIcon: "add_task"
+                onReadOnlyAction: item => root.importReadOnlyItem(item)
+            }
+
+            TaskList {
+                listBottomPadding: 16
+                emptyPlaceholderIcon: "mark_email_read"
+                emptyPlaceholderText: Translation.tr("No recent inbox messages")
+                taskList: root.mailList
+                readOnlyActionIcon: "add_task"
+                onReadOnlyAction: item => UnifiedAgenda.addMailAsTask(item.mailMessage)
             }
         }
 

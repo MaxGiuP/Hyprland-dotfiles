@@ -23,7 +23,9 @@ Item {
     property bool selectionEnabled: false
     property string selectedExternalId: ""
     property string selectedCalId: ""
+    property string readOnlyActionIcon: ""
     signal itemActivated(var item)
+    signal readOnlyAction(var item)
 
     function itemMatchesHighlight(task) {
         if (root.highlightDayStartMs < 0 || root.highlightDayEndMs <= root.highlightDayStartMs)
@@ -74,7 +76,11 @@ Item {
         const timePart = root.isAllDayTask(task, dueDate)
             ? "--:--"
             : dueDate.toLocaleTimeString(Translation.locale, "HH:mm");
-        return Translation.tr("Due: %1").arg(`${datePart}, ${timePart}`);
+        return task?.source === "mail"
+            ? Translation.tr("Received: %1").arg(`${datePart}, ${timePart}`)
+            : task?.kind === "event"
+            ? Translation.tr("Starts: %1").arg(`${datePart}, ${timePart}`)
+            : Translation.tr("Due: %1").arg(`${datePart}, ${timePart}`);
     }
 
     StyledListView {
@@ -173,6 +179,8 @@ Item {
                         visible: !!todoItem.modelData.readOnly
                         text: {
                             const sourceName = `${todoItem.modelData.calendarName ?? ""}`.trim();
+                            if (todoItem.modelData.source === "mail")
+                                return Translation.tr("Mail: %1").arg(todoItem.modelData.account ?? "Thunderbird");
                             return sourceName.length > 0
                                 ? Translation.tr("Source: %1 (read-only)").arg(sourceName)
                                 : Translation.tr("Source: Thunderbird (read-only)");
@@ -188,6 +196,18 @@ Item {
                         Layout.bottomMargin: todoListItemPadding
                         Item {
                             Layout.fillWidth: true
+                        }
+                        TodoItemActionButton {
+                            Layout.fillWidth: false
+                            visible: !!todoItem.modelData.readOnly && root.readOnlyActionIcon.length > 0
+                            onClicked: root.readOnlyAction(todoItem.modelData)
+                            contentItem: MaterialSymbol {
+                                anchors.centerIn: parent
+                                horizontalAlignment: Text.AlignHCenter
+                                text: root.readOnlyActionIcon
+                                iconSize: Appearance.font.pixelSize.larger
+                                color: Appearance.colors.colOnLayer1
+                            }
                         }
                         TodoItemActionButton {
                             Layout.fillWidth: false

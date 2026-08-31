@@ -27,8 +27,8 @@ Rectangle {
         },
         {
             "type": "events",
-            "name": Translation.tr("Events"),
-            "icon": "event",
+            "name": Translation.tr("Hub"),
+            "icon": "dashboard",
             "widget": "todo/EventsTasksWidget.qml"
         },
         {
@@ -125,11 +125,11 @@ Rectangle {
         }
 
         StyledText {
-            property int remainingTasks: Todo.list.filter(task => !task.done).length
+            property int remainingTasks: UnifiedAgenda.openLocalTaskCount + UnifiedAgenda.openRemoteTaskCount
             Layout.margins: 10
             Layout.leftMargin: 0
             // text: `${DateTime.collapsedCalendarFormat}   •   ${remainingTasks} task${remainingTasks > 1 ? "s" : ""}`
-            text: Translation.tr("%1   •   %2 tasks").arg(DateTime.collapsedCalendarFormat).arg(remainingTasks)
+            text: Translation.tr("%1   •   %2 tasks   •   %3 unread").arg(DateTime.collapsedCalendarFormat).arg(remainingTasks).arg(UnifiedAgenda.unreadCount)
             font.pixelSize: Appearance.font.pixelSize.large
             color: Appearance.colors.colOnLayer1
         }

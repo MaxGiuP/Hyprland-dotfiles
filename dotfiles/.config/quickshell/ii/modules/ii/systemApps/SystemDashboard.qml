@@ -120,7 +120,7 @@ Item {
                             MetricCard { iconName: "jamboard_kiosk"; label: "GPU"; value: `${SystemMetrics.gpuUtil}% • ${SystemMetrics.vramPercent}% VRAM` }
                             MetricCard { iconName: "network_check"; label: "Network"; value: `↓ ${SystemMetrics.netDisplayDown.toFixed(1)} ↑ ${SystemMetrics.netDisplayUp.toFixed(1)} ${SystemMetrics.netDisplayUnit}` }
                             MetricCard { iconName: "system_update"; label: "Updates"; value: Updates.checking ? "Checking…" : `${Updates.count} available` }
-                            MetricCard { iconName: "checklist"; label: "Open tasks"; value: `${Todo.list.filter(item => !item.done).length}` }
+                            MetricCard { iconName: "event_note"; label: "Agenda & mail"; value: `${UnifiedAgenda.openLocalTaskCount + UnifiedAgenda.openRemoteTaskCount} tasks • ${UnifiedAgenda.unreadCount} unread` }
                         }
 
                         ContentSection {
@@ -151,17 +151,18 @@ Item {
                         ContentSection {
                             Layout.fillWidth: true
                             icon: "task_alt"
-                            title: "Next tasks"
+                            title: "Next up"
                             Repeater {
-                                model: Todo.list.filter(item => !item.done).slice(0, 5)
+                                model: UnifiedAgenda.agendaItems.slice(0, 5)
                                 delegate: RowLayout {
                                     required property var modelData
                                     Layout.fillWidth: true
-                                    MaterialSymbol { text: "radio_button_unchecked"; color: Appearance.colors.colPrimary }
+                                    MaterialSymbol { text: modelData.kind === "event" ? "event" : "radio_button_unchecked"; color: Appearance.colors.colPrimary }
                                     StyledText { Layout.fillWidth: true; text: modelData.title; color: Appearance.colors.colOnLayer1; elide: Text.ElideRight }
+                                    StyledText { visible: modelData.account.length > 0; text: modelData.account; color: Appearance.colors.colSubtext; font.pixelSize: Appearance.font.pixelSize.smaller }
                                 }
                             }
-                            StyledText { visible: Todo.list.filter(item => !item.done).length === 0; text: "Nothing pending."; color: Appearance.colors.colSubtext }
+                            StyledText { visible: UnifiedAgenda.agendaItems.length === 0; text: "Nothing pending."; color: Appearance.colors.colSubtext }
                         }
                     }
                 }
