@@ -208,8 +208,8 @@ Singleton {
         if (root.settingsApp)
             return;
 
-        fallbackDeviceProcess.running = false;
-        fallbackDeviceProcess.running = true;
+        if (!fallbackDeviceProcess.running)
+            fallbackDeviceProcess.running = true;
     }
 
     function attemptRestoreSavedDefaults() {
@@ -411,7 +411,7 @@ Singleton {
 
     Timer {
         id: volumePollTimer
-        interval: 1000
+        interval: 5000
         repeat: true
         running: true
         onTriggered: {
@@ -484,7 +484,7 @@ Singleton {
 
     Timer {
         id: fallbackRefreshTimer
-        interval: 5000
+        interval: 30000
         repeat: true
         running: !root.settingsApp
         onTriggered: {

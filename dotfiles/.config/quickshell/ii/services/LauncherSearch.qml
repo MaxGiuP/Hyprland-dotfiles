@@ -123,13 +123,25 @@ Singleton {
             name: Translation.tr("Calculator"),
             keywords: ["calculator", "calculate", "arithmetic", "math"],
             icon: "calculate",
-            execute: () => GlobalStates.openCalculator()
+            execute: () => Quickshell.execDetached(["qs", "-c", "ii", "ipc", "call", "systemApps", "calculator"])
         },
         {
-            name: Translation.tr("Timer"),
+            name: Translation.tr("Timers"),
             keywords: ["timer", "countdown", "stopwatch", "pomodoro"],
             icon: "schedule",
-            execute: () => GlobalStates.openTimer()
+            execute: () => Quickshell.execDetached(["qs", "-c", "ii", "ipc", "call", "systemApps", "timers"])
+        },
+        {
+            name: Translation.tr("System Dashboard"),
+            keywords: ["health", "modes", "workspaces", "privacy", "widgets", "today"],
+            icon: "space_dashboard",
+            execute: () => Quickshell.execDetached(["qs", "-c", "ii", "ipc", "call", "systemApps", "dashboard"])
+        },
+        {
+            name: Translation.tr("Workspace Atlas"),
+            keywords: ["workspace", "atlas", "overview", "monitor"],
+            icon: "grid_view",
+            execute: () => Quickshell.execDetached(["qs", "-c", "ii", "ipc", "call", "systemApps", "workspaces"])
         }
     ]
 
@@ -172,7 +184,7 @@ Singleton {
             runInTerminal: entry.runInTerminal,
             genericName: entry.genericName,
             keywords: entry.keywords,
-            actions: entry.actions.map(action => {
+            actions: (entry.actions ?? []).map(action => {
                 return resultComp.createObject(null, {
                     name: action.name,
                     iconName: action.icon,
@@ -300,7 +312,9 @@ Singleton {
             .fuzzyQuery(StringUtils.cleanPrefix(root.query, Config.options.search.prefix.app))
             .slice(0, root.appResultLimit)
             .map(entry => root.createAppResultObject(entry));
-        const shellDestinationObjects = root.fuzzyShellDestinations(root.query).map(destination => {
+        const shellDestinationObjects = root.fuzzyShellDestinations(root.query)
+            .filter(destination => !appResultObjects.some(app => app.name === destination.name))
+            .map(destination => {
             return resultComp.createObject(null, {
                 name: destination.name,
                 verb: Translation.tr("Open"),
@@ -309,7 +323,7 @@ Singleton {
                 iconType: LauncherSearchResult.IconType.Material,
                 execute: destination.execute
             });
-        });
+            });
         const commandResultObject = resultComp.createObject(null, {
             name: StringUtils.cleanPrefix(root.query, Config.options.search.prefix.shellCommand).replace("file://", ""),
             verb: Translation.tr("Run"),

@@ -19,177 +19,19 @@ MouseArea {
         Quickshell.execDetached(["bash", "-lc", Config.options.apps.taskManager])
     }
 
-    // GPU (NVIDIA via nvidia-smi -q)
-    property string gpuId: "0"
-    property bool gpuAvailable: true
-    property bool gpuDriverMismatch: false
-    property bool _gpuMismatchNotified: false
-    property int gpuUtil: 0
-    property int vramUsedMB: 0
-    property int vramTotalMB: 0
-    property int vramPercent: (vramTotalMB > 0) ? Math.round((vramUsedMB / vramTotalMB) * 100) : 0
-
-    Timer {
-        id: gpuTimer
-        interval: 2000
-        running: true
-        repeat: true
-        onTriggered: {
-            gpuQuery.buf = ""
-            gpuQuery.errBuf = ""
-            gpuQuery.running = false
-            gpuQuery.running = true
-        }
-    }
-
-    Process {
-        id: gpuQuery
-        environment: ({ LANG: "C", LC_ALL: "C" })
-        command: ["nvidia-smi", "-i", root.gpuId, "-q", "-d", "UTILIZATION,MEMORY"]
-        property string buf: ""
-        property string errBuf: ""
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: data => gpuQuery.buf += data + "\n"
-        }
-        stderr: SplitParser {
-            splitMarker: "\n"
-            onRead: data => gpuQuery.errBuf += data + "\n"
-        }
-        onExited: code => {
-            const t = gpuQuery.buf
-            const e = gpuQuery.errBuf
-            gpuQuery.buf = ""
-            gpuQuery.errBuf = ""
-
-            if (code !== 0) {
-                gpuAvailable = false
-                gpuUtil = 0
-                vramUsedMB = 0
-                vramTotalMB = 0
-                const isMismatch = (t + e).toLowerCase().includes("version mismatch")
-                if (isMismatch && !root._gpuMismatchNotified) {
-                    root.gpuDriverMismatch = true
-                    root._gpuMismatchNotified = true
-                    Quickshell.execDetached([
-                        "notify-send",
-                        "--urgency=critical",
-                        "--icon=nvidia",
-                        "GPU driver version mismatch",
-                        "nvidia-smi failed: kernel module and userspace library versions differ. A reboot is required."
-                    ])
-                }
-                return
-            }
-            root.gpuDriverMismatch = false
-            root._gpuMismatchNotified = false
-            gpuAvailable = true
-
-            const utilM = t.match(/Gpu\s*:\s*(\d+)\s*%/i)
-            if (utilM) gpuUtil = parseInt(utilM[1]) || 0
-
-            const fbM = t.match(/FB Memory Usage[\s\S]*?Total\s*:\s*(\d+)\s*MiB[\s\S]*?Used\s*:\s*(\d+)\s*MiB/i)
-            if (fbM) {
-                vramTotalMB = parseInt(fbM[1]) || 0
-                vramUsedMB  = parseInt(fbM[2]) || 0
-            }
-        }
-    }
-
-    // Network via /proc/net/dev
-    property string netIface: ""
-    property real downMbps: 0
-    property real upMbps: 0
-    property var _lastMap: ({})
-    property double _lastT: 0
-
-    // Autoscaled display values for popup
-    property real netDisplayDown: 0
-    property real netDisplayUp: 0
-    property string netDisplayUnit: "Mbps"
-
-    function updateNetDisplay() {
-        const absMax = Math.max(Math.abs(downMbps), Math.abs(upMbps))
-        var factor = 1
-        var unit = "Mbps"
-
-        if (absMax >= 1000) {
-            factor = 1 / 1000
-            unit = "Gbps"
-        } else if (absMax >= 1) {
-            factor = 1
-            unit = "Mbps"
-        } else if (absMax >= 0.001) {
-            factor = 1000
-            unit = "Kbps"
-        } else {
-            factor = 1000000
-            unit = "bps"
-        }
-
-        netDisplayUnit = unit
-        netDisplayDown = downMbps * factor
-        netDisplayUp   = upMbps * factor
-    }
-
-    onDownMbpsChanged: updateNetDisplay()
-    onUpMbpsChanged: updateNetDisplay()
-
-    Timer {
-        id: netTimer
-        interval: 1000
-        repeat: true
-        running: true
-        onTriggered: devView.reload()
-    }
-
-    FileView {
-        id: devView
-        path: "/proc/net/dev"
-        onLoaded: {
-            const now = Date.now()
-            const lines = (devView.text() || "").trim().split("\n").slice(2)
-
-            let map = {}
-            for (let i = 0; i < lines.length; i++) {
-                const parts = lines[i].split(":")
-                if (parts.length < 2) continue
-                const iface = parts[0].trim()
-                const fields = parts[1].trim().split(/\s+/)
-                if (fields.length < 10) continue
-                const rx = Number(fields[0])
-                const tx = Number(fields[8])
-                map[iface] = { rx, tx }
-            }
-
-            if (!netIface || !(netIface in map)) {
-                let best = ""
-                let bestSum = -1
-                for (const k in map) {
-                    if (k === "lo") continue
-                    const sum = (map[k].rx || 0) + (map[k].tx || 0)
-                    if (sum > bestSum) { best = k; bestSum = sum }
-                }
-                if (best) netIface = best
-            }
-
-            if (netIface && (netIface in map)) {
-                const curr = map[netIface]
-                if (_lastT > 0 && _lastMap[netIface]) {
-                    const dt = Math.max(1e-3, (now - _lastT) / 1000.0)
-                    const dRx = Math.max(0, curr.rx - _lastMap[netIface].rx)
-                    const dTx = Math.max(0, curr.tx - _lastMap[netIface].tx)
-                    downMbps = (dRx * 8) / 1e6 / dt
-                    upMbps   = (dTx * 8) / 1e6 / dt
-                }
-            }
-
-            _lastMap = map
-            _lastT = now
-
-            Qt.callLater(netSpark.pushSample)
-        }
-    }
+    readonly property string gpuId: Services.SystemMetrics.gpuId
+    readonly property bool gpuAvailable: Services.SystemMetrics.gpuAvailable
+    readonly property bool gpuDriverMismatch: Services.SystemMetrics.gpuDriverMismatch
+    readonly property int gpuUtil: Services.SystemMetrics.gpuUtil
+    readonly property int vramUsedMB: Services.SystemMetrics.vramUsedMB
+    readonly property int vramTotalMB: Services.SystemMetrics.vramTotalMB
+    readonly property int vramPercent: Services.SystemMetrics.vramPercent
+    readonly property string netIface: Services.SystemMetrics.netIface
+    readonly property real downMbps: Services.SystemMetrics.downMbps
+    readonly property real upMbps: Services.SystemMetrics.upMbps
+    readonly property real netDisplayDown: Services.SystemMetrics.netDisplayDown
+    readonly property real netDisplayUp: Services.SystemMetrics.netDisplayUp
+    readonly property string netDisplayUnit: Services.SystemMetrics.netDisplayUnit
 
     RowLayout {
         id: rowLayout
@@ -330,6 +172,11 @@ MouseArea {
                         drawLine(netSpark.upHist,   "#ff00d4")
                     }
                 }
+
+                Connections {
+                    target: Services.SystemMetrics
+                    function onNetworkSample() { netSpark.pushSample(); }
+                }
             }
         }
 
@@ -385,8 +232,4 @@ MouseArea {
         netDisplayUnit: root.netDisplayUnit
     }
 
-    Component.onCompleted: {
-        gpuTimer.triggered()
-        netTimer.triggered()
-    }
 }

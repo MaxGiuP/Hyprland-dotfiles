@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Timers
+GenericName=Timer
+Comment=Open Quickshell countdown, stopwatch and Pomodoro tools
+Exec=qs -c ii ipc call systemApps timers
+TryExec=qs
+Icon=org.gnome.Clocks
+Terminal=false
+Categories=Utility;Clock;
+Keywords=timer;countdown;stopwatch;pomodoro;quickshell;
+StartupNotify=false

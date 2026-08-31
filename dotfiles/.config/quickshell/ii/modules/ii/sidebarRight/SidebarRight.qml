@@ -66,9 +66,10 @@ Scope {
 
                 Loader {
                     id: sidebarContentLoader
-                    // Keep the expensive sidebar tree warm so opening never
-                    // waits for its controls, devices, and notifications to load.
-                    active: true
+                    // Keep it warm only when requested. Instantiating the full
+                    // sidebar tree for every monitor was one of the shell's
+                    // largest idle memory costs.
+                    active: screenScope.sidebarOpen || Config.options.sidebar.keepRightSidebarLoaded
                     x: root.sidebarWidth
                     y: Appearance.sizes.hyprlandGapsOut
                     width: root.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin

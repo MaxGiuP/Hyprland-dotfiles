@@ -920,6 +920,43 @@ layer_rule({
 -- # ######## Local window rules ########
 window_rule({
     match = {
+        class = [[^(org\.quickshell)$]],
+        title = [[^(Quickshell Calculator)$]],
+    },
+    float = true,
+    size = [[520 760]],
+    center = true,
+})
+window_rule({
+    match = {
+        class = [[^(org\.quickshell)$]],
+        title = [[^(Quickshell Timers)$]],
+    },
+    float = true,
+    size = [[620 560]],
+    center = true,
+})
+window_rule({
+    match = {
+        class = [[^(org\.quickshell)$]],
+        title = [[^(Quickshell System Dashboard)$]],
+    },
+    float = true,
+    size = [[980 760]],
+    center = true,
+})
+window_rule({
+    match = {
+        class = [[^(kitty|QSHealth)$]],
+        title = [[^(Quickshell Health Logs)$]],
+    },
+    float = true,
+    size = [[1100 760]],
+    center = true,
+})
+
+window_rule({
+    match = {
         class = [[^(kitty)$]],
         title = [[^(QSUpdate)$]],
     },

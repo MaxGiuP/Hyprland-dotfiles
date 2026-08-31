@@ -24,13 +24,6 @@ StyledPopup {
     property real netDisplayUp: 0
     property string netDisplayUnit: "Mbps"
 
-    function formatKB(kb) {
-        return (kb / (1024 * 1024)).toFixed(1) + " GB"
-    }
-    function formatMBToGB(mb) {
-        return (mb / 1024).toFixed(1) + " GB"
-    }
-
     Row {
         anchors.centerIn: parent
         spacing: 12
@@ -88,9 +81,9 @@ StyledPopup {
 
             Column {
                 spacing: 4
-                StyledPopupValueRow { icon: "clock_loader_60"; label: Services.Translation.tr("Used:");  value: root.formatKB(Services.ResourceUsage.memoryUsed || 0) }
-                StyledPopupValueRow { icon: "check_circle";     label: Services.Translation.tr("Free:");  value: root.formatKB(Services.ResourceUsage.memoryFree || 0) }
-                StyledPopupValueRow { icon: "empty_dashboard";  label: Services.Translation.tr("Total:"); value: root.formatKB(Services.ResourceUsage.memoryTotal || 0) }
+                StyledPopupValueRow { icon: "clock_loader_60"; label: Services.Translation.tr("Used:");  value: Services.ResourceUsage.kbToGbString(Services.ResourceUsage.memoryUsed || 0) }
+                StyledPopupValueRow { icon: "check_circle";     label: Services.Translation.tr("Free:");  value: Services.ResourceUsage.kbToGbString(Services.ResourceUsage.memoryFree || 0) }
+                StyledPopupValueRow { icon: "empty_dashboard";  label: Services.Translation.tr("Total:"); value: Services.ResourceUsage.kbToGbString(Services.ResourceUsage.memoryTotal || 0) }
                 StyledPopupValueRow { icon: "shield";           label: Services.Translation.tr("Max:");   value: Services.ResourceUsage.maxAvailableMemoryString }
             }
         }
@@ -124,7 +117,7 @@ StyledPopup {
                     icon: "memory"
                     label: Services.Translation.tr("VRAM:")
                     value: root.gpuAvailable
-                        ? `${root.formatMBToGB(root.vramUsedMB)} / ${root.formatMBToGB(root.vramTotalMB)}`
+                        ? `${(root.vramUsedMB / 1024).toFixed(1)} GB / ${(root.vramTotalMB / 1024).toFixed(1)} GB`
                         : Services.Translation.tr("N/A")
                 }
 
@@ -184,9 +177,9 @@ StyledPopup {
 
             Column {
                 spacing: 4
-                StyledPopupValueRow { icon: "clock_loader_60"; label: Services.Translation.tr("Used:");  value: root.formatKB(Services.ResourceUsage.swapUsed || 0) }
-                StyledPopupValueRow { icon: "check_circle";     label: Services.Translation.tr("Free:");  value: root.formatKB(Services.ResourceUsage.swapFree || 0) }
-                StyledPopupValueRow { icon: "empty_dashboard";  label: Services.Translation.tr("Total:"); value: root.formatKB(Services.ResourceUsage.swapTotal || 0) }
+                StyledPopupValueRow { icon: "clock_loader_60"; label: Services.Translation.tr("Used:");  value: Services.ResourceUsage.kbToGbString(Services.ResourceUsage.swapUsed || 0) }
+                StyledPopupValueRow { icon: "check_circle";     label: Services.Translation.tr("Free:");  value: Services.ResourceUsage.kbToGbString(Services.ResourceUsage.swapFree || 0) }
+                StyledPopupValueRow { icon: "empty_dashboard";  label: Services.Translation.tr("Total:"); value: Services.ResourceUsage.kbToGbString(Services.ResourceUsage.swapTotal || 0) }
                 StyledPopupValueRow { icon: "shield";           label: Services.Translation.tr("Max:");   value: Services.ResourceUsage.maxAvailableSwapString }
             }
         }

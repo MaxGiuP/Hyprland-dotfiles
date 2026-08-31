@@ -304,6 +304,46 @@ Singleton {
         dynamicRefreshDelay.restart()
     }
 
+    function validateConfiguredWallpaper() {
+        if (!Config.ready || root.settingsApp || wallpaperValidationProc.running)
+            return
+        const path = Config.options.background.wallpaperPath ?? ""
+        if (!path)
+            return
+        wallpaperValidationProc.requestedPath = path
+        wallpaperValidationProc.exec(["test", "-f", path])
+    }
+
+    Timer {
+        id: wallpaperValidationTimer
+        interval: 350
+        repeat: false
+        running: Config.ready && !root.settingsApp
+        onTriggered: root.validateConfiguredWallpaper()
+    }
+
+    Connections {
+        target: Config.options.background
+        function onWallpaperPathChanged() { wallpaperValidationTimer.restart() }
+    }
+
+    Process {
+        id: wallpaperValidationProc
+        property string requestedPath: ""
+        onExited: exitCode => {
+            if (exitCode === 0 || requestedPath !== (Config.options.background.wallpaperPath ?? ""))
+                return
+            if ((Config.options.background.wallpaperMode ?? "static") === "dynamic") {
+                root.dynamicNext()
+            } else {
+                Quickshell.execDetached([
+                    "notify-send", "--urgency=normal", "--icon=image-missing",
+                    "Wallpaper file is missing", "Choose a replacement from the wallpaper picker."
+                ])
+            }
+        }
+    }
+
     function refreshDynamicStatus(recoverIfStopped = false) {
         dynamicStatusProc.running = false
         dynamicStatusProc.recoverIfStopped = recoverIfStopped

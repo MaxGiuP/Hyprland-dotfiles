@@ -15,6 +15,7 @@ import QtQuick.Window
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import qs.modules.ii.systemApps
 
 ShellRoot {
     id: root
@@ -22,6 +23,7 @@ ShellRoot {
     // Stuff for every panel family
     ReloadPopup {}
     SoftwareDimmingOverlay {}
+    SystemApps {}
 
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()

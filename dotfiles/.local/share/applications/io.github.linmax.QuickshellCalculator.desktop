@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Calculator
+GenericName=Calculator
+Comment=Open the Quickshell scientific calculator
+Exec=qs -c ii ipc call systemApps calculator
+TryExec=qs
+Icon=accessories-calculator
+Terminal=false
+Categories=Utility;Calculator;
+Keywords=calculator;calculate;math;arithmetic;quickshell;
+StartupNotify=false

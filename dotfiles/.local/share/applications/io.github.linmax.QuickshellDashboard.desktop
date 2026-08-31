@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=System Dashboard
+GenericName=Control Center
+Comment=Health, desktop modes, workspaces, privacy and widgets
+Exec=qs -c ii ipc call systemApps dashboard
+TryExec=qs
+Icon=preferences-system
+Terminal=false
+Categories=System;
+Keywords=health;modes;workspaces;privacy;widgets;dashboard;quickshell;
+StartupNotify=false

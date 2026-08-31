@@ -11,6 +11,7 @@ h.exec_on_start("/usr/lib/pam_kwallet_init")
 h.exec_on_start("dbus-update-activation-environment --all")
 h.exec_on_start("sleep 1 && dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE DBUS_SESSION_BUS_ADDRESS HYPRCURSOR_THEME HYPRCURSOR_SIZE")
 h.exec_on_start("~/.config/hypr/hyprland/scripts/quickshell_restart_from_hyprland.sh $qsConfig")
+h.exec_on_start("systemctl --user start kdeconnect-bridge.service tv-mode-daemon.service kdeconnect-cursor-sync.service")
 
 -- Audio
 h.exec_on_start("easyeffects --hide-window --service-mode")
