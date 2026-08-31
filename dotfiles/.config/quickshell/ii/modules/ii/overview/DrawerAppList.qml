@@ -23,9 +23,31 @@ Item {
     readonly property int iconSize: 52
     property int selectedAppIndex: 0
     readonly property var navigationApps: root.recentApps.concat(root.sortedApps)
+    readonly property var rowModel: root.buildRowModel(root.sortedApps, root.recentApps)
 
     function activateFirstApp() {
         root.selectedAppIndex = 0
+        Qt.callLater(() => appList.positionViewAtBeginning())
+    }
+
+    function navigationCell(navigationIndex) {
+        for (let rowIndex = 0; rowIndex < root.rowModel.length; ++rowIndex) {
+            const row = root.rowModel[rowIndex]
+            if (row.type !== "apps")
+                continue
+
+            const offset = row.navigationOffset ?? -1
+            const appCount = (row.apps ?? []).length
+            if (navigationIndex >= offset && navigationIndex < offset + appCount)
+                return { rowIndex: rowIndex, column: navigationIndex - offset }
+        }
+        return null
+    }
+
+    function revealSelection() {
+        const cell = root.navigationCell(root.selectedAppIndex)
+        if (cell)
+            appList.positionViewAtIndex(cell.rowIndex, ListView.Contain)
     }
 
     function moveSelection(delta) {
@@ -33,6 +55,29 @@ Item {
         if (count === 0)
             return
         root.selectedAppIndex = Math.max(0, Math.min(count - 1, root.selectedAppIndex + delta))
+        Qt.callLater(root.revealSelection)
+    }
+
+    function moveVerticalSelection(direction) {
+        const cell = root.navigationCell(root.selectedAppIndex)
+        if (!cell)
+            return
+
+        for (let rowIndex = cell.rowIndex + direction;
+                rowIndex >= 0 && rowIndex < root.rowModel.length;
+                rowIndex += direction) {
+            const row = root.rowModel[rowIndex]
+            const apps = row.apps ?? []
+            if (row.type !== "apps" || apps.length <= cell.column)
+                continue
+
+            root.selectedAppIndex = row.navigationOffset + cell.column
+            Qt.callLater(root.revealSelection)
+            return
+        }
+
+        if (direction < 0)
+            root.returnToSearchAction?.()
     }
 
     function launchSelectedApp() {
@@ -49,12 +94,9 @@ Item {
         } else if (key === Qt.Key_Left) {
             root.moveSelection(-1)
         } else if (key === Qt.Key_Down) {
-            root.moveSelection(root.columns)
+            root.moveVerticalSelection(1)
         } else if (key === Qt.Key_Up) {
-            if (root.selectedAppIndex < root.columns)
-                root.returnToSearchAction?.()
-            else
-                root.moveSelection(-root.columns)
+            root.moveVerticalSelection(-1)
         } else if (key === Qt.Key_Return || key === Qt.Key_Enter) {
             root.launchSelectedApp()
         } else if (key === Qt.Key_Escape) {
@@ -297,7 +339,7 @@ Item {
         reuseItems: false
         ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-        model: root.buildRowModel(root.sortedApps, root.recentApps)
+        model: root.rowModel
 
         delegate: Item {
             id: rowItem
