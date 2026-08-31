@@ -168,6 +168,15 @@ Item {
                     font.pixelSize: Appearance.font.pixelSize.large
                 }
 
+                StyledText {
+                    Layout.alignment: Qt.AlignHCenter
+                    text: Translation.tr("Type a value or use the arrows, mouse wheel, and ↑/↓ keys")
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    color: Appearance.colors.colSubtext
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                }
+
                 TimeDialPicker {
                     id: dialPicker
                     Layout.alignment: Qt.AlignHCenter
@@ -183,9 +192,11 @@ Item {
 
                     Repeater {
                         model: [
+                            {"name": "01:00", "seconds": 1 * 60},
                             {"name": "05:00", "seconds": 5 * 60},
                             {"name": "15:00", "seconds": 15 * 60},
-                            {"name": "30:00", "seconds": 30 * 60}
+                            {"name": "30:00", "seconds": 30 * 60},
+                            {"name": "60:00", "seconds": 60 * 60}
                         ]
                         delegate: GroupButton {
                             required property var modelData
@@ -217,7 +228,7 @@ Item {
                         onClicked: root.showSettingsDialog = false
                     }
                     DialogButton {
-                        buttonText: Translation.tr("Save")
+                        buttonText: Translation.tr("Set timer")
                         padding: 8
                         onClicked: {
                             TimerService.setCountdownDuration(root.draftCountdownSeconds);

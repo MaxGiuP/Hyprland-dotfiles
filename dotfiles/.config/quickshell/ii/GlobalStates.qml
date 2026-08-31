@@ -13,6 +13,7 @@ Singleton {
     property bool crosshairOpen: false
     property bool sidebarLeftOpen: false
     property bool sidebarRightOpen: false
+    property bool newTaskRequested: false
     property bool mediaControlsOpen: false
     property bool liveCaptionsOpen: false
     property bool osdBrightnessOpen: false
@@ -404,6 +405,19 @@ Singleton {
             Persistent.states.sidebar.bottomGroup.collapsed = false
         }
         root.openSidebarRight(preferredScreen)
+    }
+
+    function openTodo(preferredScreen = "") {
+        if (Persistent.ready) {
+            Persistent.states.sidebar.bottomGroup.tab = 2
+            Persistent.states.sidebar.bottomGroup.collapsed = false
+        }
+        root.openSidebarRight(preferredScreen)
+    }
+
+    function openNewTask(preferredScreen = "") {
+        root.newTaskRequested = true
+        root.openTodo(preferredScreen)
     }
 
     function resolvedOverviewScreen(preferredScreen = "") {

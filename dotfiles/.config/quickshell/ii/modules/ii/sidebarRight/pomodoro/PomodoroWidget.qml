@@ -7,6 +7,7 @@ import QtQuick.Layouts
 
 Item {
     id: root
+    readonly property bool editingSettings: countdownPage.showSettingsDialog || pomodoroPage.showSettingsDialog
     property var tabButtonList: [
         {"name": Translation.tr("Countdown"), "icon": "hourglass_top"},
         {"name": Translation.tr("Stopwatch"), "icon": "timer"},
@@ -14,6 +15,15 @@ Item {
     ]
 
     Keys.onPressed: event => {
+        if (root.editingSettings) {
+            if (event.key === Qt.Key_Escape) {
+                countdownPage.showSettingsDialog = false;
+                pomodoroPage.showSettingsDialog = false;
+                root.forceActiveFocus();
+                event.accepted = true;
+            }
+            return;
+        }
         if ((event.key === Qt.Key_PageDown || event.key === Qt.Key_PageUp) && event.modifiers === Qt.NoModifier) {
             if (event.key === Qt.Key_PageDown) {
                 tabBar.incrementCurrentIndex();
@@ -71,9 +81,9 @@ Item {
             clip: true
             currentIndex: tabBar.currentIndex
 
-            CountdownTimer {}
+            CountdownTimer { id: countdownPage }
             Stopwatch {}
-            PomodoroTimer {}
+            PomodoroTimer { id: pomodoroPage }
         }
     }
 }

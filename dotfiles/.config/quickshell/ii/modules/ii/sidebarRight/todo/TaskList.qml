@@ -67,8 +67,6 @@ Item {
     }
 
     function formatDueLabel(task) {
-        if (task?.source === "local")
-            return "";
         const dueAt = parseInt(task?.dueAt ?? 0);
         if (!dueAt || dueAt <= 0) return "";
         const dueDate = new Date(dueAt);
@@ -76,6 +74,20 @@ Item {
         const timePart = root.isAllDayTask(task, dueDate)
             ? "--:--"
             : dueDate.toLocaleTimeString(Translation.locale, "HH:mm");
+        if (task?.source === "local") {
+            const now = new Date();
+            const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+            const tomorrowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
+            const dayAfterStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2).getTime();
+            const relativeDate = dueAt >= todayStart && dueAt < tomorrowStart
+                ? Translation.tr("Today")
+                : dueAt >= tomorrowStart && dueAt < dayAfterStart
+                    ? Translation.tr("Tomorrow")
+                    : datePart;
+            return dueAt < Date.now()
+                ? Translation.tr("Overdue: %1").arg(`${relativeDate}, ${timePart}`)
+                : Translation.tr("Due: %1").arg(`${relativeDate}, ${timePart}`);
+        }
         return task?.source === "mail"
             ? Translation.tr("Received: %1").arg(`${datePart}, ${timePart}`)
             : task?.kind === "event"
@@ -169,6 +181,10 @@ Item {
                         text: root.formatDueLabel(todoItem.modelData)
                         color: (todoItem.selected || (root.accentHighlightMatches && todoItem.highlighted))
                             ? Appearance.colors.colOnPrimary
+                            : todoItem.modelData.source === "local"
+                                && (parseInt(todoItem.modelData.dueAt ?? 0) || 0) > 0
+                                && (parseInt(todoItem.modelData.dueAt ?? 0) || 0) < Date.now()
+                                ? Appearance.colors.colError
                             : Appearance.colors.colSubtext
                         font.pixelSize: Appearance.font.pixelSize.smaller
                     }

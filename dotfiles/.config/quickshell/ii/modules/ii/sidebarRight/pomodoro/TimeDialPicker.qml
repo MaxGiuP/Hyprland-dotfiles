@@ -3,6 +3,7 @@ import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 
 Item {
@@ -18,87 +19,137 @@ Item {
     implicitHeight: timeRow.implicitHeight
 
     component TimeSegment: Item {
-        id: seg
+        id: segment
 
-        required property int segValue
-        required property int segMax
-        required property string segLabel
+        required property int segmentValue
+        required property int maximumValue
+        required property string label
 
-        signal segChanged(int newValue)
+        signal segmentChanged(int newValue)
 
-        implicitWidth: 58
-        implicitHeight: segLayout.implicitHeight
+        implicitWidth: 70
+        implicitHeight: segmentLayout.implicitHeight
+
+        function setValue(value) {
+            const range = segment.maximumValue + 1;
+            segment.segmentChanged(((value % range) + range) % range);
+        }
 
         function increment() {
-            segChanged(segValue >= segMax ? 0 : segValue + 1);
+            segment.setValue(segment.segmentValue + 1);
         }
+
         function decrement() {
-            segChanged(segValue <= 0 ? segMax : segValue - 1);
+            segment.setValue(segment.segmentValue - 1);
+        }
+
+        function commitInput() {
+            const parsed = parseInt(valueInput.text);
+            if (isNaN(parsed)) {
+                valueInput.text = segment.segmentValue.toString().padStart(2, "0");
+                return;
+            }
+            const nextValue = Math.max(0, Math.min(segment.maximumValue, parsed));
+            segment.segmentChanged(nextValue);
+            valueInput.text = nextValue.toString().padStart(2, "0");
         }
 
         ColumnLayout {
-            id: segLayout
+            id: segmentLayout
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 2
+            spacing: 3
 
-            StyledText {
+            RippleButton {
                 Layout.alignment: Qt.AlignHCenter
-                text: "▲"
-                font.pixelSize: Appearance.font.pixelSize.small
-                color: Appearance.colors.colSubtext
+                implicitWidth: 30
+                implicitHeight: 24
+                buttonRadius: Appearance.rounding.small
+                onClicked: segment.increment()
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "keyboard_arrow_up"
+                    iconSize: 18
+                    color: Appearance.colors.colOnLayer2
+                }
+            }
+
+            TextField {
+                id: valueInput
+                Layout.alignment: Qt.AlignHCenter
+                implicitWidth: 58
+                implicitHeight: 42
+                horizontalAlignment: TextInput.AlignHCenter
+                verticalAlignment: TextInput.AlignVCenter
+                leftPadding: 4
+                rightPadding: 4
+                selectByMouse: true
+                inputMethodHints: Qt.ImhDigitsOnly
+                validator: IntValidator { bottom: 0; top: segment.maximumValue }
+                color: Appearance.colors.colOnLayer2
+                selectionColor: Appearance.colors.colPrimaryContainer
+                selectedTextColor: Appearance.colors.colOnPrimaryContainer
+                font.family: Appearance.font.family.numbers
+                font.pixelSize: 24
+                text: segment.segmentValue.toString().padStart(2, "0")
+
+                background: Rectangle {
+                    radius: Appearance.rounding.small
+                    color: valueInput.activeFocus ? Appearance.colors.colLayer2Hover : Appearance.colors.colLayer2
+                    border.width: valueInput.activeFocus ? 2 : 1
+                    border.color: valueInput.activeFocus ? Appearance.colors.colPrimary : Appearance.colors.colOutlineVariant
+                }
+
+                onActiveFocusChanged: {
+                    if (activeFocus)
+                        selectAll();
+                    else
+                        segment.commitInput();
+                }
+                onAccepted: {
+                    segment.commitInput();
+                    nextItemInFocusChain(true).forceActiveFocus();
+                }
+                Keys.onUpPressed: event => {
+                    segment.increment();
+                    event.accepted = true;
+                }
+                Keys.onDownPressed: event => {
+                    segment.decrement();
+                    event.accepted = true;
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    acceptedButtons: Qt.NoButton
+                    onWheel: event => {
+                        if (event.angleDelta.y > 0)
+                            segment.increment();
+                        else if (event.angleDelta.y < 0)
+                            segment.decrement();
+                        event.accepted = true;
+                    }
+                }
+            }
+
+            RippleButton {
+                Layout.alignment: Qt.AlignHCenter
+                implicitWidth: 30
+                implicitHeight: 24
+                buttonRadius: Appearance.rounding.small
+                onClicked: segment.decrement()
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "keyboard_arrow_down"
+                    iconSize: 18
+                    color: Appearance.colors.colOnLayer2
+                }
             }
 
             StyledText {
                 Layout.alignment: Qt.AlignHCenter
-                text: seg.segValue.toString().padStart(2, "0")
-                font.pixelSize: 26
-            }
-
-            StyledText {
-                Layout.alignment: Qt.AlignHCenter
-                text: "▼"
-                font.pixelSize: Appearance.font.pixelSize.small
-                color: Appearance.colors.colSubtext
-            }
-
-            StyledText {
-                Layout.alignment: Qt.AlignHCenter
-                text: seg.segLabel
+                text: segment.label
                 font.pixelSize: Appearance.font.pixelSize.smaller
                 color: Appearance.colors.colSubtext
-            }
-        }
-
-        MouseArea {
-            anchors.fill: parent
-            hoverEnabled: true
-            property real pressY: 0
-            property int valueAtPress: 0
-            property bool didDrag: false
-
-            onPressed: event => {
-                pressY = event.y;
-                valueAtPress = seg.segValue;
-                didDrag = false;
-            }
-            onPositionChanged: event => {
-                if (!pressed) return;
-                const delta = Math.floor((pressY - event.y) / 7);
-                if (delta !== 0) didDrag = true;
-                const range = seg.segMax + 1;
-                seg.segChanged(((valueAtPress + delta) % range + range) % range);
-            }
-            onClicked: event => {
-                if (didDrag) return;
-                if (event.y < seg.height * 0.4)
-                    seg.increment();
-                else if (event.y > seg.height * 0.6)
-                    seg.decrement();
-            }
-            onWheel: event => {
-                if (event.angleDelta.y > 0) seg.increment();
-                else seg.decrement();
-                event.accepted = true;
             }
         }
     }
@@ -106,14 +157,14 @@ Item {
     RowLayout {
         id: timeRow
         anchors.centerIn: parent
-        spacing: 0
+        spacing: 4
 
         TimeSegment {
-            segValue: root.hourValue
-            segMax: 23
-            segLabel: Translation.tr("hr")
-            onSegChanged: v => {
-                root.hourValue = v;
+            segmentValue: root.hourValue
+            maximumValue: 23
+            label: Translation.tr("hr")
+            onSegmentChanged: value => {
+                root.hourValue = value;
                 root.valuesChanged(root.hourValue, root.minuteValue, root.secondValue);
             }
         }
@@ -122,18 +173,16 @@ Item {
             text: ":"
             font.pixelSize: 26
             Layout.alignment: Qt.AlignVCenter
-            Layout.bottomMargin: 22
-            leftPadding: 2
-            rightPadding: 2
+            Layout.bottomMargin: 24
             color: Appearance.colors.colSubtext
         }
 
         TimeSegment {
-            segValue: root.minuteValue
-            segMax: 59
-            segLabel: Translation.tr("min")
-            onSegChanged: v => {
-                root.minuteValue = v;
+            segmentValue: root.minuteValue
+            maximumValue: 59
+            label: Translation.tr("min")
+            onSegmentChanged: value => {
+                root.minuteValue = value;
                 root.valuesChanged(root.hourValue, root.minuteValue, root.secondValue);
             }
         }
@@ -142,18 +191,16 @@ Item {
             text: ":"
             font.pixelSize: 26
             Layout.alignment: Qt.AlignVCenter
-            Layout.bottomMargin: 22
-            leftPadding: 2
-            rightPadding: 2
+            Layout.bottomMargin: 24
             color: Appearance.colors.colSubtext
         }
 
         TimeSegment {
-            segValue: root.secondValue
-            segMax: 59
-            segLabel: Translation.tr("sec")
-            onSegChanged: v => {
-                root.secondValue = v;
+            segmentValue: root.secondValue
+            maximumValue: 59
+            label: Translation.tr("sec")
+            onSegmentChanged: value => {
+                root.secondValue = value;
                 root.valuesChanged(root.hourValue, root.minuteValue, root.secondValue);
             }
         }

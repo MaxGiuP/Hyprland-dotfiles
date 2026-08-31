@@ -141,6 +141,14 @@ Scope {
         function timer(): void {
             GlobalStates.openTimer();
         }
+
+        function todo(): void {
+            GlobalStates.openTodo();
+        }
+
+        function newTask(): void {
+            GlobalStates.openNewTask();
+        }
     }
 
     GlobalShortcut {
