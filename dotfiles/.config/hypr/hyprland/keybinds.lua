@@ -26,6 +26,13 @@ local function bind(modifiers, ...)
 end
 local superSearchMenu = [[~/.config/hypr/hyprland/scripts/super_search_menu.sh]]
 
+-- Drop bindings left behind by older Lua reloads before registering the
+-- launcher interrupts below. Doing this later also removes those interrupts,
+-- allowing Super+Arrow focus round trips to look like an untouched Super tap.
+for _, direction_key in ipairs({ "Left", "Right", "Up", "Down" }) do
+    hl.unbind("SUPER + " .. direction_key)
+end
+
 -- # Lines ending with `# [hidden]` won't be shown on cheatsheet
 -- # Lines starting with #! are section headings
 
@@ -130,10 +137,6 @@ bind([[Super+Shift+Alt]], [[mouse:273]], [[exec]], [[~/.config/hypr/hyprland/scr
 -- Interactive mouse binds are registered at the root in hyprland.lua.
 -- Hyprland 0.55 does not run these dispatchers correctly from a named submap.
 -- #/# bind = Super, ←/↑/→/↓,, # Focus in direction
--- Drop bindings left behind by older Lua reloads before replacing them.
-for _, direction_key in ipairs({ "Left", "Right", "Up", "Down" }) do
-    hl.unbind("SUPER + " .. direction_key)
-end
 bind([[Super]], [[Left]], h.focus_and_center_cursor([[l]]), nil, nil) -- [hidden]
 bind([[Super]], [[Right]], h.focus_and_center_cursor([[r]]), nil, nil) -- [hidden]
 bind([[Super]], [[Up]], h.focus_and_center_cursor([[u]]), nil, nil) -- [hidden]
