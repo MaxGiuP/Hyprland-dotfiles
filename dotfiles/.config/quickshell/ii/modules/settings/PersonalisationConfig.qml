@@ -70,7 +70,9 @@ Item {
             Loader {
                 id: styleLoader
                 active: swipeView.currentIndex === 1 || styleLoaded
-                asynchronous: true
+                // This page is large enough to trigger runaway memory use in Qt's
+                // incubating Loader path. Load it synchronously when first opened.
+                asynchronous: false
                 property bool styleLoaded: false
                 onStatusChanged: if (status === Loader.Ready) styleLoaded = true
                 source: "DesktopThemeConfig.qml"
