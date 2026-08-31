@@ -34,6 +34,10 @@ CONFLICT_ABORT=0                   # set to 1 when the user aborts conflict hand
 ASSUME_INSTALLED=()                # packages to pass as --assume-installed when skipping
 REBOOT_REQUIRED=0
 REBOOT_REASONS=()
+UPDATE_PLAN="full"
+REBOOT_UPDATE_PACKAGES=()
+declare -A REBOOT_PACKAGE_VERSIONS_BEFORE=()
+declare -A INSTALLED_KERNEL_PACKAGES=()
 
 conflict_pair_key() {
     local pkg_a="$1" pkg_b="$2"
@@ -406,6 +410,93 @@ count_updates() {
     rm -rf "$tmpdb"
     echo $((n + f))
 }
+
+pending_native_packages() {
+    local tmpdb="/tmp/reboot-plan-db-${UID}-$$" helper
+
+    if command -v checkupdates >/dev/null 2>&1; then
+        CHECKUPDATES_DB="$tmpdb" checkupdates 2>/dev/null || true
+    else
+        pacman -Qu 2>/dev/null || true
+    fi
+
+    helper=$(preferred_aur_helper 2>/dev/null || true)
+    if [ -n "$helper" ]; then
+        "$helper" -Qua 2>/dev/null || true
+    fi
+
+    rm -rf "$tmpdb"
+}
+
+is_reboot_sensitive_package() {
+    local pkg="$1"
+
+    [ -n "${INSTALLED_KERNEL_PACKAGES[$pkg]+x}" ] && return 0
+
+    case "$pkg" in
+        linux|linux-lts|linux-zen|linux-hardened|linux-rt|linux-rt-lts|linux-cachyos*)
+            return 0
+            ;;
+        linux-firmware|linux-firmware-*|amd-ucode|intel-ucode)
+            return 0
+            ;;
+        nvidia|nvidia-*|lib32-nvidia-*|opencl-nvidia|opencl-nvidia-*|lib32-opencl-nvidia*)
+            return 0
+            ;;
+        *-nvidia|*-nvidia-*)
+            return 0
+            ;;
+    esac
+
+    return 1
+}
+
+detect_reboot_sensitive_updates() {
+    local pkg owner
+    local -A seen=()
+
+    REBOOT_UPDATE_PACKAGES=()
+    REBOOT_PACKAGE_VERSIONS_BEFORE=()
+    INSTALLED_KERNEL_PACKAGES=()
+
+    while IFS= read -r owner; do
+        [ -n "$owner" ] && INSTALLED_KERNEL_PACKAGES[$owner]=1
+    done < <(pacman -Qqo /usr/lib/modules/*/vmlinuz 2>/dev/null | sort -u)
+
+    while IFS= read -r pkg; do
+        [ -n "$pkg" ] || continue
+        [ -z "${seen[$pkg]+x}" ] || continue
+        seen[$pkg]=1
+        is_reboot_sensitive_package "$pkg" || continue
+        REBOOT_UPDATE_PACKAGES+=("$pkg")
+        REBOOT_PACKAGE_VERSIONS_BEFORE[$pkg]="$(package_version "$pkg" || true)"
+    done < <(pending_native_packages | awk '{print $1}' | LC_ALL=C sort -u)
+}
+
+mark_updated_reboot_packages() {
+    local pkg before after
+    local -a changed=()
+
+    for pkg in "${REBOOT_UPDATE_PACKAGES[@]:-}"; do
+        before="${REBOOT_PACKAGE_VERSIONS_BEFORE[$pkg]:-}"
+        after=$(package_version "$pkg" || true)
+        [ "$before" != "$after" ] && changed+=("$pkg")
+    done
+
+    if [ "${#changed[@]}" -gt 0 ]; then
+        mark_reboot_required "reboot-sensitive packages updated: ${changed[*]}"
+    fi
+}
+
+if [ "${1:-}" = "--reboot-sensitive" ]; then
+    detect_reboot_sensitive_updates
+    if [ "${#REBOOT_UPDATE_PACKAGES[@]}" -eq 0 ]; then
+        echo "No pending reboot-sensitive package updates detected."
+    else
+        printf '%s\n' "${REBOOT_UPDATE_PACKAGES[@]}"
+    fi
+    exit 0
+fi
 
 # ── Fast path for badge ───────────────────────────────────────────────────────
 if [ "${1:-}" = "--count-only" ]; then
@@ -1174,6 +1265,59 @@ run_aur_updates() {
     return 1
 }
 
+choose_update_plan() {
+    local pkg choice
+
+    detect_reboot_sensitive_updates
+    [ "${#REBOOT_UPDATE_PACKAGES[@]}" -gt 0 ] || return 0
+
+    section "Restart-aware update plan"
+    echo -e "  ${WARN}  ${YELLOW}${BOLD}A reboot-sensitive system update is waiting.${R}"
+    echo
+    for pkg in "${REBOOT_UPDATE_PACKAGES[@]}"; do
+        echo -e "  ${YELLOW}●${R} ${WHITE}${pkg}${R}  ${DIM}${REBOOT_PACKAGE_VERSIONS_BEFORE[$pkg]:-installed}${R}"
+    done
+    echo
+    echo -e "  ${DIM}Kernel, graphics-driver, firmware, and microcode packages only become fully active after reboot.${R}"
+    echo -e "  ${DIM}Arch repository packages must stay in one complete transaction, so the updater will not create${R}"
+    echo -e "  ${DIM}an unsafe partial upgrade by separating pacman applications from these system packages.${R}"
+    echo
+    echo -e "  ${BOLD}Choose an update plan${R}"
+    echo -e "  ${GREEN}1)${R} Apps first, then full system update  ${GREEN}· recommended${R}"
+    echo -e "     ${DIM}Update Flatpak apps, then Arch/AUR together; offer a reboot when finished.${R}"
+    echo -e "  ${GREEN}2)${R} Apps only for now"
+    echo -e "     ${DIM}Update independent Flatpak apps and defer the complete Arch/AUR update.${R}"
+    echo -e "  ${GREEN}3)${R} Cancel"
+
+    if [ ! -t 0 ]; then
+        UPDATE_PLAN="apps-only"
+        echo -e "  ${DIM}No interactive terminal; choosing apps only and deferring the system transaction.${R}"
+        return 0
+    fi
+
+    while true; do
+        read -rp "  Choice [1]: " choice
+        choice="${choice:-1}"
+        case "$choice" in
+            1)
+                UPDATE_PLAN="full"
+                return 0
+                ;;
+            2)
+                UPDATE_PLAN="apps-only"
+                return 0
+                ;;
+            3)
+                UPDATE_PLAN="cancel"
+                return 0
+                ;;
+            *)
+                echo -e "  ${WARN}  ${YELLOW}Please enter 1, 2, or 3.${R}"
+                ;;
+        esac
+    done
+}
+
 # ── Banner ────────────────────────────────────────────────────────────────────
 clear
 echo
@@ -1216,45 +1360,63 @@ else
     echo -e "  ${WARN}  ${YELLOW}${BOLD}${msg}${R}"
 fi
 
+choose_update_plan
+if [ "$UPDATE_PLAN" = "cancel" ]; then
+    echo
+    echo -e "  ${DIM}Update cancelled; no packages were changed.${R}"
+    exit 0
+fi
+
+# Flatpak has its own runtime and repository model, so it is safe to update
+# before (or independently from) the native Arch transaction.
+section "Apps — ${T[FLATPAK]}"
+run_pkg "flatpak" flatpak update -y
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
-section "${T[AUTH]}"
 USE_SUDO=1
-if sudo -v 2>/dev/null; then
-    ok "sudo"
-elif command -v pkexec >/dev/null 2>&1; then
-    USE_SUDO=0
-    echo -e "  ${WARN}  ${YELLOW}${T[PKEXEC_FALLBACK]}${R}"
+if [ "$UPDATE_PLAN" = "full" ]; then
+    section "${T[AUTH]}"
+    if sudo -v 2>/dev/null; then
+        ok "sudo"
+    elif command -v pkexec >/dev/null 2>&1; then
+        USE_SUDO=0
+        echo -e "  ${WARN}  ${YELLOW}${T[PKEXEC_FALLBACK]}${R}"
+    else
+        fail "auth"
+        echo
+        echo -e "  ${RED}  ${T[NO_PRIV]}${R}"
+        echo
+        read -rp "  ${T[PRESS_ENTER]}"
+        exit 1
+    fi
 else
-    fail "auth"
-    echo
-    echo -e "  ${RED}  ${T[NO_PRIV]}${R}"
-    echo
-    read -rp "  ${T[PRESS_ENTER]}"
-    exit 1
+    SKIPPED+=("Arch system and AUR updates (deferred together)")
 fi
 
 priv() {
     if [ "$USE_SUDO" -eq 1 ]; then sudo "$@"; else pkexec "$@"; fi
 }
 
-VMWARE_WORKSTATION_BEFORE=$(package_version vmware-workstation || true)
-VMWARE_HOST_MODULES_PKG_BEFORE=$(detect_vmware_host_modules_pkg || true)
+VMWARE_WORKSTATION_BEFORE=""
+VMWARE_HOST_MODULES_PKG_BEFORE=""
 VMWARE_HOST_MODULES_BEFORE=""
-if [ -n "$VMWARE_HOST_MODULES_PKG_BEFORE" ]; then
-    VMWARE_HOST_MODULES_BEFORE=$(package_version "$VMWARE_HOST_MODULES_PKG_BEFORE" || true)
+KERNEL_BEFORE=""
+KERNEL_HEADERS_BEFORE=""
+if [ "$UPDATE_PLAN" = "full" ]; then
+    VMWARE_WORKSTATION_BEFORE=$(package_version vmware-workstation || true)
+    VMWARE_HOST_MODULES_PKG_BEFORE=$(detect_vmware_host_modules_pkg || true)
+    if [ -n "$VMWARE_HOST_MODULES_PKG_BEFORE" ]; then
+        VMWARE_HOST_MODULES_BEFORE=$(package_version "$VMWARE_HOST_MODULES_PKG_BEFORE" || true)
+    fi
+    KERNEL_BEFORE=$(package_version linux || true)
+    KERNEL_HEADERS_BEFORE=$(package_version linux-headers || true)
 fi
-KERNEL_BEFORE=$(package_version linux || true)
-KERNEL_HEADERS_BEFORE=$(package_version linux-headers || true)
 
-# ── pacman ────────────────────────────────────────────────────────────────────
-run_pacman_updates
-
-# ── AUR ───────────────────────────────────────────────────────────────────────
-run_aur_updates
-
-# ── flatpak ───────────────────────────────────────────────────────────────────
-section "${T[FLATPAK]}"
-run_pkg "flatpak" flatpak update -y
+if [ "$UPDATE_PLAN" = "full" ]; then
+    # Arch repository packages stay together in one full system transaction.
+    run_pacman_updates
+    run_aur_updates
+fi
 
 # ── quickshell (rebuild from source) ─────────────────────────────────────────
 rebuild_quickshell() {
@@ -1374,7 +1536,9 @@ rebuild_quickshell() {
     fi
 }
 
-rebuild_quickshell
+if [ "$UPDATE_PLAN" = "full" ]; then
+    rebuild_quickshell
+fi
 
 # ── VMware (host modules rebuild) ────────────────────────────────────────────
 repair_vmware() {
@@ -1583,7 +1747,9 @@ repair_vmware() {
     fi
 }
 
-repair_vmware
+if [ "$UPDATE_PLAN" = "full" ]; then
+    repair_vmware
+fi
 
 hyprland_binary_replaced() {
     local pid exe
@@ -1667,7 +1833,7 @@ prompt_reboot_if_required() {
 }
 
 # ── Deferred AUR conflict resolution ─────────────────────────────────────────
-if [ -n "$PENDING_AUR_HELPER" ]; then
+if [ "$UPDATE_PLAN" = "full" ] && [ -n "$PENDING_AUR_HELPER" ]; then
     section "Conflict Resolution — ${PENDING_AUR_HELPER}"
     _def_captured="$PENDING_AUR_CAPTURED"
     _def_ignore=("${PENDING_AUR_IGNORE_ARGS[@]}")
@@ -1722,7 +1888,10 @@ if [ -n "$PENDING_AUR_HELPER" ]; then
     [ "$_def_ok" -eq 1 ] && ok "$PENDING_AUR_HELPER" || fail "$PENDING_AUR_HELPER"
 fi
 
-check_post_update_runtime
+if [ "$UPDATE_PLAN" = "full" ]; then
+    mark_updated_reboot_packages
+    check_post_update_runtime
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo
@@ -1747,7 +1916,12 @@ if [ ${#FAILED[@]} -gt 0 ]; then
 fi
 
 echo
-echo -e "  ${GREEN}${BOLD}  ✔  ${T[ALL_DONE]}${R}"
+if [ "$UPDATE_PLAN" = "apps-only" ]; then
+    echo -e "  ${GREEN}${BOLD}  ✔  App updates finished.${R}"
+    echo -e "  ${DIM}     Arch system and AUR updates remain grouped and ready for a later full update.${R}"
+else
+    echo -e "  ${GREEN}${BOLD}  ✔  ${T[ALL_DONE]}${R}"
+fi
 echo
-prompt_reboot_if_required
+[ "$UPDATE_PLAN" = "full" ] && prompt_reboot_if_required
 read -rp "  ${T[PRESS_ENTER]}"
