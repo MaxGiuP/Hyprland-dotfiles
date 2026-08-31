@@ -69,42 +69,61 @@ Item {
             }
 
             Item {
+                readonly property bool customisationRequested: swipeView.currentIndex === 1
+                property bool customisationActivated: false
+                readonly property bool customisationReady: styleLoader.status === Loader.Ready
+                    && styleLoader.item
+                    && styleLoader.item.ready
+
+                onCustomisationRequestedChanged: {
+                    if (customisationRequested)
+                        customisationActivated = true
+                }
+                Component.onCompleted: {
+                    if (customisationRequested)
+                        customisationActivated = true
+                }
+
                 Loader {
                     id: styleLoader
                     anchors.fill: parent
-                    active: true
-                    property bool finishSynchronously: false
-                    asynchronous: !finishSynchronously
+                    active: parent.customisationActivated
+                    // The wrapper is intentionally tiny; it schedules the
+                    // expensive sections as bounded chunks between event turns.
+                    asynchronous: false
                     source: "DesktopThemeConfig.qml"
                 }
 
-                Timer {
-                    interval: 1500
-                    running: styleLoader.status === Loader.Loading && !styleLoader.finishSynchronously
-                    onTriggered: styleLoader.finishSynchronously = true
+                Rectangle {
+                    anchors.fill: parent
+                    z: 10
+                    visible: styleLoader.status === Loader.Null
+                        || styleLoader.status === Loader.Loading
+                        || (styleLoader.status === Loader.Ready && !parent.customisationReady)
+                    color: Appearance.m3colors.m3surfaceContainerLow
+
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: 14
+
+                        MaterialLoadingIndicator {
+                            Layout.alignment: Qt.AlignHCenter
+                            loading: parent.visible
+                            implicitSize: 52
+                        }
+
+                        StyledText {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: Translation.tr("Loading customisation settings")
+                            color: Appearance.colors.colSubtext
+                        }
+                    }
                 }
 
                 ColumnLayout {
                     anchors.centerIn: parent
                     spacing: 14
-                    visible: styleLoader.status === Loader.Null || styleLoader.status === Loader.Loading
-
-                    MaterialLoadingIndicator {
-                        Layout.alignment: Qt.AlignHCenter
-                        loading: parent.visible
-                        implicitSize: 52
-                    }
-
-                    StyledText {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: Translation.tr("Loading customisation settings")
-                        color: Appearance.colors.colSubtext
-                    }
-                }
-
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 14
+                    z: 11
                     visible: styleLoader.status === Loader.Error
 
                     MaterialSymbol {
@@ -125,7 +144,6 @@ Item {
                         materialIcon: "refresh"
                         mainText: Translation.tr("Try again")
                         onClicked: {
-                            styleLoader.finishSynchronously = false
                             styleLoader.source = ""
                             Qt.callLater(() => styleLoader.source = "DesktopThemeConfig.qml")
                         }

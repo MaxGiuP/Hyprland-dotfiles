@@ -240,6 +240,13 @@ Singleton {
         }));
     }
 
+    function collectedLines(text) {
+        return (text || "")
+            .split(/\r?\n/)
+            .map(value => value.trim())
+            .filter(value => value.length > 0);
+    }
+
     function saveGtk3(values) {
         let content = gtk3View.text() || "[Settings]\n";
         content = setIniValue(content, "Settings", "gtk-theme-name", values.theme);
@@ -507,11 +514,8 @@ Singleton {
         id: themeScanner
         running: false
         command: ["bash", "-lc", "find /usr/share/themes ~/.themes -maxdepth 1 -mindepth 1 -type d 2>/dev/null | xargs -r -n1 basename | sort -u"]
-        stdout: SplitParser {
-            onRead: data => {
-                const next = [...root.gtkThemeOptions.map(item => item.value), data];
-                root.gtkThemeOptions = root.toOptionList(next);
-            }
+        stdout: StdioCollector {
+            onStreamFinished: root.gtkThemeOptions = root.toOptionList(root.collectedLines(text))
         }
     }
 
@@ -519,10 +523,9 @@ Singleton {
         id: iconScanner
         running: false
         command: ["bash", "-lc", "find /usr/share/icons ~/.icons -maxdepth 1 -mindepth 1 -type d 2>/dev/null | xargs -r -n1 basename | sort -u"]
-        stdout: SplitParser {
-            onRead: data => {
-                const next = [...root.iconThemeOptions.map(item => item.value), data];
-                const options = root.toOptionList(next);
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const options = root.toOptionList(root.collectedLines(text));
                 root.iconThemeOptions = options;
                 root.cursorThemeOptions = options;
             }
@@ -533,11 +536,8 @@ Singleton {
         id: colorSchemeScanner
         running: false
         command: ["bash", "-lc", "find /usr/share/color-schemes ~/.local/share/color-schemes -maxdepth 1 -mindepth 1 \\( -name '*.colors' -o -type d \\) 2>/dev/null | sed 's#.*/##' | sed 's/\\.colors$//' | sort -u"]
-        stdout: SplitParser {
-            onRead: data => {
-                const next = [...root.kdeColorSchemeOptions.map(item => item.value), data];
-                root.kdeColorSchemeOptions = root.toOptionList(next);
-            }
+        stdout: StdioCollector {
+            onStreamFinished: root.kdeColorSchemeOptions = root.toOptionList(root.collectedLines(text))
         }
     }
 
@@ -545,11 +545,8 @@ Singleton {
         id: lookAndFeelScanner
         running: false
         command: ["bash", "-lc", "find /usr/share/plasma/look-and-feel ~/.local/share/plasma/look-and-feel -maxdepth 1 -mindepth 1 -type d 2>/dev/null | xargs -r -n1 basename | sort -u"]
-        stdout: SplitParser {
-            onRead: data => {
-                const next = [...root.kdeLookAndFeelOptions.map(item => item.value), data];
-                root.kdeLookAndFeelOptions = root.toOptionList(next);
-            }
+        stdout: StdioCollector {
+            onStreamFinished: root.kdeLookAndFeelOptions = root.toOptionList(root.collectedLines(text))
         }
     }
 
@@ -557,11 +554,8 @@ Singleton {
         id: kvantumScanner
         running: false
         command: ["bash", "-lc", "find /usr/share/Kvantum ~/.config/Kvantum -maxdepth 1 -mindepth 1 -type d 2>/dev/null | xargs -r -n1 basename | sort -u"]
-        stdout: SplitParser {
-            onRead: data => {
-                const next = [...root.kvantumThemeOptions.map(item => item.value), data];
-                root.kvantumThemeOptions = root.toOptionList(next);
-            }
+        stdout: StdioCollector {
+            onStreamFinished: root.kvantumThemeOptions = root.toOptionList(root.collectedLines(text))
         }
     }
 
@@ -569,11 +563,11 @@ Singleton {
         id: fontScanner
         running: false
         command: ["bash", "-lc", "fc-list : family | sed 's/,/\\n/g' | sed 's/^ *//;s/ *$//' | awk 'NF' | sort -u"]
-        stdout: SplitParser {
-            onRead: data => {
-                const next = [...root.defaultFontFamilyValues, ...root.fontFamilyOptions.map(item => item.value), data];
-                root.fontFamilyOptions = root.toOptionList(next);
-            }
+        stdout: StdioCollector {
+            onStreamFinished: root.fontFamilyOptions = root.toOptionList([
+                ...root.defaultFontFamilyValues,
+                ...root.collectedLines(text)
+            ])
         }
     }
 }
