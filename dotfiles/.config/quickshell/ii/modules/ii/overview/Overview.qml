@@ -337,6 +337,7 @@ Scope {
                 id: drawerAppList
                 anchors.fill: parent
                 onAppLaunched: GlobalStates.overviewOpen = false
+                closeAction: () => GlobalStates.overviewOpen = false
                 returnToSearchAction: () => {
                     GlobalStates.overviewDrawerMode = false
                     Qt.callLater(() => searchWidget.focusSearchInput())

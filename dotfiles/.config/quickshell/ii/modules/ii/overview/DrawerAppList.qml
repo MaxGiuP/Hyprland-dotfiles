@@ -16,6 +16,7 @@ Item {
 
     signal appLaunched()
     property var returnToSearchAction: null
+    property var closeAction: null
 
     readonly property int columns: 8
     readonly property int cellHeight: 108
@@ -25,10 +26,6 @@ Item {
 
     function activateFirstApp() {
         root.selectedAppIndex = 0
-        // Claim keyboard focus even if AppSearch is still populating. Returning
-        // before this handoff leaves the search field active until the pointer
-        // enters the drawer.
-        root.forceActiveFocus(Qt.TabFocusReason)
     }
 
     function moveSelection(delta) {
@@ -61,25 +58,11 @@ Item {
         } else if (key === Qt.Key_Return || key === Qt.Key_Enter) {
             root.launchSelectedApp()
         } else if (key === Qt.Key_Escape) {
-            root.returnToSearchAction?.()
+            root.closeAction?.()
         } else {
             return false
         }
         return true
-    }
-
-    focus: GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode
-    activeFocusOnTab: true
-
-    onNavigationAppsChanged: {
-        if (GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode && !root.activeFocus)
-            Qt.callLater(root.activateFirstApp)
-    }
-
-    Keys.onPressed: event => {
-        if (!root.handleKey(event.key))
-            return
-        event.accepted = true
     }
 
     // All apps sorted A-Z

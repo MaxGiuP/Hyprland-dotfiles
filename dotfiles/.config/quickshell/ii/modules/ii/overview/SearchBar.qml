@@ -65,9 +65,9 @@ RowLayout {
         Layout.topMargin: 4
         Layout.bottomMargin: 4
         implicitHeight: 40
-        // DrawerAppList owns the keyboard once drawer mode is active. Keeping
-        // this field focused made the handoff depend on pointer movement.
-        focus: GlobalStates.overviewOpen && !GlobalStates.overviewDrawerMode
+        // Keep one stable keyboard owner while the drawer is open. Arrow,
+        // Enter, and Escape events are forwarded below to DrawerAppList.
+        focus: GlobalStates.overviewOpen
         font.pixelSize: Appearance.font.pixelSize.small
         placeholderText: Translation.tr("Search, calculate or run")
         implicitWidth: root.searchingText == "" ? Appearance.sizes.searchWidthCollapsed : Appearance.sizes.searchWidth
