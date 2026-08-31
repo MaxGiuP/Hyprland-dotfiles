@@ -847,5 +847,8 @@
   "Showing all wireless adapters.": "Showing all wireless adapters.",
   "Shell appearance quick controls": "Shell appearance quick controls",
   "Close": "Close",
-  "No matching settings": "No matching settings"
+  "No matching settings": "No matching settings",
+  "Loading customisation settings": "Loading customisation settings",
+  "Customisation settings failed to load": "Customisation settings failed to load",
+  "Try again": "Try again"
 }

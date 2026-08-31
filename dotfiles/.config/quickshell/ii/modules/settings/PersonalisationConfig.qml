@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
 
@@ -67,15 +68,69 @@ Item {
                 source: "InterfaceConfig.qml"
             }
 
-            Loader {
-                id: styleLoader
-                active: swipeView.currentIndex === 1 || styleLoaded
-                // This page is large enough to trigger runaway memory use in Qt's
-                // incubating Loader path. Load it synchronously when first opened.
-                asynchronous: false
-                property bool styleLoaded: false
-                onStatusChanged: if (status === Loader.Ready) styleLoaded = true
-                source: "DesktopThemeConfig.qml"
+            Item {
+                Loader {
+                    id: styleLoader
+                    anchors.fill: parent
+                    active: true
+                    property bool finishSynchronously: false
+                    asynchronous: !finishSynchronously
+                    source: "DesktopThemeConfig.qml"
+                }
+
+                Timer {
+                    interval: 1500
+                    running: styleLoader.status === Loader.Loading && !styleLoader.finishSynchronously
+                    onTriggered: styleLoader.finishSynchronously = true
+                }
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: 14
+                    visible: styleLoader.status === Loader.Null || styleLoader.status === Loader.Loading
+
+                    MaterialLoadingIndicator {
+                        Layout.alignment: Qt.AlignHCenter
+                        loading: parent.visible
+                        implicitSize: 52
+                    }
+
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: Translation.tr("Loading customisation settings")
+                        color: Appearance.colors.colSubtext
+                    }
+                }
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: 14
+                    visible: styleLoader.status === Loader.Error
+
+                    MaterialSymbol {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: "error"
+                        iconSize: 42
+                        color: Appearance.colors.colError
+                    }
+
+                    StyledText {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: Translation.tr("Customisation settings failed to load")
+                        color: Appearance.colors.colSubtext
+                    }
+
+                    RippleButtonWithIcon {
+                        Layout.alignment: Qt.AlignHCenter
+                        materialIcon: "refresh"
+                        mainText: Translation.tr("Try again")
+                        onClicked: {
+                            styleLoader.finishSynchronously = false
+                            styleLoader.source = ""
+                            Qt.callLater(() => styleLoader.source = "DesktopThemeConfig.qml")
+                        }
+                    }
+                }
             }
         }
     }

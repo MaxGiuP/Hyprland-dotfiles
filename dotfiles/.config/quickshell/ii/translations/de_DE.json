@@ -1398,5 +1398,8 @@
   "%1 active links": "%1 aktive Verbindungen",
   "Using %1": "Über %1",
   "Clear search": "Suche löschen",
-  "No matching settings": "Keine passenden Einstellungen"
+  "No matching settings": "Keine passenden Einstellungen",
+  "Loading customisation settings": "Anpassungseinstellungen werden geladen",
+  "Customisation settings failed to load": "Anpassungseinstellungen konnten nicht geladen werden",
+  "Try again": "Erneut versuchen"
 }

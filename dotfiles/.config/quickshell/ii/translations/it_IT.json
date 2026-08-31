@@ -1341,5 +1341,8 @@
   "Strict": "Rigido",
   "Tap and drag": "Tocca e trascina",
   "Tap-to-click": "Tocco per fare clic",
-  "Touchpad": "Touchpad"
+  "Touchpad": "Touchpad",
+  "Loading customisation settings": "Caricamento delle impostazioni di personalizzazione",
+  "Customisation settings failed to load": "Impossibile caricare le impostazioni di personalizzazione",
+  "Try again": "Riprova"
 }

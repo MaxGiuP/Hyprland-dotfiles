@@ -11,6 +11,8 @@ ContentPage {
     forceWidth: true
     baseWidth: 860
 
+    Component.onCompleted: Qt.callLater(() => DesktopThemeSettings.refreshAll())
+
     // ── Cursor preview: extracts the left_ptr SVG from the .hlc zip ──────
     component CursorThemePreview: Item {
         id: cursorPreviewItem
