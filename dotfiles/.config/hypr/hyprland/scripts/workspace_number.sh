@@ -11,8 +11,6 @@ if [[ ! "$slot" =~ ^[0-9]+$ ]] || (( slot < 1 || slot > 10 )); then
     exit 2
 fi
 
-target="r~${slot}"
-
 hyprctl_json() {
     local output
 
@@ -28,7 +26,7 @@ hyprctl_json() {
     return 1
 }
 
-monitor_under_cursor() {
+workspace_under_cursor() {
     local cursor_json monitors_json cursor_x cursor_y
 
     cursor_json="$(hyprctl_json cursorpos -j || true)"
@@ -52,22 +50,52 @@ monitor_under_cursor() {
                 $cursor_x >= .x and $cursor_x < (.x + $width)
                 and $cursor_y >= .y and $cursor_y < (.y + $height)
             )
-            | .name
+            | .activeWorkspace.id
         ][0] // empty
     ' <<<"$monitors_json"
 }
 
-focus_monitor_under_cursor() {
-    local monitor
+active_window_workspace() {
+    local window_json
 
-    monitor="$(monitor_under_cursor || true)"
-    [[ -n "$monitor" ]] || return 0
-    "$dispatch_script" focusmonitor "$monitor" >/dev/null
+    window_json="$(hyprctl_json activewindow -j || true)"
+    jq -r '.workspace.id // empty' 2>/dev/null <<<"$window_json"
+}
+
+active_workspace() {
+    local workspace_json
+
+    workspace_json="$(hyprctl_json activeworkspace -j || true)"
+    jq -r '.id // empty' 2>/dev/null <<<"$workspace_json"
 }
 
 case "$mode" in
     focus)
-        focus_monitor_under_cursor
+        workspace_id="$(workspace_under_cursor || true)"
+        ;;
+    move|move-follow)
+        workspace_id="$(active_window_workspace || true)"
+        ;;
+    *)
+        echo "usage: $0 focus|move|move-follow <1-10>" >&2
+        exit 2
+        ;;
+esac
+
+if [[ ! "$workspace_id" =~ ^[0-9]+$ ]] || (( workspace_id < 1 )); then
+    workspace_id="$(active_workspace || true)"
+fi
+
+if [[ ! "$workspace_id" =~ ^[0-9]+$ ]] || (( workspace_id < 1 )); then
+    echo "could not determine the current workspace" >&2
+    exit 1
+fi
+
+workspace_base=$(( ((workspace_id - 1) / 10) * 10 ))
+target=$(( workspace_base + slot ))
+
+case "$mode" in
+    focus)
         exec "$dispatch_script" workspace "$target"
         ;;
     move)
@@ -75,9 +103,5 @@ case "$mode" in
         ;;
     move-follow)
         exec "$dispatch_script" movetoworkspace "$target"
-        ;;
-    *)
-        echo "usage: $0 focus|move|move-follow <1-10>" >&2
-        exit 2
         ;;
 esac

@@ -343,33 +343,10 @@ function M.workspace_slot(mode, slot)
             return
         end
 
-        if mode == "focus" then
-            -- Resolve the monitor at keypress time from the pointer, rather than
-            -- reusing the workspace captured when Super was first pressed.
-            -- That capture can still refer to the monitor we just left.
-            hl.exec_cmd(shell_quote(HOME .. "/.config/hypr/hyprland/scripts/workspace_number.sh")
-                .. " focus " .. shell_quote(slot))
-            return
-        end
-
-        local workspace_id = workspace_chord.workspace_id
-        local monitor = workspace_chord.monitor
-        if not workspace_id or (os.clock() - workspace_chord.captured_at) > 2 then
-            workspace_id, monitor = current_workspace_context()
-        end
-
-        if not workspace_id then
-            return
-        end
-
-        local base = math.floor((workspace_id - 1) / 10) * 10
-        local target = tostring(base + slot)
-
-        if mode == "move" then
-            hl.dispatch(hl.dsp.window.move({ workspace = target }))
-        elseif mode == "move-follow" then
-            hl.dispatch(hl.dsp.window.move({ workspace = target, follow = true }))
-        end
+        -- Resolve the workspace bank at keypress time from the intended monitor.
+        -- Relative selectors can otherwise resolve against monitor 1.
+        hl.exec_cmd(shell_quote(HOME .. "/.config/hypr/hyprland/scripts/workspace_number.sh")
+            .. " " .. shell_quote(mode) .. " " .. shell_quote(slot))
     end
 end
 
