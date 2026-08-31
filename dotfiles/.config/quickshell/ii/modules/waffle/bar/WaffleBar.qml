@@ -22,7 +22,8 @@ Scope {
                 screen: modelData
                 property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
                 readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
-                visible: !Config.options.bar.hideWhenFullscreen || !fullscreenOnMonitor
+                readonly property bool suppressForFullscreen: HyprlandData.monitorShouldSuppressShell(monitor?.name)
+                visible: !Config.options.bar.hideWhenFullscreen || !suppressForFullscreen
                 exclusionMode: ExclusionMode.Ignore
                 exclusiveZone: visible ? implicitHeight : 0
                 WlrLayershell.namespace: "quickshell:bar"

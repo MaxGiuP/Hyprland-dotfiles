@@ -33,7 +33,8 @@ Scope {
                 screen: barLoader.modelData
                 property HyprlandMonitor monitor: Hyprland.monitorFor(barLoader.modelData)
                 readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(monitor?.name)
-                visible: !Config.options.bar.hideWhenFullscreen || !fullscreenOnMonitor
+                readonly property bool suppressForFullscreen: HyprlandData.monitorShouldSuppressShell(monitor?.name)
+                visible: !Config.options.bar.hideWhenFullscreen || !suppressForFullscreen
 
                 property var brightnessMonitor: Brightness.getMonitorForScreen(barLoader.modelData)
                 

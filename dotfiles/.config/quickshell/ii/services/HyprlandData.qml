@@ -23,6 +23,9 @@ Singleton {
     property var activeWorkspace: null
     property var monitors: []
     property var layers: ({})
+    property bool clientsReady: false
+    property bool monitorsReady: false
+    readonly property bool fullscreenStateReady: clientsReady && monitorsReady
     property bool windowRefreshPending: false
     property bool monitorRefreshPending: false
     property var activeWorkspaceIdsByMonitor: ({})
@@ -297,6 +300,16 @@ Singleton {
         return false;
     }
 
+    // Fullscreen-hiding shell surfaces must fail closed during startup. Both
+    // hyprctl snapshots are asynchronous, and treating their initial empty
+    // arrays as authoritative makes bars flash over an already-fullscreen app
+    // whenever Quickshell is restarted.
+    function monitorShouldSuppressShell(monitorName) {
+        if (!root.fullscreenStateReady || !monitorName)
+            return true;
+        return root.activeWorkspaceHasFullscreenForMonitor(monitorName);
+    }
+
     function monitorShowsTvSpecialWorkspace(monitorName) {
         if (!monitorName)
             return false;
@@ -454,6 +467,7 @@ Singleton {
                 root.syncBrowserFullscreenStates(previousByAddress, tempWinByAddress);
                 root.windowByAddress = tempWinByAddress;
                 root.addresses = root.windowList.map(win => win.address);
+                root.clientsReady = true;
             }
         }
     }
@@ -483,6 +497,7 @@ Singleton {
                 const nextMonitors = JSON.parse(monitorsCollector.text);
                 root.reconcileMonitorWorkspaceState(nextMonitors);
                 root.monitors = nextMonitors;
+                root.monitorsReady = true;
             }
         }
     }

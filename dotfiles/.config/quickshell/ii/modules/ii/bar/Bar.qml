@@ -56,9 +56,10 @@ Scope {
                 readonly property string screenName: screenScope.modelData?.name ?? ""
                 readonly property bool tvOutput: screenName === "HDMI-A-2"
                 readonly property bool fullscreenOnMonitor: HyprlandData.activeWorkspaceHasFullscreenForMonitor(screenName)
+                readonly property bool suppressForFullscreen: HyprlandData.monitorShouldSuppressShell(screenName)
                 readonly property bool tvSpecialVisible: tvOutput && HyprlandData.monitorShowsTvSpecialWorkspace(screenName)
                 readonly property bool hideWhenFullscreen: Config.options.bar.hideWhenFullscreen ?? false
-                visible: !tvSpecialVisible
+                visible: !tvSpecialVisible && (!hideWhenFullscreen || !suppressForFullscreen)
                 readonly property bool topBarVisible: !Config.options.bar.bottom
                     && visible
                     && (!hideWhenFullscreen || !fullscreenOnMonitor)
