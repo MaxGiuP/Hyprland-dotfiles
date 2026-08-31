@@ -41,11 +41,14 @@ Scope {
 
             NotificationListView {
                 id: listview
+                // Keep dismissing notifications from bleeding into the
+                // screen-edge buffer while they animate to the right.
+                clip: true
                 anchors {
                     top: parent.top
                     bottom: parent.bottom
                     right: parent.right
-                    rightMargin: 4
+                    rightMargin: Appearance.sizes.elevationMargin
                     topMargin: 4
                 }
                 implicitWidth: parent.width - Appearance.sizes.elevationMargin * 2
