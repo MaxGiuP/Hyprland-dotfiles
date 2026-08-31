@@ -13,8 +13,21 @@ Scope {
     id: root
     readonly property bool isOpen: GlobalStates.layoutSwitcherOpen
     property string currentLayoutCommand: ""
+    property string targetScreenName: ""
+    readonly property var targetScreen: Quickshell.screens.find(screen => screen.name === targetScreenName)
+                                        ?? Quickshell.screens[0]
+                                        ?? null
     // Deliberately translucent while testing the compositor's layer blur.
     readonly property real frostedOpacity: 0.65
+
+    function prepareTargetScreen() {
+        const focusedName = HyprlandData.monitors.find(monitor => monitor.focused)?.name
+                            || HyprlandData.eventFocusedMonitorName
+                            || Hyprland.focusedMonitor?.name
+                            || "";
+        const focusedScreen = Quickshell.screens.find(screen => screen.name === focusedName);
+        root.targetScreenName = (focusedScreen ?? Quickshell.screens[0] ?? null)?.name ?? "";
+    }
 
     readonly property var layouts: [
         {
@@ -87,25 +100,19 @@ Scope {
         }
     ]
 
-    // Visual-only dimming surfaces sit below the selector's Overlay layer.
-    // Their empty input regions leave all pointer handling to the compositor.
-    Variants {
-        model: Quickshell.screens
-
-        PanelWindow {
-            id: dimWindow
-            required property ShellScreen modelData
-
-            visible: root.isOpen
-            screen: modelData
-            anchors { top: true; bottom: true; left: true; right: true }
-            exclusionMode: ExclusionMode.Ignore
-            WlrLayershell.namespace: "quickshell:layoutSwitcherDim"
-            WlrLayershell.layer: WlrLayer.Top
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
-            color: Qt.rgba(0, 0, 0, 0.42)
-            mask: Region {}
-        }
+    // The visual-only dimming surface follows the monitor that was focused
+    // when the selector opened and leaves pointer handling to the compositor.
+    PanelWindow {
+        id: dimWindow
+        visible: root.isOpen
+        screen: root.targetScreen
+        anchors { top: true; bottom: true; left: true; right: true }
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.namespace: "quickshell:layoutSwitcherDim"
+        WlrLayershell.layer: WlrLayer.Top
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        color: Qt.rgba(0, 0, 0, 0.42)
+        mask: Region {}
     }
 
     Loader {
@@ -118,7 +125,7 @@ Scope {
             id: panelWindow
             // This surface is only the dialog card.
             visible: root.isOpen
-            screen: Quickshell.screens.find(screen => screen.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
+            screen: root.targetScreen
 
             anchors { top: true; left: true }
             margins {
@@ -382,6 +389,7 @@ Scope {
     }
 
     function open() {
+        prepareTargetScreen();
         refreshCurrentLayout();
         GlobalStates.layoutSwitcherOpen = true;
     }
