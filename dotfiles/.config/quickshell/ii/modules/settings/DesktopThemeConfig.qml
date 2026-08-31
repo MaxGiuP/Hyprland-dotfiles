@@ -25,7 +25,8 @@ ContentPage {
     }
 
     function copyGtk4DraftToGnome(values) {
-        gnomeLoader.item?.setGtkDraft(values)
+        if (gnomeLoader.item && typeof gnomeLoader.item.setGtkDraft === "function")
+            gnomeLoader.item.setGtkDraft(values)
     }
 
     Component.onCompleted: {
