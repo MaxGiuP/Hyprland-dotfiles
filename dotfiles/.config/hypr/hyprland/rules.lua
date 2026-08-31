@@ -709,6 +709,20 @@ layer_rule({
 })
 layer_rule({
     match = {
+        namespace = [[quickshell:layoutSwitcher]],
+    },
+    blur = true,
+    ignore_alpha = [[0]],
+    xray = false,
+})
+layer_rule({
+    match = {
+        namespace = [[quickshell:layoutSwitcherDim]],
+    },
+    animation = [[fade]],
+})
+layer_rule({
+    match = {
         namespace = [[quickshell:bar]],
     },
     animation = [[slide]],
