@@ -21,8 +21,6 @@ Item { // Wrapper
     property string searchingText: LauncherSearch.query
     readonly property string displayedText: searchBar.searchInput.text
     property bool showResults: displayedText != ""
-    signal emptySearchDownPressed()
-    signal drawerKeyPressed(int key)
     implicitWidth: searchWidgetContent.implicitWidth + Appearance.sizes.elevationMargin * 2
     implicitHeight: searchWidgetContent.implicitHeight + searchBar.verticalPadding * 2 + Appearance.sizes.elevationMargin * 2
 
@@ -151,8 +149,6 @@ Item { // Wrapper
                 Synchronizer on searchingText {
                     property alias source: root.searchingText
                 }
-                onEmptySearchDownPressed: root.emptySearchDownPressed()
-                onDrawerKeyPressed: key => root.drawerKeyPressed(key)
             }
 
             Rectangle {

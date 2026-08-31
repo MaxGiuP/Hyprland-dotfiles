@@ -88,6 +88,25 @@ bind([[Super]], [[S]], [[global]], [[quickshell:sidebarRightToggle]], { descript
 -- Super+Ctrl+Shift+N respectively.
 bind([[Super+Alt]], [[N]], [[global]], [[quickshell:sidebarRightOpen]], { description = [[Open right sidebar]] })
 bind([[Super+Shift+Alt]], [[N]], [[global]], [[quickshell:sidebarRightClose]], { description = [[Close right sidebar]] })
+
+-- Route drawer navigation through compositor shortcuts instead of relying on
+-- pointer-sensitive QML focus. These remain non-consuming, so the same keys
+-- continue to work normally whenever the drawer is closed.
+for _, navigation in ipairs({
+    { key = [[Left]], shortcut = [[overviewDrawerLeft]], repeating = true },
+    { key = [[Right]], shortcut = [[overviewDrawerRight]], repeating = true },
+    { key = [[Up]], shortcut = [[overviewDrawerUp]], repeating = true },
+    { key = [[Down]], shortcut = [[overviewDrawerDown]], repeating = true },
+    { key = [[Return]], shortcut = [[overviewDrawerActivate]] },
+    { key = [[KP_Enter]], shortcut = [[overviewDrawerActivate]] },
+    { key = [[Escape]], shortcut = [[overviewDrawerEscape]] },
+}) do
+    bind([[]], navigation.key, [[global]], [[quickshell:]] .. navigation.shortcut, {
+        non_consuming = true,
+        transparent = true,
+        repeating = navigation.repeating,
+    }) -- [hidden]
+end
 bind([[Super]], [[Slash]], [[global]], [[quickshell:cheatsheetToggle]], { description = [[Toggle cheatsheet]] }) -- Toggle cheatsheet
 bind([[Super]], [[K]], [[global]], [[quickshell:oskToggle]], { description = [[Toggle on-screen keyboard]] }) -- Toggle on-screen keyboard
 

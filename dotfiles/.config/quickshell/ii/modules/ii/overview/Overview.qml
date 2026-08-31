@@ -164,6 +164,21 @@ Scope {
                 GlobalFocusGrab.addDismissable(panelWindow);
         }
 
+        function routeDrawerKey(key) {
+            if (!GlobalStates.overviewOpen)
+                return;
+
+            if (!GlobalStates.overviewDrawerMode) {
+                if (key === Qt.Key_Down && searchWidget.displayedText.length === 0) {
+                    GlobalStates.overviewDrawerMode = true;
+                    drawerAppList.activateFirstApp();
+                }
+                return;
+            }
+
+            drawerAppList.handleKey(key);
+        }
+
         function handleOverviewClosed() {
             entranceDelay.stop();
             panelWindow.entranceShown = false;
@@ -236,6 +251,18 @@ Scope {
             transform: Translate { y: columnLayout.slideY }
 
             Keys.onPressed: event => {
+                // Drawer keys are handled by the compositor shortcuts below.
+                // Do not also treat Left/Right as workspace navigation when the
+                // same non-consuming event reaches the focused search field.
+                if (GlobalStates.overviewDrawerMode) {
+                    if (event.key === Qt.Key_Left || event.key === Qt.Key_Right
+                            || event.key === Qt.Key_Up || event.key === Qt.Key_Down
+                            || event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                            || event.key === Qt.Key_Escape)
+                        event.accepted = true;
+                    return;
+                }
+
                 if (event.key === Qt.Key_Escape) {
                     GlobalStates.overviewOpen = false;
                 } else if (event.key === Qt.Key_Left) {
@@ -253,11 +280,6 @@ Scope {
                 Synchronizer on searchingText {
                     property alias source: panelWindow.searchingText
                 }
-                onEmptySearchDownPressed: {
-                    GlobalStates.overviewDrawerMode = true
-                    Qt.callLater(() => drawerAppList.activateFirstApp())
-                }
-                onDrawerKeyPressed: key => drawerAppList.handleKey(key)
             }
 
             Loader {
@@ -343,6 +365,31 @@ Scope {
                     Qt.callLater(() => searchWidget.focusSearchInput())
                 }
             }
+        }
+
+        GlobalShortcut {
+            name: "overviewDrawerLeft"
+            onPressed: panelWindow.routeDrawerKey(Qt.Key_Left)
+        }
+        GlobalShortcut {
+            name: "overviewDrawerRight"
+            onPressed: panelWindow.routeDrawerKey(Qt.Key_Right)
+        }
+        GlobalShortcut {
+            name: "overviewDrawerUp"
+            onPressed: panelWindow.routeDrawerKey(Qt.Key_Up)
+        }
+        GlobalShortcut {
+            name: "overviewDrawerDown"
+            onPressed: panelWindow.routeDrawerKey(Qt.Key_Down)
+        }
+        GlobalShortcut {
+            name: "overviewDrawerActivate"
+            onPressed: panelWindow.routeDrawerKey(Qt.Key_Return)
+        }
+        GlobalShortcut {
+            name: "overviewDrawerEscape"
+            onPressed: panelWindow.routeDrawerKey(Qt.Key_Escape)
         }
     }
     }

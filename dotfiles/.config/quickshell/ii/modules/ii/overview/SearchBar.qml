@@ -14,8 +14,6 @@ RowLayout {
     property bool animateWidth: false
     property alias searchInput: searchInput
     property string searchingText
-    signal emptySearchDownPressed()
-    signal drawerKeyPressed(int key)
 
     function forceFocus() {
         searchInput.forceActiveFocus();
@@ -65,8 +63,8 @@ RowLayout {
         Layout.topMargin: 4
         Layout.bottomMargin: 4
         implicitHeight: 40
-        // Keep one stable keyboard owner while the drawer is open. Arrow,
-        // Enter, and Escape events are forwarded below to DrawerAppList.
+        // Keep the search field ready for typing whenever the overview owns
+        // the keyboard. Drawer navigation itself is compositor-routed.
         focus: GlobalStates.overviewOpen
         font.pixelSize: Appearance.font.pixelSize.small
         placeholderText: Translation.tr("Search, calculate or run")
@@ -95,17 +93,7 @@ RowLayout {
         }
 
         Keys.onPressed: event => {
-            if (GlobalStates.overviewDrawerMode
-                    && (event.key === Qt.Key_Left || event.key === Qt.Key_Right
-                        || event.key === Qt.Key_Up || event.key === Qt.Key_Down
-                        || event.key === Qt.Key_Return || event.key === Qt.Key_Enter
-                        || event.key === Qt.Key_Escape)) {
-                root.drawerKeyPressed(event.key)
-                event.accepted = true
-            } else if (event.key === Qt.Key_Down && searchInput.text.length === 0) {
-                root.emptySearchDownPressed()
-                event.accepted = true
-            } else if (event.key === Qt.Key_Tab) {
+            if (event.key === Qt.Key_Tab) {
                 if (LauncherSearch.results.length === 0) return;
                 const tabbedText = LauncherSearch.results[0].name;
                 LauncherSearch.query = tabbedText;
