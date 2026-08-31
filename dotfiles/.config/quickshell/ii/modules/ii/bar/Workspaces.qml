@@ -128,13 +128,19 @@ Item {
     implicitWidth: root.vertical ? Appearance.sizes.verticalBarWidth : (root.workspaceButtonWidth * root.workspacesShown)
     implicitHeight: root.vertical ? (root.workspaceButtonWidth * root.workspacesShown) : Appearance.sizes.barHeight
 
+    WheelStepAccumulator {
+        id: wheelSteps
+    }
+
     // Scroll to switch workspaces
     WheelHandler {
         onWheel: (event) => {
-            if (event.angleDelta.y < 0) {
-                HyprlandDispatch.dispatch(`workspace r+1`);
-            } else if (event.angleDelta.y > 0) {
-                HyprlandDispatch.dispatch(`workspace r-1`);
+            const steps = wheelSteps.takeSteps(event.angleDelta.y);
+            for (let index = 0; index < Math.abs(steps); ++index) {
+                if (steps < 0)
+                    HyprlandDispatch.dispatch(`workspace r+1`);
+                else
+                    HyprlandDispatch.dispatch(`workspace r-1`);
             }
         }
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad

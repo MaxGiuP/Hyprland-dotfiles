@@ -9,11 +9,18 @@ TabBar {
     property real indicatorPadding: 8
     Layout.fillWidth: true
 
+    WheelStepAccumulator {
+        id: wheelSteps
+    }
+
     background: Item {
         WheelHandler {
             onWheel: (event) => {
-                if (event.angleDelta.y < 0) root.incrementCurrentIndex();
-                else if (event.angleDelta.y > 0) root.decrementCurrentIndex();
+                const steps = wheelSteps.takeSteps(event.angleDelta.y);
+                for (let index = 0; index < Math.abs(steps); ++index) {
+                    if (steps < 0) root.incrementCurrentIndex();
+                    else root.decrementCurrentIndex();
+                }
             }
             acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         }

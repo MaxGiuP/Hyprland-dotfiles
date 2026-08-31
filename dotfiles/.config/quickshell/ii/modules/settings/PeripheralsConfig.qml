@@ -432,15 +432,26 @@ ContentPage {
         }
 
         ConfigSlider {
-            text: `${Translation.tr("Scroll factor")} (${root.rounded(Config.options.peripherals.mouse.scrollFactor)})`
+            text: `${Translation.tr("Wheel speed")} (${root.rounded(Config.options.peripherals.mouse.scrollFactor)})`
             buttonIcon: "swap_vert"
             textWidth: 200
             value: Config.options.peripherals.mouse.scrollFactor
-            from: 0.25
-            to: 3
-            stopIndicatorValues: [1]
+            from: 0.05
+            to: 2
+            stepSize: 0.05
+            stopIndicatorValues: [0.25, 0.5, 1, 1.5]
             usePercentTooltip: false
+            tooltipDecimals: 2
             onValueChanged: Config.options.peripherals.mouse.scrollFactor = value
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            Layout.leftMargin: 8
+            Layout.rightMargin: 8
+            wrapMode: Text.Wrap
+            color: Appearance.colors.colSubtext
+            text: Translation.tr("1.00 is one standard wheel step. Lower values slow scrolling; higher values speed it up.")
         }
 
         ContentSubsection {
@@ -968,14 +979,14 @@ ContentPage {
 
         ContentSubsection {
             visible: LogitechG502.controlAvailable("high_res_scroll")
-            title: Translation.tr("High-resolution wheel")
+            title: Translation.tr("Wheel event mode")
 
             ConfigRow {
                 uniform: true
 
                 ConfigSwitch {
                     buttonIcon: "mouse"
-                    text: Translation.tr("High-resolution scrolling")
+                    text: Translation.tr("High-resolution wheel events")
                     checked: root.g502HighResolutionScroll
                     onCheckedChanged: root.g502HighResolutionScroll = checked
                 }
@@ -984,9 +995,22 @@ ContentPage {
                     Layout.fillWidth: true
                     enabled: LogitechG502.connected && !LogitechG502.actionRunning
                     materialIcon: "save"
-                    mainText: Translation.tr("Apply wheel resolution")
+                    mainText: Translation.tr("Apply wheel mode")
                     onClicked: LogitechG502.set("high_res_scroll", root.g502HighResolutionScroll ? "on" : "off")
                 }
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                Layout.leftMargin: 8
+                Layout.rightMargin: 8
+                wrapMode: Text.Wrap
+                color: root.g502HighResolutionScroll
+                    ? Appearance.colors.colOnLayer1
+                    : Appearance.colors.colSubtext
+                text: root.g502HighResolutionScroll
+                    ? Translation.tr("Recommended. Smooth, responsive scrolling in browsers; Quickshell combines the partial events into one action per wheel notch.")
+                    : Translation.tr("Compatibility mode sends coarser wheel events and can feel unusually slow in browsers.")
             }
         }
 

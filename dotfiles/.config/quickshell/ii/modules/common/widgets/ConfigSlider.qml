@@ -1,6 +1,7 @@
 import qs.modules.common.widgets
 import qs.modules.common
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import qs.services
 
@@ -15,8 +16,10 @@ RowLayout {
     property string text: ""
     property string buttonIcon: ""
     property alias value: slider.value
+    property alias stepSize: slider.stepSize
     property alias stopIndicatorValues: slider.stopIndicatorValues
     property bool usePercentTooltip: true
+    property int tooltipDecimals: 0
     property real from: slider.from
     property real to: slider.to
     property real textWidth: 120
@@ -47,6 +50,10 @@ RowLayout {
         Layout.minimumWidth: 120
         configuration: StyledSlider.Configuration.XS
         usePercentTooltip: root.usePercentTooltip
+        snapMode: root.stepSize > 0 ? Slider.SnapAlways : Slider.NoSnap
+        tooltipContent: root.usePercentTooltip
+            ? `${Math.round(((value - from) / (to - from)) * 100)}%`
+            : Number(value).toFixed(root.tooltipDecimals)
         value: root.value
         from: root.from
         to: root.to

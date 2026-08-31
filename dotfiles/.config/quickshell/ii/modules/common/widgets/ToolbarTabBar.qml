@@ -36,6 +36,10 @@ Item {
         }
     }
 
+    WheelStepAccumulator {
+        id: wheelSteps
+    }
+
     Row {
         id: contentItem
         z: 1
@@ -79,10 +83,12 @@ Item {
         acceptedButtons: Qt.NoButton
         cursorShape: Qt.PointingHandCursor
         onWheel: event => {
-            if (event.angleDelta.y < 0) {
-                root.incrementCurrentIndex();
-            } else {
-                root.decrementCurrentIndex();
+            const steps = wheelSteps.takeSteps(event.angleDelta.y);
+            for (let index = 0; index < Math.abs(steps); ++index) {
+                if (steps < 0)
+                    root.incrementCurrentIndex();
+                else
+                    root.decrementCurrentIndex();
             }
         }
     }

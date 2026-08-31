@@ -128,7 +128,7 @@ QtObject {
         { label: "Startup commands autostart", page: 12, icon: "deployed_code" },
         { label: "Mouse sensitivity", page: 2, icon: "mouse" },
         { label: "Mouse acceleration profile", page: 2, icon: "mouse" },
-        { label: "Mouse scroll factor", page: 2, icon: "mouse" },
+        { label: "Mouse wheel speed", page: 2, icon: "mouse" },
         { label: "Follow mouse focus", page: 2, icon: "mouse" },
         { label: "Left-handed mouse", page: 2, icon: "mouse" },
         { label: "Touchpad natural scroll", page: 2, icon: "touchpad_mouse" },

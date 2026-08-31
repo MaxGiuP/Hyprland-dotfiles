@@ -17,6 +17,10 @@ MouseArea { // Right side | scroll to change volume
     acceptedButtons: Qt.LeftButton | Qt.MiddleButton
     hoverEnabled: true
 
+    WheelStepAccumulator {
+        id: wheelSteps
+    }
+
     onEntered: {
         root.hovered = true
     }
@@ -27,10 +31,13 @@ MouseArea { // Right side | scroll to change volume
     }
 
     onWheel: event => {
-        if (event.angleDelta.y < 0)
-            root.scrollDown(event.angleDelta.y)
-        else if (event.angleDelta.y > 0)
-            root.scrollUp(event.angleDelta.y)
+        const steps = wheelSteps.takeSteps(event.angleDelta.y);
+        for (let index = 0; index < Math.abs(steps); ++index) {
+            if (steps < 0)
+                root.scrollDown(-wheelSteps.stepSize);
+            else
+                root.scrollUp(wheelSteps.stepSize);
+        }
 
         root.lastScrollX = event.x
         root.lastScrollY = event.y

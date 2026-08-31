@@ -191,7 +191,7 @@ Singleton {
             input: {
                 sensitivity: root.roundNumber(root.clampNumber(mouse.sensitivity, root.mouseSensitivityMin, root.mouseSensitivityMax, 0), 2),
                 accel_profile: root.profileValue(mouse.accelProfile),
-                scroll_factor: root.roundNumber(root.clampNumber(mouse.scrollFactor, 0.25, 3, 1), 2),
+                scroll_factor: root.roundNumber(root.clampNumber(mouse.scrollFactor, 0.05, 2, 1), 2),
                 follow_mouse: Math.round(root.clampNumber(mouse.followMouse, 0, 3, 1)),
                 left_handed: root.boolValue(mouse.leftHanded),
                 numlock_by_default: root.boolValue(keyboard.numlockByDefault),
@@ -258,7 +258,7 @@ Singleton {
     }
 
     function applyMouseScrollFactor(value = Config.options.peripherals.mouse.scrollFactor) {
-        root.applyConfig("input.scroll_factor", root.roundNumber(root.clampNumber(value, 0.25, 3, 1), 2));
+        root.applyConfig("input.scroll_factor", root.roundNumber(root.clampNumber(value, 0.05, 2, 1), 2));
     }
 
     function applyFollowMouse(value = Config.options.peripherals.mouse.followMouse) {
