@@ -566,8 +566,18 @@ ContentPage {
         }
     }
 
+    RowLayout {
+        id: internetOverviewRow
+        Layout.fillWidth: true
+        spacing: 16
+
     ContentSection {
         id: internetMainSection
+        Layout.fillWidth: !networksSection.visible
+        Layout.minimumWidth: networksSection.visible ? 280 : 0
+        Layout.preferredWidth: networksSection.visible ? 300 : internetOverviewRow.width
+        Layout.maximumWidth: networksSection.visible ? 320 : Number.POSITIVE_INFINITY
+        Layout.alignment: Qt.AlignTop
         icon: root.wifiEnabled ? "wifi" : "wifi_off"
         title: Translation.tr("Internet")
 
@@ -877,6 +887,8 @@ ContentPage {
 
     ContentSection {
         id: networksSection
+        Layout.fillWidth: true
+        Layout.alignment: Qt.AlignTop
         visible: root.wifiCards.length > 0 && !root.showingEthernet
         icon: "network_wifi"
         title: Translation.tr("Available networks")
@@ -1147,6 +1159,8 @@ ContentPage {
                 NumberAnimation { duration: root.uiAnimationDuration; easing.type: Easing.OutCubic }
             }
         }
+    }
+
     }
 
     ContentSection {
