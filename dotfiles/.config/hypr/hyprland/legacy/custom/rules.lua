@@ -12,33 +12,12 @@ window_rule({
 })
 -- window_rule({ match = { class = [[^(kitty)$]] }, opacity = [[0.96]] })
 
--- Thunderbird calendar/reminder popups
-window_rule({
-    match = {
-        class = [[^(thunderbird|Thunderbird)$]],
-        title = [[^(.*(Reminder|Promemoria|Calendar|Event).*)$]],
-    },
-    float = true,
-    center = true,
-})
-
 -- KDE portal dialog
 window_rule({
     match = { class = [[^(org\.freedesktop\.impl\.portal\.desktop\.kde)$]] },
     float = true,
     size = [[1000 725]],
     center = true,
-})
-
--- Thunderbird: compose/event editor windows should open as floating dialogs
-window_rule({
-    match = {
-        class = [[^(thunderbird|Thunderbird)$]],
-        title = [[^((Write|Compose|Scrivi|Nuovo messaggio|New Message|Message Compose|Event|New Event|Edit Event|Nuovo evento|Modifica evento).*)$]],
-    },
-    float = true,
-    center = true,
-    size = [[1280 860]],
 })
 
 -- Nautilus/Files: keep fully opaque and disable blur bleed-through

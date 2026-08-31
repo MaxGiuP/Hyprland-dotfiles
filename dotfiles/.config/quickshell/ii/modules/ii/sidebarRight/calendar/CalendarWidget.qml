@@ -16,11 +16,11 @@ Item {
     property var viewingDate: (currentDay, CalendarLayout.getDateInXMonthsTime(monthShift))
     property var calendarLayout: CalendarLayout.getCalendarLayout(viewingDate, monthShift === 0)
     property date selectedDate: new Date()
-    property var thunderbirdTasks: RemoteCalendarBridge.thunderbirdTasks
-    property var thunderbirdEvents: RemoteCalendarBridge.thunderbirdEvents
-    property string lastError: RemoteCalendarBridge.lastError
-    readonly property bool loading: RemoteCalendarBridge.loading
-    readonly property bool hasAnyData: root.thunderbirdEvents.length > 0 || root.thunderbirdTasks.length > 0
+    property var remoteTasks: UnifiedAgenda.remoteTasks
+    property var remoteEvents: UnifiedAgenda.remoteEvents
+    property string lastError: UnifiedAgenda.lastError
+    readonly property bool loading: UnifiedAgenda.loading
+    readonly property bool hasAnyData: root.remoteEvents.length > 0 || root.remoteTasks.length > 0
 
     Timer {
         id: midnightTimer
@@ -54,6 +54,13 @@ Item {
         return d;
     }
 
+    function dateRangeForDay(dateObj) {
+        return {
+            "startMs": root.startOfDay(dateObj).getTime(),
+            "endMs": root.endOfDay(dateObj).getTime(),
+        };
+    }
+
     function dayToDate(dayValue) {
         if (!dayValue || `${dayValue}`.trim().length === 0) return null;
         const d = new Date(viewingDate);
@@ -77,8 +84,8 @@ Item {
     }
 
     function allTasksForDay(dayDate) {
-        const range = CalendarBridge.dateRangeForDay(dayDate);
-        const imported = root.thunderbirdTasks.filter(task => {
+        const range = root.dateRangeForDay(dayDate);
+        const imported = root.remoteTasks.filter(task => {
             if (task.done) return false;
             const due = task.dueAt ?? 0;
             const entry = task.entryAt ?? 0;
@@ -89,8 +96,8 @@ Item {
     }
 
     function eventsForDay(dayDate) {
-        const range = CalendarBridge.dateRangeForDay(dayDate);
-        return root.thunderbirdEvents
+        const range = root.dateRangeForDay(dayDate);
+        return root.remoteEvents
             .filter(event => {
                 const start = event.startAt ?? 0;
                 const end = event.endAt ?? start;
@@ -103,7 +110,7 @@ Item {
 
     function allUpcomingItems() {
         const minTs = root.startOfDay(root.selectedDate).getTime();
-        const eventItems = root.thunderbirdEvents
+        const eventItems = root.remoteEvents
             .filter(item => {
                 const start = parseInt(item?.startAt ?? 0) || 0;
                 const end = parseInt(item?.endAt ?? start) || start;
@@ -129,7 +136,7 @@ Item {
             "readOnly": false,
             "allDay": false,
         }));
-        const importedTaskItems = root.thunderbirdTasks
+        const importedTaskItems = root.remoteTasks
             .filter(task => {
                 if (task.done) return false;
                 const ts = parseInt(task?.dueAt ?? task?.entryAt ?? 0) || 0;
@@ -142,7 +149,7 @@ Item {
             "dueAt": task.dueAt || 0,
             "entryAt": task.entryAt || 0,
             "allDay": task.allDay === true,
-            "source": "thunderbird",
+            "source": "lightbird",
             "readOnly": true,
         }));
 
@@ -184,7 +191,7 @@ Item {
     function isAllDayTask(taskLike) {
         if (taskLike?.allDay === true)
             return true;
-        if (!(taskLike?.readOnly || taskLike?.source === "thunderbird"))
+        if (!(taskLike?.readOnly || taskLike?.source === "lightbird"))
             return false;
         const ts = parseInt(taskLike?.dueAt ?? taskLike?.entryAt ?? taskLike?.at ?? 0) || 0;
         if (ts <= 0)
@@ -223,12 +230,9 @@ Item {
         return root.formatTaskDateTime(item);
     }
 
-    function openThunderbirdForDay(dateObj) {
-        if (!dateObj)
-            return;
-        const isoDate = Qt.formatDate(new Date(dateObj), "yyyy-MM-dd");
-        const launcher = `${Directories.scriptPath}/calendar/open_thunderbird_day.sh`.replace(/file:\/\//, "");
-        Quickshell.execDetached(["bash", launcher, isoDate]);
+    function openLightbirdForDay(dateObj) {
+        if (dateObj)
+            UnifiedAgenda.openCalendar();
     }
 
     Keys.onPressed: (event) => {
@@ -294,8 +298,8 @@ Item {
             }
             CalendarHeaderButton {
                 forceCircle: true
-                tooltipText: Translation.tr("Open Thunderbird calendar")
-                downAction: () => Quickshell.execDetached(["thunderbird", "-calendar"])
+                tooltipText: Translation.tr("Open Lightbird Mail calendar")
+                downAction: () => UnifiedAgenda.openCalendar()
                 contentItem: MaterialSymbol {
                     text: "open_in_new"
                     iconSize: Appearance.font.pixelSize.large
@@ -305,8 +309,8 @@ Item {
             }
             CalendarHeaderButton {
                 forceCircle: true
-                tooltipText: Translation.tr("Refresh Thunderbird calendar/tasks")
-                downAction: () => RemoteCalendarBridge.refresh()
+                tooltipText: Translation.tr("Refresh Lightbird Mail agenda")
+                downAction: () => UnifiedAgenda.refresh()
                 contentItem: MaterialSymbol {
                     text: root.loading ? "hourglass_top" : "refresh"
                     iconSize: Appearance.font.pixelSize.large
@@ -369,7 +373,7 @@ Item {
                         onDayClicked: {
                             if (parsedDate) {
                                 root.selectedDate = parsedDate;
-                                RemoteCalendarBridge.focusDay(parsedDate);
+                                UnifiedAgenda.focusDay(parsedDate);
                                 Persistent.states.sidebar.bottomGroup.tab = 1;
                             }
                         }
@@ -463,7 +467,7 @@ Item {
                         StyledText {
                             Layout.fillWidth: true
                             visible: !!modelData.readOnly
-                            text: Translation.tr("Source: Thunderbird")
+                            text: Translation.tr("Source: Lightbird Mail")
                             color: Appearance.colors.colSubtext
                             font.pixelSize: Appearance.font.pixelSize.smaller
                         }

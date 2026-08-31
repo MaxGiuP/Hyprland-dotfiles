@@ -30,7 +30,7 @@ StyledPopup {
                 "allDay": false,
             }));
 
-        const eventItems = CalendarBridge.thunderbirdEvents
+        const eventItems = UnifiedAgenda.remoteEvents
             .filter(item => {
                 const startAt = item.startAt ?? 0;
                 const endAt = item.endAt ?? startAt;
@@ -41,7 +41,7 @@ StyledPopup {
                 "title": item.title ?? "",
                 "allDay": !!item.allDay,
             }));
-        const taskItems = CalendarBridge.thunderbirdTasks
+        const taskItems = UnifiedAgenda.remoteTasks
             .filter(item => {
                 if (item.done) return false;
                 const ts = (item.dueAt ?? item.entryAt ?? 0);

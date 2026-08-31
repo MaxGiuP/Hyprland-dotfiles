@@ -64,7 +64,7 @@ ContentPage {
     ContentSection {
         icon: "hub"
         title: Translation.tr("Connected accounts")
-        description: Translation.tr("Thunderbird securely owns account credentials; Quickshell reads only calendar and indexed mail metadata.")
+        description: Translation.tr("Lightbird Mail owns synchronization and credentials; Quickshell reads only its account, inbox and agenda snapshot.")
 
         Repeater {
             model: UnifiedAgenda.accounts
@@ -111,7 +111,7 @@ ContentPage {
         StyledText {
             visible: UnifiedAgenda.accounts.length === 0
             Layout.fillWidth: true
-            text: UnifiedAgenda.mailError || Translation.tr("No Thunderbird mail accounts were found.")
+            text: UnifiedAgenda.mailError || Translation.tr("No Lightbird Mail accounts were found.")
             color: UnifiedAgenda.mailError ? Appearance.colors.colError : Appearance.colors.colSubtext
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
@@ -128,11 +128,11 @@ ContentPage {
                 anchors.fill: parent
                 anchors.margins: 10
                 spacing: 10
-                MaterialSymbol { text: RemoteCalendarBridge.lastError ? "event_busy" : "event_available"; iconSize: 22; color: RemoteCalendarBridge.lastError ? Appearance.colors.colError : Appearance.colors.colPrimary }
+                MaterialSymbol { text: UnifiedAgenda.lastError ? "event_busy" : "event_available"; iconSize: 22; color: UnifiedAgenda.lastError ? Appearance.colors.colError : Appearance.colors.colPrimary }
                 ColumnLayout {
                     Layout.fillWidth: true
                     StyledText { text: Translation.tr("Calendar and tasks"); color: Appearance.colors.colOnLayer1; font.weight: Font.Medium }
-                    StyledText { Layout.fillWidth: true; text: RemoteCalendarBridge.lastError || Translation.tr("%1 events and %2 remote tasks synced").arg(RemoteCalendarBridge.thunderbirdEvents.length).arg(RemoteCalendarBridge.thunderbirdTasks.length); color: RemoteCalendarBridge.lastError ? Appearance.colors.colError : Appearance.colors.colSubtext; wrapMode: Text.Wrap }
+                    StyledText { Layout.fillWidth: true; text: UnifiedAgenda.lastError || Translation.tr("%1 events and %2 remote tasks synced").arg(UnifiedAgenda.remoteEvents.length).arg(UnifiedAgenda.remoteTasks.length); color: UnifiedAgenda.lastError ? Appearance.colors.colError : Appearance.colors.colSubtext; wrapMode: Text.Wrap }
                 }
             }
         }
@@ -141,12 +141,12 @@ ContentPage {
             uniform: true
             RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "refresh"; mainText: Translation.tr("Refresh accounts"); onClicked: UnifiedAgenda.refresh() }
             RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "add_link"; mainText: Translation.tr("Add or manage accounts"); onClicked: UnifiedAgenda.openAccountSettings() }
-            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open Thunderbird"); onClicked: UnifiedAgenda.openMail() }
+            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open Lightbird Mail"); onClicked: UnifiedAgenda.openMail() }
         }
 
         StyledText {
             Layout.fillWidth: true
-            text: Translation.tr("Add Gmail, Microsoft, IMAP, CalDAV or ICS accounts in Thunderbird and they will appear here automatically after refresh.")
+            text: Translation.tr("Add accounts in Lightbird Mail and they will appear here automatically. Gmail and IMAP are first-class providers; Microsoft and calendar adapters will populate this dashboard as the client adds them.")
             color: Appearance.colors.colSubtext
             wrapMode: Text.Wrap
             font.pixelSize: Appearance.font.pixelSize.small

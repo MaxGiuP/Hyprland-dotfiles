@@ -15,15 +15,15 @@ Item {
         {"name": Translation.tr("Mail"), "icon": "mail"}
     ]
     readonly property int dayMs: 24 * 60 * 60 * 1000
-    property var thunderbirdTasks: RemoteCalendarBridge.thunderbirdTasks ?? []
-    property var thunderbirdEvents: RemoteCalendarBridge.thunderbirdEvents ?? []
-    property string lastError: RemoteCalendarBridge.lastError
+    property var remoteTasks: UnifiedAgenda.remoteTasks ?? []
+    property var remoteEvents: UnifiedAgenda.remoteEvents ?? []
+    property string lastError: UnifiedAgenda.lastError
     readonly property bool loading: UnifiedAgenda.loading
     readonly property bool hasAnyData: UnifiedAgenda.agendaItems.length > 0 || UnifiedAgenda.recentMail.length > 0
-    property real focusedDayStartMs: RemoteCalendarBridge.focusedDayStartMs
-    property real focusedDayEndMs: RemoteCalendarBridge.focusedDayEndMs
-    property string selectedEventExternalId: RemoteCalendarBridge.selectedEventExternalId
-    property string selectedEventCalId: RemoteCalendarBridge.selectedEventCalId
+    property real focusedDayStartMs: UnifiedAgenda.focusedDayStartMs
+    property real focusedDayEndMs: UnifiedAgenda.focusedDayEndMs
+    property string selectedEventExternalId: UnifiedAgenda.selectedEventExternalId
+    property string selectedEventCalId: UnifiedAgenda.selectedEventCalId
 
     onFocusedDayStartMsChanged: {
         if (root.focusedDayStartMs >= 0 && root.focusedDayEndMs > root.focusedDayStartMs) {
@@ -33,7 +33,7 @@ Item {
                 && (parseInt(item?.dueAt ?? 0) || 0) < root.focusedDayEndMs
             );
             if (firstMatch)
-                RemoteCalendarBridge.selectEvent(firstMatch);
+                UnifiedAgenda.selectEvent(firstMatch);
         }
     }
 
@@ -43,7 +43,7 @@ Item {
             readOnly: false,
             source: item.source || "local",
         }));
-        const importedTasks = root.thunderbirdTasks
+        const importedTasks = root.remoteTasks
             .map(item => Object.assign({}, item, {
                 originalIndex: -1,
                 readOnly: true,
@@ -91,7 +91,7 @@ Item {
         kind: "mail",
         originalIndex: -1,
         externalId: `mail:${message.accountId}:${message.id}`,
-        account: message.account || message.provider || "Thunderbird",
+        account: message.account || message.provider || "Lightbird",
         mailMessage: message,
     }))
 
@@ -115,7 +115,7 @@ Item {
             maxTs = Math.max(maxTs, root.focusedDayEndMs);
         }
 
-        return root.thunderbirdEvents
+        return root.remoteEvents
             .map(event => ({
                 content: event.title ?? "",
                 title: event.title ?? "",
@@ -125,7 +125,7 @@ Item {
                 allDay: !!event?.allDay,
                 done: false,
                 readOnly: true,
-                source: "thunderbird-event",
+                source: "lightbird-event",
                 originalIndex: -1,
                 externalId: `${event?.externalId ?? ""}`,
                 calId: `${event?.calId ?? ""}`,
@@ -173,15 +173,15 @@ Item {
         StyledText {
             Layout.fillWidth: true
             Layout.topMargin: 6
-            visible: root.lastError.length > 0 || UnifiedAgenda.mailError.length > 0
-            text: root.lastError.length > 0 ? root.lastError : UnifiedAgenda.mailError
+            visible: root.lastError.length > 0
+            text: root.lastError
             wrapMode: Text.Wrap
             color: Appearance.colors.colError
             font.pixelSize: Appearance.font.pixelSize.smaller
         }
 
         RowLayout {
-            Layout.topMargin: (root.lastError.length > 0 || UnifiedAgenda.mailError.length > 0) ? 6 : 0
+            Layout.topMargin: root.lastError.length > 0 ? 6 : 0
             Layout.alignment: Qt.AlignHCenter
             spacing: 10
             visible: root.loading
@@ -223,7 +223,7 @@ Item {
                 selectedCalId: root.selectedEventCalId
                 onItemActivated: item => {
                     if (item.kind === "event")
-                        RemoteCalendarBridge.selectEvent(item);
+                        UnifiedAgenda.selectEvent(item);
                 }
                 onReadOnlyAction: item => root.importReadOnlyItem(item)
             }

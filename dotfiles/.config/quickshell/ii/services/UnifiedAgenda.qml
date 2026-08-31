@@ -9,15 +9,26 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property string mailScriptPath: `${Directories.scriptPath}/accounts/fetch-thunderbird-summary.py`.replace(/file:\/\//, "")
+    readonly property string bridgeScriptPath: `${Directories.scriptPath}/accounts/fetch-lightbird-snapshot.py`.replace(/file:\/\//, "")
+    readonly property string launcherScriptPath: `${Directories.scriptPath}/accounts/open-lightbird-mail.sh`.replace(/file:\/\//, "")
     property list<var> accounts: []
     property list<var> recentMail: []
-    property string mailError: ""
-    property date lastMailRefresh: new Date(0)
-    readonly property bool loading: mailProcess.running || RemoteCalendarBridge.loading
+    property list<var> remoteTasks: []
+    property list<var> remoteEvents: []
+    property var syncStatus: ({})
+    property bool serviceAvailable: false
+    property bool syncRequested: false
+    property string lastError: ""
+    readonly property string mailError: lastError
+    property date lastRefresh: new Date(0)
+    property real focusedDayStartMs: -1
+    property real focusedDayEndMs: -1
+    property string selectedEventExternalId: ""
+    property string selectedEventCalId: ""
+    readonly property bool loading: snapshotProcess.running
     readonly property int unreadCount: accounts.reduce((sum, account) => sum + (Number(account.unread) || 0), 0)
     readonly property int openLocalTaskCount: Todo.list.filter(item => !item.done).length
-    readonly property int openRemoteTaskCount: RemoteCalendarBridge.thunderbirdTasks.filter(item => !item.done).length
+    readonly property int openRemoteTaskCount: remoteTasks.filter(item => !item.done).length
 
     readonly property var agendaItems: {
         const now = Date.now();
@@ -30,26 +41,26 @@ Singleton {
                 account: item.account || "", externalId: item.externalId || ""
             }))
             .filter(item => !item.done);
-        const remoteTasks = RemoteCalendarBridge.thunderbirdTasks
+        const importedTasks = root.remoteTasks
             .map(item => ({
-                kind: "task", source: "calendar-task", title: item.content || item.title || "",
-                description: "", timestamp: Number(item.dueAt || item.entryAt) || 0,
+                kind: "task", source: "lightbird-task", title: item.content || item.title || "",
+                description: item.description || "", timestamp: Number(item.dueAt || item.entryAt) || 0,
                 done: !!item.done, readOnly: true, originalIndex: -1,
-                account: item.calendarName || "Calendar", externalId: item.externalId || "",
+                account: item.calendarName || "Lightbird", externalId: item.externalId || item.id || "",
                 calId: item.calId || ""
             }))
             .filter(item => !item.done && item.title.length > 0);
-        const events = RemoteCalendarBridge.thunderbirdEvents
+        const events = root.remoteEvents
             .map(item => ({
-                kind: "event", source: "calendar-event", title: item.title || "",
-                description: "", timestamp: Number(item.startAt) || 0,
+                kind: "event", source: "lightbird-event", title: item.title || "",
+                description: item.description || "", timestamp: Number(item.startAt) || 0,
                 endAt: Number(item.endAt) || 0, allDay: !!item.allDay,
                 done: false, readOnly: true, originalIndex: -1,
-                account: item.calendarName || "Calendar", externalId: item.externalId || "",
+                account: item.calendarName || "Lightbird", externalId: item.externalId || item.id || "",
                 calId: item.calId || ""
             }))
             .filter(item => item.title.length > 0 && item.timestamp >= now - 24 * 60 * 60 * 1000 && item.timestamp <= horizon);
-        return local.concat(remoteTasks, events).sort((a, b) => {
+        return local.concat(importedTasks, events).sort((a, b) => {
             const aTime = a.timestamp > 0 ? a.timestamp : Number.MAX_SAFE_INTEGER;
             const bTime = b.timestamp > 0 ? b.timestamp : Number.MAX_SAFE_INTEGER;
             if (aTime !== bTime) return aTime - bTime;
@@ -65,10 +76,34 @@ Singleton {
         return agendaItems.filter(item => item.timestamp === 0 || (item.timestamp >= start.getTime() && item.timestamp < end.getTime()));
     }
 
-    function refresh() {
-        RemoteCalendarBridge.refresh();
-        if (!mailProcess.running)
-            mailProcess.running = true;
+    function refresh(requestSync = true) {
+        if (snapshotProcess.running)
+            return;
+        root.syncRequested = requestSync;
+        snapshotProcess.running = true;
+    }
+
+    function focusDay(dayDate) {
+        const start = new Date(dayDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 1);
+        root.focusedDayStartMs = start.getTime();
+        root.focusedDayEndMs = end.getTime();
+        root.selectedEventExternalId = "";
+        root.selectedEventCalId = "";
+    }
+
+    function selectEvent(eventItem) {
+        const nextExternalId = `${eventItem?.externalId ?? ""}`;
+        const nextCalId = `${eventItem?.calId ?? ""}`;
+        if (root.selectedEventExternalId === nextExternalId && root.selectedEventCalId === nextCalId) {
+            root.selectedEventExternalId = "";
+            root.selectedEventCalId = "";
+            return;
+        }
+        root.selectedEventExternalId = nextExternalId;
+        root.selectedEventCalId = nextCalId;
     }
 
     function addMailAsTask(message) {
@@ -97,34 +132,55 @@ Singleton {
         return Todo.list.some(item => item.externalId === externalId);
     }
 
-    function openMail() { Quickshell.execDetached(["thunderbird", "-mail"]); }
-    function openCalendar() { Quickshell.execDetached(["thunderbird", "-calendar"]); }
-    function openAccountSettings() { Quickshell.execDetached(["thunderbird", "-options"]); }
+    function launch(view) {
+        Quickshell.execDetached(["bash", root.launcherScriptPath, view || "mail"]);
+    }
+
+    function openMail() { root.launch("mail"); }
+    function openCalendar() { root.launch("calendar"); }
+    function openAccountSettings() { root.launch("accounts"); }
 
     Timer {
         interval: 5 * 60 * 1000
         repeat: true
         running: true
         triggeredOnStart: true
-        onTriggered: if (!mailProcess.running) mailProcess.running = true
+        onTriggered: root.refresh(false)
     }
 
     Process {
-        id: mailProcess
-        command: ["python3", root.mailScriptPath]
+        id: snapshotProcess
+        command: root.syncRequested
+            ? ["python3", root.bridgeScriptPath, "--sync"]
+            : ["python3", root.bridgeScriptPath]
+
         stdout: StdioCollector {
-            id: mailOutput
+            id: snapshotOutput
             onStreamFinished: {
                 try {
-                    const payload = JSON.parse(mailOutput.text || "{}");
+                    const payload = JSON.parse(snapshotOutput.text || "{}");
                     root.accounts = payload.accounts ?? [];
                     root.recentMail = payload.messages ?? [];
-                    root.mailError = payload.error ?? "";
-                    root.lastMailRefresh = new Date();
+                    root.remoteTasks = payload.tasks ?? [];
+                    root.remoteEvents = payload.events ?? [];
+                    root.syncStatus = payload.sync ?? ({});
+                    root.serviceAvailable = !!payload.available;
+                    root.lastError = payload.error ?? "";
+                    root.lastRefresh = new Date();
                 } catch (error) {
-                    root.mailError = `${error}`;
+                    root.serviceAvailable = false;
+                    root.lastError = `${error}`;
                 }
             }
         }
+    }
+
+    IpcHandler {
+        target: "lightbirdMail"
+
+        function open(): void { root.openMail(); }
+        function calendar(): void { root.openCalendar(); }
+        function accounts(): void { root.openAccountSettings(); }
+        function refresh(): void { root.refresh(true); }
     }
 }
