@@ -18,7 +18,14 @@ ContentPage {
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var dashboardAgenda: UnifiedAgenda.agendaItems.slice(0, 7)
-    readonly property var dashboardMail: UnifiedAgenda.recentMail.slice(0, 6)
+    readonly property var dashboardMail: UnifiedAgenda.recentMail.slice(0, 10)
+    property int dashboardTab: 0
+    readonly property var dashboardTabs: [
+        { name: Translation.tr("Overview"), icon: "space_dashboard" },
+        { name: Translation.tr("Agenda"), icon: "event_upcoming" },
+        { name: Translation.tr("Inbox"), icon: "all_inbox" },
+        { name: Translation.tr("Controls"), icon: "tune" },
+    ]
 
     function formatAgendaTime(timestamp, allDay = false) {
         if (!timestamp) return Translation.tr("Any time")
@@ -58,7 +65,24 @@ ContentPage {
         title: Translation.tr("Dashboard")
         description: `${DateTime.longDate} • ${DateTime.time}`
 
+        SecondaryTabBar {
+            id: dashboardTabBar
+            Layout.fillWidth: true
+            currentIndex: root.dashboardTab
+            onCurrentIndexChanged: root.dashboardTab = currentIndex
+
+            Repeater {
+                model: root.dashboardTabs
+                delegate: SecondaryTabButton {
+                    required property var modelData
+                    buttonText: modelData.name
+                    buttonIcon: modelData.icon
+                }
+            }
+        }
+
         ConfigRow {
+            visible: root.dashboardTab === 0
             preferredColumns: 4
             collapseWidth: 720
             uniform: true
@@ -67,44 +91,49 @@ ContentPage {
                 iconName: SystemHealth.healthy ? "check_circle" : "monitor_heart"
                 label: Translation.tr("System")
                 value: SystemHealth.healthy ? Translation.tr("Healthy") : Translation.tr("Needs attention")
-                onClicked: root.navigate(10)
+                onClicked: root.dashboardTab = 3
             }
 
             HomeStatusButton {
                 iconName: "event"
                 label: Translation.tr("Agenda")
                 value: Translation.tr("%1 upcoming").arg(UnifiedAgenda.agendaItems.length)
-                onClicked: UnifiedAgenda.openCalendar()
+                onClicked: root.dashboardTab = 1
             }
 
             HomeStatusButton {
                 iconName: UnifiedAgenda.unreadCount > 0 ? "mark_email_unread" : "mail"
                 label: Translation.tr("Mail")
                 value: Translation.tr("%1 unread").arg(UnifiedAgenda.unreadCount)
-                onClicked: UnifiedAgenda.openMail()
+                onClicked: root.dashboardTab = 2
             }
 
             HomeStatusButton {
                 iconName: "task_alt"
                 label: Translation.tr("Tasks")
                 value: Translation.tr("%1 open").arg(UnifiedAgenda.openLocalTaskCount + UnifiedAgenda.openRemoteTaskCount)
-                onClicked: quickTaskInput.forceActiveFocus()
+                onClicked: {
+                    root.dashboardTab = 1
+                    Qt.callLater(() => quickTaskInput.forceActiveFocus())
+                }
             }
         }
 
         GridLayout {
+            visible: root.dashboardTab <= 2
             Layout.fillWidth: true
-            columns: width < 740 ? 1 : 2
+            columns: root.dashboardTab === 0 && width >= 740 ? 2 : 1
             columnSpacing: 10
             rowSpacing: 10
             uniformCellWidths: true
 
             DashboardPanel {
+                visible: root.dashboardTab === 0 || root.dashboardTab === 1
                 title: Translation.tr("Unified agenda")
                 iconName: "calendar_month"
 
                 Repeater {
-                    model: root.dashboardAgenda
+                    model: root.dashboardAgenda.slice(0, root.dashboardTab === 0 ? 3 : 7)
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
@@ -153,11 +182,12 @@ ContentPage {
             }
 
             DashboardPanel {
+                visible: root.dashboardTab === 0 || root.dashboardTab === 2
                 title: Translation.tr("Unified inbox")
                 iconName: "all_inbox"
 
                 Repeater {
-                    model: root.dashboardMail
+                    model: root.dashboardMail.slice(0, root.dashboardTab === 0 ? 3 : 10)
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
@@ -206,6 +236,7 @@ ContentPage {
         }
 
         RowLayout {
+            visible: root.dashboardTab === 1
             Layout.fillWidth: true
             spacing: 8
 
@@ -230,47 +261,55 @@ ContentPage {
                 }
             }
 
-            DialogButton { buttonText: Translation.tr("Refresh all"); onClicked: UnifiedAgenda.refresh() }
         }
 
         ConfigRow {
+            visible: root.dashboardTab <= 2
             uniform: true
-            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open mail"); onClicked: UnifiedAgenda.openMail() }
-            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "calendar_month"; mainText: Translation.tr("Open calendar"); onClicked: UnifiedAgenda.openCalendar() }
+            RippleButtonWithIcon { visible: root.dashboardTab === 0 || root.dashboardTab === 2; Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open mail"); onClicked: UnifiedAgenda.openMail() }
+            RippleButtonWithIcon { visible: root.dashboardTab === 0 || root.dashboardTab === 1; Layout.fillWidth: true; materialIcon: "calendar_month"; mainText: Translation.tr("Open calendar"); onClicked: UnifiedAgenda.openCalendar() }
             RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "manage_accounts"; mainText: Translation.tr("Connected accounts"); onClicked: root.navigate(6) }
+            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "refresh"; mainText: Translation.tr("Refresh all"); onClicked: UnifiedAgenda.refresh() }
         }
-    }
 
-    ContentSection {
-        icon: "tune"
-        title: Translation.tr("Desktop modes and privacy")
-        description: Translation.tr("Apply a scene or change interruption controls without leaving Settings")
+        DashboardPanel {
+            visible: root.dashboardTab === 3
+            iconName: "tune"
+            title: Translation.tr("Desktop modes and privacy")
 
-        GridLayout {
-            Layout.fillWidth: true
-            columns: width < 700 ? 2 : 3
-            columnSpacing: 8
-            rowSpacing: 8
-            uniformCellWidths: true
+            StyledText {
+                Layout.fillWidth: true
+                text: Translation.tr("Apply a scene or change interruption controls without leaving Settings")
+                color: Appearance.colors.colSubtext
+                wrapMode: Text.Wrap
+            }
 
-            Repeater {
-                model: DesktopModes.modes
-                delegate: RippleButtonWithIcon {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    materialIcon: modelData.icon
-                    mainText: modelData.name
-                    toggled: DesktopModes.currentMode === modelData.id
-                    onClicked: DesktopModes.apply(modelData.id)
+            GridLayout {
+                Layout.fillWidth: true
+                columns: width < 700 ? 2 : 3
+                columnSpacing: 8
+                rowSpacing: 8
+                uniformCellWidths: true
+
+                Repeater {
+                    model: DesktopModes.modes
+                    delegate: RippleButtonWithIcon {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        materialIcon: modelData.icon
+                        mainText: modelData.name
+                        toggled: DesktopModes.currentMode === modelData.id
+                        onClicked: DesktopModes.apply(modelData.id)
+                    }
                 }
             }
-        }
 
-        ConfigRow {
-            uniform: true
-            ConfigSwitch { Layout.fillWidth: true; buttonIcon: Notifications.silent ? "notifications_off" : "notifications"; text: Translation.tr("Do not disturb"); checked: Notifications.silent; onClicked: Notifications.silent = !Notifications.silent }
-            ConfigSwitch { Layout.fillWidth: true; buttonIcon: Audio.micMuted ? "mic_off" : "mic"; text: Translation.tr("Mute microphone"); checked: Audio.micMuted; onClicked: Audio.toggleMicMute() }
-            ConfigSwitch { Layout.fillWidth: true; buttonIcon: Idle.inhibit ? "bedtime_off" : "bedtime"; text: Translation.tr("Keep awake"); checked: Idle.inhibit; onClicked: Idle.toggleInhibit() }
+            ConfigRow {
+                uniform: true
+                ConfigSwitch { Layout.fillWidth: true; buttonIcon: Notifications.silent ? "notifications_off" : "notifications"; text: Translation.tr("Do not disturb"); checked: Notifications.silent; onClicked: Notifications.silent = !Notifications.silent }
+                ConfigSwitch { Layout.fillWidth: true; buttonIcon: Audio.micMuted ? "mic_off" : "mic"; text: Translation.tr("Mute microphone"); checked: Audio.micMuted; onClicked: Audio.toggleMicMute() }
+                ConfigSwitch { Layout.fillWidth: true; buttonIcon: Idle.inhibit ? "bedtime_off" : "bedtime"; text: Translation.tr("Keep awake"); checked: Idle.inhibit; onClicked: Idle.toggleInhibit() }
+            }
         }
     }
 
