@@ -22,12 +22,152 @@ SKIP_PKGS=()
 PENDING_AUR_HELPER=""
 PENDING_AUR_CAPTURED=""
 PENDING_AUR_IGNORE_ARGS=()
-declare -A CONFLICT_DECISIONS=()   # "installed:incoming" -> "skip"|"remove"
+declare -A CONFLICT_DECISIONS=()   # Per-run: "installed:incoming" -> "skip"|"remove"
+declare -A CONFLICT_PREFERENCES=() # Package pair -> preferred package
+declare -A CONFLICT_PREFERENCE_DATES=()
+CONFLICT_PREFERENCES_LOADED=0
+CONFLICT_PREFERENCES_PRIMED=0
+CONFLICT_STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hyprland-updater"
+CONFLICT_PREFERENCES_FILE="$CONFLICT_STATE_DIR/conflict-preferences.tsv"
 CONFLICT_NEW_DECISION=0            # set to 1 when resolve_conflicts shows a new menu
 CONFLICT_ABORT=0                   # set to 1 when the user aborts conflict handling
 ASSUME_INSTALLED=()                # packages to pass as --assume-installed when skipping
 REBOOT_REQUIRED=0
 REBOOT_REASONS=()
+
+conflict_pair_key() {
+    local pkg_a="$1" pkg_b="$2"
+
+    if [[ "$pkg_a" < "$pkg_b" ]]; then
+        printf '%s\x1f%s' "$pkg_a" "$pkg_b"
+    else
+        printf '%s\x1f%s' "$pkg_b" "$pkg_a"
+    fi
+}
+
+valid_conflict_package_name() {
+    [[ "${1:-}" =~ ^[[:alnum:]@._+:-]+$ ]]
+}
+
+load_conflict_preferences() {
+    local pkg_a pkg_b preferred saved_at key
+
+    [ "$CONFLICT_PREFERENCES_LOADED" -eq 0 ] || return 0
+    CONFLICT_PREFERENCES_LOADED=1
+    [ -r "$CONFLICT_PREFERENCES_FILE" ] || return 0
+
+    while IFS=$'\t' read -r pkg_a pkg_b preferred saved_at _rest; do
+        [[ -n "$pkg_a" && "${pkg_a:0:1}" != "#" ]] || continue
+        valid_conflict_package_name "$pkg_a" || continue
+        valid_conflict_package_name "$pkg_b" || continue
+        [ "$pkg_a" != "$pkg_b" ] || continue
+        [ "$preferred" = "$pkg_a" ] || [ "$preferred" = "$pkg_b" ] || continue
+        [[ "$saved_at" =~ ^[0-9]+$ ]] || saved_at=0
+
+        key=$(conflict_pair_key "$pkg_a" "$pkg_b")
+        CONFLICT_PREFERENCES[$key]="$preferred"
+        CONFLICT_PREFERENCE_DATES[$key]="$saved_at"
+    done < "$CONFLICT_PREFERENCES_FILE"
+}
+
+save_conflict_preferences() {
+    local tmp key pkg_a pkg_b
+
+    mkdir -p "$CONFLICT_STATE_DIR" || return 1
+    chmod 700 "$CONFLICT_STATE_DIR" 2>/dev/null || true
+    tmp=$(mktemp "$CONFLICT_STATE_DIR/.conflict-preferences.XXXXXX") || return 1
+    chmod 600 "$tmp" 2>/dev/null || true
+
+    {
+        printf '# package-a\tpackage-b\tpreferred\tsaved-at\n'
+        for key in "${!CONFLICT_PREFERENCES[@]}"; do
+            IFS=$'\x1f' read -r pkg_a pkg_b <<< "$key"
+            printf '%s\t%s\t%s\t%s\n' \
+                "$pkg_a" "$pkg_b" "${CONFLICT_PREFERENCES[$key]}" \
+                "${CONFLICT_PREFERENCE_DATES[$key]:-0}"
+        done | LC_ALL=C sort
+    } > "$tmp"
+
+    if ! mv -f "$tmp" "$CONFLICT_PREFERENCES_FILE"; then
+        rm -f "$tmp"
+        return 1
+    fi
+}
+
+remember_conflict_preference() {
+    local pkg_a="$1" pkg_b="$2" preferred="$3" key
+
+    load_conflict_preferences
+    key=$(conflict_pair_key "$pkg_a" "$pkg_b")
+    CONFLICT_PREFERENCES[$key]="$preferred"
+    CONFLICT_PREFERENCE_DATES[$key]="$(date +%s)"
+    save_conflict_preferences
+}
+
+forget_conflict_preference() {
+    local pkg_a="$1" pkg_b="$2" key
+
+    load_conflict_preferences
+    key=$(conflict_pair_key "$pkg_a" "$pkg_b")
+    if [ -z "${CONFLICT_PREFERENCES[$key]+x}" ]; then
+        printf 'No remembered preference for %s and %s.\n' "$pkg_a" "$pkg_b"
+        return 0
+    fi
+
+    unset 'CONFLICT_PREFERENCES[$key]' 'CONFLICT_PREFERENCE_DATES[$key]'
+    save_conflict_preferences
+    printf 'Forgot the preference for %s and %s.\n' "$pkg_a" "$pkg_b"
+}
+
+show_conflict_preferences() {
+    local key pkg_a pkg_b preferred saved_at saved_on
+
+    load_conflict_preferences
+    if [ "${#CONFLICT_PREFERENCES[@]}" -eq 0 ]; then
+        echo "No remembered package conflict preferences."
+        return 0
+    fi
+
+    echo "Remembered package conflict preferences:"
+    while IFS=$'\t' read -r pkg_a pkg_b preferred saved_at; do
+        if [ "$saved_at" -gt 0 ] 2>/dev/null; then
+            saved_on=$(date -d "@$saved_at" +%Y-%m-%d 2>/dev/null || printf 'unknown date')
+        else
+            saved_on="unknown date"
+        fi
+        printf '  %-30s ↔ %-30s prefer %s  (%s)\n' "$pkg_a" "$pkg_b" "$preferred" "$saved_on"
+    done < <(
+        for key in "${!CONFLICT_PREFERENCES[@]}"; do
+            IFS=$'\x1f' read -r pkg_a pkg_b <<< "$key"
+            printf '%s\t%s\t%s\t%s\n' \
+                "$pkg_a" "$pkg_b" "${CONFLICT_PREFERENCES[$key]}" \
+                "${CONFLICT_PREFERENCE_DATES[$key]:-0}"
+        done | LC_ALL=C sort
+    )
+    echo
+    echo "Forget one with: $0 --forget-conflict PACKAGE_A PACKAGE_B"
+    echo "Forget all with: $0 --reset-conflict-preferences"
+}
+
+case "${1:-}" in
+    --conflict-preferences)
+        show_conflict_preferences
+        exit 0
+        ;;
+    --forget-conflict)
+        if [ "$#" -ne 3 ]; then
+            echo "Usage: $0 --forget-conflict PACKAGE_A PACKAGE_B" >&2
+            exit 2
+        fi
+        forget_conflict_preference "$2" "$3"
+        exit $?
+        ;;
+    --reset-conflict-preferences)
+        rm -f "$CONFLICT_PREFERENCES_FILE"
+        echo "Forgot all package conflict preferences."
+        exit 0
+        ;;
+esac
 
 preferred_aur_helper() {
     if command -v yay >/dev/null 2>&1; then
@@ -549,6 +689,33 @@ add_skip_resolution() {
     fi
 }
 
+# Apply the non-destructive half of remembered preferences before the first
+# package-manager attempt. If the preferred package is already installed, its
+# known alternative can be ignored immediately instead of making pacman rediscover
+# the same conflict (and possibly show its own replacement prompt) every run.
+prime_conflict_preferences() {
+    local key pkg_a pkg_b preferred alternative
+
+    [ "$CONFLICT_PREFERENCES_PRIMED" -eq 0 ] || return 0
+    CONFLICT_PREFERENCES_PRIMED=1
+    load_conflict_preferences
+
+    for key in "${!CONFLICT_PREFERENCES[@]}"; do
+        IFS=$'\x1f' read -r pkg_a pkg_b <<< "$key"
+        preferred="${CONFLICT_PREFERENCES[$key]}"
+        if [ "$preferred" = "$pkg_a" ]; then
+            alternative="$pkg_b"
+        else
+            alternative="$pkg_a"
+        fi
+
+        if pacman -Q "$preferred" >/dev/null 2>&1 \
+            && ! pacman -Q "$alternative" >/dev/null 2>&1; then
+            add_skip_resolution SKIP_PKGS "$preferred" "$alternative"
+        fi
+    done
+}
+
 conflict_recommendation() {
     local installed="$1" incoming="$2"
     local required reason
@@ -665,15 +832,19 @@ resolve_conflicts() {
     local -a to_remove=() to_skip=()
     CONFLICT_NEW_DECISION=0
     CONFLICT_ABORT=0
+    load_conflict_preferences
 
     for pair in "${pairs[@]}"; do
         local installed="${pair%%:*}"
         local incoming="${pair##*:}"
         local _dkey="${installed}:${incoming}"
+        local _pkey
+        _pkey=$(conflict_pair_key "$installed" "$incoming")
 
-        # Auto-apply a stored decision without prompting
+        # First honour a one-run decision. This prevents duplicate prompts when
+        # pacman and the AUR helper report the same pair in one update session.
         if [ -n "${CONFLICT_DECISIONS[$_dkey]+x}" ]; then
-            echo -e "\n  ${DIM}Applying stored decision for ${WHITE}${installed}${R}${DIM} ↔ ${CYAN}${incoming}${R}${DIM}: ${CONFLICT_DECISIONS[$_dkey]}${R}"
+            echo -e "\n  ${DIM}Reusing this run's decision for ${WHITE}${installed}${R}${DIM} ↔ ${CYAN}${incoming}${R}${DIM}: ${CONFLICT_DECISIONS[$_dkey]}${R}"
             case "${CONFLICT_DECISIONS[$_dkey]}" in
                 skip)
                     add_skip_resolution to_skip "$installed" "$incoming"
@@ -683,12 +854,38 @@ resolve_conflicts() {
             continue
         fi
 
+        # Persistent choices name the preferred package, rather than an action.
+        # That remains correct if a future pacman message presents the pair in
+        # the opposite order.
+        if [ -n "${CONFLICT_PREFERENCES[$_pkey]+x}" ]; then
+            local preferred="${CONFLICT_PREFERENCES[$_pkey]}"
+            echo
+            echo -e "  ${GREEN}${BOLD}✓ Remembered package preference${R}"
+            echo -e "  ${DIM}${WHITE}${installed}${R}${DIM} ↔ ${CYAN}${incoming}${R}${DIM}: prefer ${BOLD}${preferred}${R}"
+            echo -e "  ${DIM}Change it with: $0 --forget-conflict ${installed} ${incoming}${R}"
+
+            if [ "$preferred" = "$installed" ]; then
+                add_skip_resolution to_skip "$installed" "$incoming"
+            else
+                append_unique to_remove "$installed"
+            fi
+            continue
+        fi
+
         CONFLICT_NEW_DECISION=1
-        local recommendation rec_reason default_choice
+        local recommendation rec_reason default_choice keep_note replace_note
         IFS=$'\t' read -r recommendation rec_reason < <(conflict_recommendation "$installed" "$incoming")
         case "$recommendation" in
-            remove) default_choice=2 ;;
-            *)      default_choice=1 ;;
+            remove)
+                default_choice=2
+                keep_note=""
+                replace_note=" ${GREEN}· recommended${R}"
+                ;;
+            *)
+                default_choice=1
+                keep_note=" ${GREEN}· recommended${R}"
+                replace_note=""
+                ;;
         esac
 
         echo
@@ -709,17 +906,23 @@ resolve_conflicts() {
         fi
         echo -e "  ${DIM}Reason: ${rec_reason}${R}"
         echo
+        echo -e "  ${DIM}Remembered preferences apply only to this exact package pair and can be reviewed later.${R}"
+        echo
 
         local choice
         while true; do
-            echo -e "  ${BOLD}How to resolve?${R}"
-            echo -e "  ${GREEN}1)${R} Keep ${WHITE}${installed}${R} — skip ${CYAN}${incoming}${R} for this run"
-            echo -e "  ${GREEN}2)${R} Replace — remove ${WHITE}${installed}${R}, then rerun pacman"
-            echo -e "  ${GREEN}3)${R} Abort pacman updates"
+            echo -e "  ${BOLD}Remember my preference${R}"
+            echo -e "  ${GREEN}1)${R} Prefer ${WHITE}${installed}${R} — automatically skip ${CYAN}${incoming}${R} when this pair conflicts${keep_note}"
+            echo -e "  ${GREEN}2)${R} Prefer ${CYAN}${incoming}${R} — automatically replace ${WHITE}${installed}${R} when this pair conflicts${replace_note}"
+            echo
+            echo -e "  ${BOLD}Just this update${R}"
+            echo -e "  ${GREEN}3)${R} Keep ${WHITE}${installed}${R} this time"
+            echo -e "  ${GREEN}4)${R} Replace ${WHITE}${installed}${R} this time"
+            echo -e "  ${GREEN}5)${R} Abort package updates"
 
             if [ ! -t 0 ]; then
-                choice="$default_choice"
-                echo -e "  ${DIM}No interactive terminal; applying default choice ${choice}.${R}"
+                choice=3
+                echo -e "  ${DIM}No interactive terminal; safely keeping ${installed} for this run without saving a preference.${R}"
             else
                 read -rp "  Choice [${default_choice}]: " choice
                 choice="${choice:-$default_choice}"
@@ -729,18 +932,38 @@ resolve_conflicts() {
                 1)
                     add_skip_resolution to_skip "$installed" "$incoming"
                     CONFLICT_DECISIONS[$_dkey]="skip"
+                    if remember_conflict_preference "$installed" "$incoming" "$installed"; then
+                        echo -e "  ${PASS}  ${GREEN}Preference saved: prefer ${installed}.${R}"
+                    else
+                        echo -e "  ${WARN}  ${YELLOW}Could not save the preference; it will apply only to this run.${R}"
+                    fi
                     break
                     ;;
                 2)
                     append_unique to_remove "$installed"
                     CONFLICT_DECISIONS[$_dkey]="remove"
+                    if remember_conflict_preference "$installed" "$incoming" "$incoming"; then
+                        echo -e "  ${PASS}  ${GREEN}Preference saved: prefer ${incoming}.${R}"
+                    else
+                        echo -e "  ${WARN}  ${YELLOW}Could not save the preference; it will apply only to this run.${R}"
+                    fi
                     break
                     ;;
                 3)
+                    add_skip_resolution to_skip "$installed" "$incoming"
+                    CONFLICT_DECISIONS[$_dkey]="skip"
+                    break
+                    ;;
+                4)
+                    append_unique to_remove "$installed"
+                    CONFLICT_DECISIONS[$_dkey]="remove"
+                    break
+                    ;;
+                5)
                     CONFLICT_ABORT=1
                     return 1
                     ;;
-                *) echo -e "  ${WARN}  Please enter 1, 2, or 3." ;;
+                *) echo -e "  ${WARN}  Please enter 1, 2, 3, 4, or 5." ;;
             esac
         done
     done
@@ -782,6 +1005,8 @@ run_pacman_updates() {
         skip "pacman"
         return 0
     fi
+
+    prime_conflict_preferences
 
     local rc captured loop ok
     local -a ignore_args assume_args pairs
@@ -896,6 +1121,8 @@ run_aur_updates() {
     fi
 
     section "$title"
+
+    prime_conflict_preferences
 
     # Build --ignore flags from any packages the user chose to skip
     local -a ignore_args=()
