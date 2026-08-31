@@ -303,6 +303,7 @@ Scope {
                 if (drawerActive) {
                     drawerTransitionDisarm.stop()
                     drawerTransitionArmed = true
+                    Qt.callLater(drawerAppList.activateFirstApp)
                 } else if (drawerTransitionArmed) {
                     drawerTransitionDisarm.restart()
                 }

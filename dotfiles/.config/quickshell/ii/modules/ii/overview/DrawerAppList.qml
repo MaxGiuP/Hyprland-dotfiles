@@ -24,10 +24,11 @@ Item {
     readonly property var navigationApps: root.recentApps.concat(root.sortedApps)
 
     function activateFirstApp() {
-        if (root.navigationApps.length === 0)
-            return
         root.selectedAppIndex = 0
-        root.forceActiveFocus()
+        // Claim keyboard focus even if AppSearch is still populating. Returning
+        // before this handoff leaves the search field active until the pointer
+        // enters the drawer.
+        root.forceActiveFocus(Qt.TabFocusReason)
     }
 
     function moveSelection(delta) {
@@ -68,6 +69,13 @@ Item {
     }
 
     focus: GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode
+    activeFocusOnTab: true
+
+    onNavigationAppsChanged: {
+        if (GlobalStates.overviewOpen && GlobalStates.overviewDrawerMode && !root.activeFocus)
+            Qt.callLater(root.activateFirstApp)
+    }
+
     Keys.onPressed: event => {
         if (!root.handleKey(event.key))
             return
