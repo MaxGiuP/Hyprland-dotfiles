@@ -64,7 +64,7 @@ ContentPage {
     ContentSection {
         icon: "hub"
         title: Translation.tr("Connected accounts")
-        description: Translation.tr("Lightbird Mail owns synchronization and credentials; Quickshell reads only its account, inbox and agenda snapshot.")
+        description: Translation.tr("QuickMail owns synchronization and credentials; Quickshell reads only its account, inbox and agenda snapshot.")
 
         Repeater {
             model: UnifiedAgenda.accounts
@@ -111,7 +111,7 @@ ContentPage {
         StyledText {
             visible: UnifiedAgenda.accounts.length === 0
             Layout.fillWidth: true
-            text: UnifiedAgenda.mailError || Translation.tr("No Lightbird Mail accounts were found.")
+            text: UnifiedAgenda.mailError || Translation.tr("No QuickMail accounts were found.")
             color: UnifiedAgenda.mailError ? Appearance.colors.colError : Appearance.colors.colSubtext
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
@@ -141,12 +141,12 @@ ContentPage {
             uniform: true
             RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "refresh"; mainText: Translation.tr("Refresh accounts"); onClicked: UnifiedAgenda.refresh() }
             RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "add_link"; mainText: Translation.tr("Add or manage accounts"); onClicked: UnifiedAgenda.openAccountSettings() }
-            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open Lightbird Mail"); onClicked: UnifiedAgenda.openMail() }
+            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open QuickMail"); onClicked: UnifiedAgenda.openMail() }
         }
 
         StyledText {
             Layout.fillWidth: true
-            text: Translation.tr("Add accounts in Lightbird Mail and they will appear here automatically. Gmail and IMAP are first-class providers; Microsoft and calendar adapters will populate this dashboard as the client adds them.")
+            text: Translation.tr("Add accounts in QuickMail and they will appear here automatically. Gmail and IMAP are first-class providers; Microsoft and calendar adapters will populate this dashboard as the client adds them.")
             color: Appearance.colors.colSubtext
             wrapMode: Text.Wrap
             font.pixelSize: Appearance.font.pixelSize.small

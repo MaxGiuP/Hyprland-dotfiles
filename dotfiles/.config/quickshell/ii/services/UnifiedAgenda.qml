@@ -9,8 +9,8 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    readonly property string bridgeScriptPath: `${Directories.scriptPath}/accounts/fetch-lightbird-snapshot.py`.replace(/file:\/\//, "")
-    readonly property string launcherScriptPath: `${Directories.scriptPath}/accounts/open-lightbird-mail.sh`.replace(/file:\/\//, "")
+    readonly property string bridgeScriptPath: `${Directories.scriptPath}/accounts/fetch-quickmail-snapshot.py`.replace(/file:\/\//, "")
+    readonly property string launcherScriptPath: `${Directories.scriptPath}/accounts/open-quickmail.sh`.replace(/file:\/\//, "")
     property list<var> accounts: []
     property list<var> recentMail: []
     property list<var> remoteTasks: []
@@ -43,20 +43,20 @@ Singleton {
             .filter(item => !item.done);
         const importedTasks = root.remoteTasks
             .map(item => ({
-                kind: "task", source: "lightbird-task", title: item.content || item.title || "",
+                kind: "task", source: "quickmail-task", title: item.content || item.title || "",
                 description: item.description || "", timestamp: Number(item.dueAt || item.entryAt) || 0,
                 done: !!item.done, readOnly: true, originalIndex: -1,
-                account: item.calendarName || "Lightbird", externalId: item.externalId || item.id || "",
+                account: item.calendarName || "QuickMail", externalId: item.externalId || item.id || "",
                 calId: item.calId || ""
             }))
             .filter(item => !item.done && item.title.length > 0);
         const events = root.remoteEvents
             .map(item => ({
-                kind: "event", source: "lightbird-event", title: item.title || "",
+                kind: "event", source: "quickmail-event", title: item.title || "",
                 description: item.description || "", timestamp: Number(item.startAt) || 0,
                 endAt: Number(item.endAt) || 0, allDay: !!item.allDay,
                 done: false, readOnly: true, originalIndex: -1,
-                account: item.calendarName || "Lightbird", externalId: item.externalId || item.id || "",
+                account: item.calendarName || "QuickMail", externalId: item.externalId || item.id || "",
                 calId: item.calId || ""
             }))
             .filter(item => item.title.length > 0 && item.timestamp >= now - 24 * 60 * 60 * 1000 && item.timestamp <= horizon);
@@ -176,7 +176,7 @@ Singleton {
     }
 
     IpcHandler {
-        target: "lightbirdMail"
+        target: "quickMail"
 
         function open(): void { root.openMail(); }
         function calendar(): void { root.openCalendar(); }

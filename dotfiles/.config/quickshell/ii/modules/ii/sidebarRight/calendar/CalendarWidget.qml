@@ -149,7 +149,7 @@ Item {
             "dueAt": task.dueAt || 0,
             "entryAt": task.entryAt || 0,
             "allDay": task.allDay === true,
-            "source": "lightbird",
+            "source": "quickmail-task",
             "readOnly": true,
         }));
 
@@ -191,7 +191,7 @@ Item {
     function isAllDayTask(taskLike) {
         if (taskLike?.allDay === true)
             return true;
-        if (!(taskLike?.readOnly || taskLike?.source === "lightbird"))
+        if (!(taskLike?.readOnly || taskLike?.source === "quickmail-task"))
             return false;
         const ts = parseInt(taskLike?.dueAt ?? taskLike?.entryAt ?? taskLike?.at ?? 0) || 0;
         if (ts <= 0)
@@ -230,7 +230,7 @@ Item {
         return root.formatTaskDateTime(item);
     }
 
-    function openLightbirdForDay(dateObj) {
+    function openQuickMailForDay(dateObj) {
         if (dateObj)
             UnifiedAgenda.openCalendar();
     }
@@ -298,7 +298,7 @@ Item {
             }
             CalendarHeaderButton {
                 forceCircle: true
-                tooltipText: Translation.tr("Open Lightbird Mail calendar")
+                tooltipText: Translation.tr("Open QuickMail calendar")
                 downAction: () => UnifiedAgenda.openCalendar()
                 contentItem: MaterialSymbol {
                     text: "open_in_new"
@@ -309,7 +309,7 @@ Item {
             }
             CalendarHeaderButton {
                 forceCircle: true
-                tooltipText: Translation.tr("Refresh Lightbird Mail agenda")
+                tooltipText: Translation.tr("Refresh QuickMail agenda")
                 downAction: () => UnifiedAgenda.refresh()
                 contentItem: MaterialSymbol {
                     text: root.loading ? "hourglass_top" : "refresh"
@@ -467,7 +467,7 @@ Item {
                         StyledText {
                             Layout.fillWidth: true
                             visible: !!modelData.readOnly
-                            text: Translation.tr("Source: Lightbird Mail")
+                            text: Translation.tr("Source: QuickMail")
                             color: Appearance.colors.colSubtext
                             font.pixelSize: Appearance.font.pixelSize.smaller
                         }

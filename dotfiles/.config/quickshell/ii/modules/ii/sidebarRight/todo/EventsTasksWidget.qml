@@ -91,7 +91,7 @@ Item {
         kind: "mail",
         originalIndex: -1,
         externalId: `mail:${message.accountId}:${message.id}`,
-        account: message.account || message.provider || "Lightbird",
+        account: message.account || message.provider || "QuickMail",
         mailMessage: message,
     }))
 
@@ -125,7 +125,7 @@ Item {
                 allDay: !!event?.allDay,
                 done: false,
                 readOnly: true,
-                source: "lightbird-event",
+                source: "quickmail-event",
                 originalIndex: -1,
                 externalId: `${event?.externalId ?? ""}`,
                 calId: `${event?.calId ?? ""}`,

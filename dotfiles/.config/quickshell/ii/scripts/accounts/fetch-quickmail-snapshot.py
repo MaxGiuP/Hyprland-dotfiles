@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Return a Quickshell-friendly Lightbird Mail dashboard snapshot.
+"""Return a Quickshell-friendly QuickMail dashboard snapshot.
 
-Lightbird remains the source of truth. This adapter only invokes its public
+QuickMail remains the source of truth. This adapter only invokes its public
 CLI and normalizes account/message/agenda metadata; it never requests message
 bodies or credentials.
 """
@@ -15,13 +15,13 @@ import subprocess
 from pathlib import Path
 
 
-def lightbirdctl_path():
-    override = os.environ.get("LIGHTBIRDCTL", "").strip()
+def quickmailctl_path():
+    override = os.environ.get("QUICKMAILCTL", "").strip()
     candidates = [
         Path(override) if override else None,
-        Path(shutil.which("lightbirdctl")) if shutil.which("lightbirdctl") else None,
-        Path.home() / "lightbird-mail/target/release/lightbirdctl",
-        Path.home() / "lightbird-mail/target/debug/lightbirdctl",
+        Path(shutil.which("quickmailctl")) if shutil.which("quickmailctl") else None,
+        Path.home() / "QuickMail/target/release/quickmailctl",
+        Path.home() / "QuickMail/target/debug/quickmailctl",
     ]
     return next((path for path in candidates if path and path.is_file() and os.access(path, os.X_OK)), None)
 
@@ -60,7 +60,7 @@ def run_cli(binary, *arguments):
     )
     if result.returncode != 0:
         detail = result.stderr.strip().splitlines()
-        raise RuntimeError(detail[-1] if detail else f"lightbirdctl exited with code {result.returncode}")
+        raise RuntimeError(detail[-1] if detail else f"quickmailctl exited with code {result.returncode}")
     return json.loads(result.stdout)
 
 
@@ -88,7 +88,7 @@ def normalize(snapshot):
             "address": address,
             "displayName": str(first(raw, "displayName", "display_name", default="")),
             "host": str(first(raw, "host", default="")),
-            "provider": str(first(raw, "provider", default="Lightbird")),
+            "provider": str(first(raw, "provider", default="QuickMail")),
             "protocol": str(first(raw, "protocol", default="")),
             "unread": int(first(raw, "unread", "unreadCount", "unread_count", default=0) or 0),
             "total": int(first(raw, "total", "messageCount", "message_count", default=0) or 0),
@@ -107,7 +107,7 @@ def normalize(snapshot):
             "starred": bool(first(raw, "starred", "isStarred", "is_starred", default=False)),
             "account": account_addresses.get(account_id, account_id),
             "accountId": account_id,
-            "provider": str(first(raw, "provider", default="Lightbird")),
+            "provider": str(first(raw, "provider", default="QuickMail")),
         })
 
     tasks = []
@@ -121,8 +121,8 @@ def normalize(snapshot):
             "done": bool(first(raw, "done", "completed", default=False)),
             "dueAt": timestamp_ms(first(raw, "dueAt", "due_at", default=0)),
             "entryAt": timestamp_ms(first(raw, "createdAt", "created_at", default=0)),
-            "calendarName": str(first(raw, "account", "calendarName", "calendar_name", default="Lightbird")),
-            "source": "lightbird",
+            "calendarName": str(first(raw, "account", "calendarName", "calendar_name", default="QuickMail")),
+            "source": "quickmail-task",
             "readOnly": True,
         })
 
@@ -133,14 +133,14 @@ def normalize(snapshot):
             "id": str(first(raw, "id", default="")),
             "externalId": str(first(raw, "externalId", "external_id", "id", default="")),
             "calId": calendar_id,
-            "calendarName": str(first(raw, "calendarName", "calendar_name", default="Lightbird")),
+            "calendarName": str(first(raw, "calendarName", "calendar_name", default="QuickMail")),
             "title": str(first(raw, "title", default="")),
             "description": str(first(raw, "description", default="")),
             "startAt": timestamp_ms(first(raw, "startAt", "start_at", default=0)),
             "endAt": timestamp_ms(first(raw, "endAt", "end_at", default=0)),
             "allDay": bool(first(raw, "allDay", "all_day", default=False)),
             "readOnly": bool(first(raw, "readOnly", "read_only", default=True)),
-            "source": "lightbird",
+            "source": "quickmail-event",
         })
 
     sync = first(snapshot, "sync", default={}) or {}
@@ -160,7 +160,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sync", action="store_true")
     args = parser.parse_args()
-    binary = lightbirdctl_path()
+    binary = quickmailctl_path()
     if binary is None:
         print(json.dumps({
             "available": False,
@@ -169,7 +169,7 @@ def main():
             "tasks": [],
             "events": [],
             "sync": {},
-            "error": "Lightbird Mail is still being built; lightbirdctl is not available yet.",
+            "error": "QuickMail is still being built; quickmailctl is not available yet.",
         }))
         return
 
@@ -193,5 +193,5 @@ if __name__ == "__main__":
             "tasks": [],
             "events": [],
             "sync": {},
-            "error": f"Lightbird Mail service unavailable: {error}",
+            "error": f"QuickMail service unavailable: {error}",
         }))

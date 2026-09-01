@@ -1,24 +1,24 @@
 [Desktop Entry]
 Type=Application
-Name=Lightbird Mail
+Name=QuickMail
 Comment=Fast local-first mail, accounts and agenda
 Icon=mail-unread
-Exec=qs -c ii ipc call lightbirdMail open
+Exec=qs -c ii ipc call quickMail open
 Terminal=false
 Categories=Network;Email;
-Keywords=mail;email;gmail;imap;calendar;agenda;lightbird;
+Keywords=mail;email;gmail;imap;calendar;agenda;quickmail;
 MimeType=x-scheme-handler/mailto;message/rfc822;
 StartupNotify=true
 Actions=Accounts;Calendar;Refresh;
 
 [Desktop Action Accounts]
 Name=Accounts
-Exec=qs -c ii ipc call lightbirdMail accounts
+Exec=qs -c ii ipc call quickMail accounts
 
 [Desktop Action Calendar]
 Name=Calendar
-Exec=qs -c ii ipc call lightbirdMail calendar
+Exec=qs -c ii ipc call quickMail calendar
 
 [Desktop Action Refresh]
 Name=Refresh dashboard data
-Exec=qs -c ii ipc call lightbirdMail refresh
+Exec=qs -c ii ipc call quickMail refresh

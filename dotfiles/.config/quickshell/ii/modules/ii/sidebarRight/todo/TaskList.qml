@@ -58,7 +58,7 @@ Item {
     function isAllDayTask(task, dueDate) {
         if (task?.allDay === true)
             return true;
-        if (!(task?.readOnly || task?.source === "lightbird"))
+        if (!(task?.readOnly || task?.source === "quickmail-task"))
             return false;
         return dueDate.getHours() === 0
             && dueDate.getMinutes() === 0
@@ -196,10 +196,10 @@ Item {
                         text: {
                             const sourceName = `${todoItem.modelData.calendarName ?? ""}`.trim();
                             if (todoItem.modelData.source === "mail")
-                                return Translation.tr("Mail: %1").arg(todoItem.modelData.account ?? "Lightbird");
+                                return Translation.tr("Mail: %1").arg(todoItem.modelData.account ?? "QuickMail");
                             return sourceName.length > 0
                                 ? Translation.tr("Source: %1 (read-only)").arg(sourceName)
-                                : Translation.tr("Source: Lightbird Mail (read-only)");
+                                : Translation.tr("Source: QuickMail (read-only)");
                         }
                         color: (todoItem.selected || (root.accentHighlightMatches && todoItem.highlighted))
                             ? Appearance.colors.colOnPrimary
