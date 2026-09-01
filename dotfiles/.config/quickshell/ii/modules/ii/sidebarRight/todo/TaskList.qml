@@ -27,10 +27,38 @@ Item {
     signal itemActivated(var item)
     signal readOnlyAction(var item)
 
+    function isQuickMailTask(task) {
+        return `${task?.source ?? ""}` === "quickmail-task"
+            && `${task?.kind ?? "task"}` === "task"
+            && `${task?.id ?? ""}`.length > 0;
+    }
+
+    function isDateOnlyTask(task) {
+        if (task?.dateOnly === true)
+            return true;
+        if (`${task?.source ?? ""}` !== "quickmail-task")
+            return false;
+        return /gmail|google/.test(`${task?.provider ?? ""}`.toLowerCase());
+    }
+
+    function dateOnlyDisplayDate(timestamp) {
+        const utcDate = new Date(timestamp);
+        // Reconstruct a local calendar date from UTC fields before formatting.
+        // Noon avoids DST transitions at midnight without changing the date.
+        return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate(), 12, 0, 0, 0);
+    }
+
     function itemMatchesHighlight(task) {
         if (root.highlightDayStartMs < 0 || root.highlightDayEndMs <= root.highlightDayStartMs)
             return false;
         const dueAt = parseInt(task?.dueAt ?? 0) || 0;
+        if (root.isDateOnlyTask(task) && dueAt > 0) {
+            const dueDate = new Date(dueAt);
+            const highlightDate = new Date(root.highlightDayStartMs);
+            return dueDate.getUTCFullYear() === highlightDate.getFullYear()
+                && dueDate.getUTCMonth() === highlightDate.getMonth()
+                && dueDate.getUTCDate() === highlightDate.getDate();
+        }
         return dueAt >= root.highlightDayStartMs && dueAt < root.highlightDayEndMs;
     }
 
@@ -58,7 +86,13 @@ Item {
     function isAllDayTask(task, dueDate) {
         if (task?.allDay === true)
             return true;
-        if (!(task?.readOnly || task?.source === "quickmail-task"))
+        if (root.isDateOnlyTask(task))
+            return true;
+        // QuickMail's Microsoft tasks retain a real time, including 00:00.
+        // Only legacy provider-less read-only rows use the midnight heuristic.
+        if (`${task?.source ?? ""}` === "quickmail-task")
+            return false;
+        if (!task?.readOnly)
             return false;
         return dueDate.getHours() === 0
             && dueDate.getMinutes() === 0
@@ -70,7 +104,16 @@ Item {
         const dueAt = parseInt(task?.dueAt ?? 0);
         if (!dueAt || dueAt <= 0) return "";
         const dueDate = new Date(dueAt);
-        const datePart = dueDate.toLocaleDateString(Translation.locale, "dd MMM");
+        const dateOnly = root.isDateOnlyTask(task);
+        const displayDate = dateOnly ? root.dateOnlyDisplayDate(dueAt) : dueDate;
+        const datePart = displayDate.toLocaleDateString(Translation.locale, "dd MMM");
+        if (dateOnly) {
+            const today = new Date();
+            const todayDateOnly = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0, 0);
+            return dueAt < todayDateOnly
+                ? Translation.tr("Overdue: %1").arg(datePart)
+                : Translation.tr("Due date: %1").arg(datePart);
+        }
         const timePart = root.isAllDayTask(task, dueDate)
             ? "--:--"
             : dueDate.toLocaleTimeString(Translation.locale, "HH:mm");
@@ -192,11 +235,15 @@ Item {
                         Layout.fillWidth: true
                         Layout.leftMargin: 10
                         Layout.rightMargin: 10
-                        visible: !!todoItem.modelData.readOnly
+                        visible: !!todoItem.modelData.readOnly || root.isQuickMailTask(todoItem.modelData)
                         text: {
                             const sourceName = `${todoItem.modelData.calendarName ?? ""}`.trim();
                             if (todoItem.modelData.source === "mail")
                                 return Translation.tr("Mail: %1").arg(todoItem.modelData.account ?? "QuickMail");
+                            if (root.isQuickMailTask(todoItem.modelData))
+                                return Translation.tr("QuickMail: %1").arg(
+                                    todoItem.modelData.account || todoItem.modelData.provider || "QuickMail"
+                                );
                             return sourceName.length > 0
                                 ? Translation.tr("Source: %1 (read-only)").arg(sourceName)
                                 : Translation.tr("Source: QuickMail (read-only)");
@@ -228,11 +275,18 @@ Item {
                         TodoItemActionButton {
                             Layout.fillWidth: false
                             visible: !(root.hideActionsForReadOnly && todoItem.modelData.readOnly)
+                            enabled: !root.isQuickMailTask(todoItem.modelData) || !UnifiedAgenda.mutationBusy
                             onClicked: {
-                                if (!todoItem.modelData.done)
+                                if (root.isQuickMailTask(todoItem.modelData)) {
+                                    UnifiedAgenda.completeRemoteTask(
+                                        todoItem.modelData.id,
+                                        !todoItem.modelData.done
+                                    );
+                                } else if (!todoItem.modelData.done) {
                                     Todo.markDone(todoItem.modelData.originalIndex);
-                                else
+                                } else {
                                     Todo.markUnfinished(todoItem.modelData.originalIndex);
+                                }
                             }
                             contentItem: MaterialSymbol {
                                 anchors.centerIn: parent
@@ -245,8 +299,12 @@ Item {
                         TodoItemActionButton {
                             Layout.fillWidth: false
                             visible: !(root.hideActionsForReadOnly && todoItem.modelData.readOnly)
+                            enabled: !root.isQuickMailTask(todoItem.modelData) || !UnifiedAgenda.mutationBusy
                             onClicked: {
-                                Todo.deleteItem(todoItem.modelData.originalIndex);
+                                if (root.isQuickMailTask(todoItem.modelData))
+                                    UnifiedAgenda.deleteRemoteTask(todoItem.modelData.id);
+                                else
+                                    Todo.deleteItem(todoItem.modelData.originalIndex);
                             }
                             contentItem: MaterialSymbol {
                                 anchors.centerIn: parent

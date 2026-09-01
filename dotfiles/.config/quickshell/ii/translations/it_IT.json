@@ -1356,5 +1356,16 @@
   "Automatic sleep delay": "Ritardo sospensione automatica",
   "Controls the idle lock timeout used by hypridle. Use Keep awake in the right sidebar to pause idle actions temporarily.": "Controlla il timeout di blocco per inattività usato da Hypridle. Usa ‘Mantieni attivo’ nella barra laterale destra per sospendere temporaneamente le azioni di inattività.",
   "Customisation settings failed to load": "Impossibile caricare le impostazioni di personalizzazione",
-  "Try again": "Riprova"
+  "Try again": "Riprova",
+  "Local device": "Dispositivo locale",
+  "Task destination": "Salva in",
+  "Syncing QuickMail task…": "Sincronizzazione dell'attività QuickMail…",
+  "No writable QuickMail account is selected": "Non è selezionato alcun account QuickMail scrivibile",
+  "Unknown QuickMail error": "Errore QuickMail sconosciuto",
+  "QuickMail task update failed: %1": "Aggiornamento dell'attività QuickMail non riuscito: %1",
+  "QuickMail: %1": "QuickMail: %1",
+  "Due date": "Data di scadenza",
+  "Due date: %1": "Data di scadenza: %1",
+  "Google Tasks stores due dates without a time.": "Google Tasks salva le date di scadenza senza un orario.",
+  "Use a valid date": "Inserisci una data valida"
 }

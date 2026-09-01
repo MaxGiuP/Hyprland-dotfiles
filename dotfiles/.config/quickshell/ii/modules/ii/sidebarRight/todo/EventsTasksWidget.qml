@@ -17,7 +17,7 @@ Item {
     readonly property int dayMs: 24 * 60 * 60 * 1000
     property var remoteTasks: UnifiedAgenda.remoteTasks ?? []
     property var remoteEvents: UnifiedAgenda.remoteEvents ?? []
-    property string lastError: UnifiedAgenda.lastError
+    property string lastError: UnifiedAgenda.mutationError || UnifiedAgenda.lastError
     readonly property bool loading: UnifiedAgenda.loading
     readonly property bool hasAnyData: UnifiedAgenda.agendaItems.length > 0 || UnifiedAgenda.recentMail.length > 0
     property real focusedDayStartMs: UnifiedAgenda.focusedDayStartMs
@@ -46,8 +46,8 @@ Item {
         const importedTasks = root.remoteTasks
             .map(item => Object.assign({}, item, {
                 originalIndex: -1,
-                readOnly: true,
-                source: "calendar-task",
+                readOnly: item.readOnly !== false,
+                source: "quickmail-task",
                 kind: "task",
             }));
         return localTasks.concat(importedTasks)
@@ -74,10 +74,15 @@ Item {
         source: item.source,
         kind: item.kind,
         originalIndex: item.originalIndex,
+        id: item.id || "",
         externalId: item.externalId || "",
         calId: item.calId || "",
         calendarName: item.account || "",
         account: item.account || "",
+        accountId: item.accountId || "",
+        provider: item.provider || "QuickMail",
+        writable: !!item.writable,
+        dateOnly: !!item.dateOnly,
     }))
 
     readonly property var mailList: UnifiedAgenda.recentMail.map(message => ({
@@ -184,15 +189,19 @@ Item {
             Layout.topMargin: root.lastError.length > 0 ? 6 : 0
             Layout.alignment: Qt.AlignHCenter
             spacing: 10
-            visible: root.loading
+            visible: root.loading || UnifiedAgenda.mutationBusy
 
             MaterialLoadingIndicator {
                 implicitSize: 22
-                loading: root.loading
+                loading: root.loading || UnifiedAgenda.mutationBusy
             }
 
             StyledText {
-                text: root.hasAnyData ? Translation.tr("Refreshing agenda and mail") : Translation.tr("Loading agenda and mail")
+                text: UnifiedAgenda.mutationBusy
+                    ? Translation.tr("Syncing QuickMail task…")
+                    : root.hasAnyData
+                        ? Translation.tr("Refreshing agenda and mail")
+                        : Translation.tr("Loading agenda and mail")
                 color: Appearance.colors.colOnLayer1
                 font.pixelSize: Appearance.font.pixelSize.small
             }

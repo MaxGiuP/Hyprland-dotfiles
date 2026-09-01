@@ -1421,5 +1421,16 @@
   "Automatic sleep delay": "Automatischer Ruhezustand",
   "Controls the idle lock timeout used by hypridle. Use Keep awake in the right sidebar to pause idle actions temporarily.": "Steuert die von Hypridle verwendete Leerlauf-Sperrzeit. Mit ‚Wach halten‘ in der rechten Seitenleiste können Leerlaufaktionen vorübergehend pausiert werden.",
   "Set timer": "Timer stellen",
-  "Type a value or use the arrows, mouse wheel, and ↑/↓ keys": "Wert eingeben oder Pfeile, Mausrad und ↑/↓ verwenden"
+  "Type a value or use the arrows, mouse wheel, and ↑/↓ keys": "Wert eingeben oder Pfeile, Mausrad und ↑/↓ verwenden",
+  "Local device": "Lokales Gerät",
+  "Task destination": "Speichern in",
+  "Syncing QuickMail task…": "QuickMail-Aufgabe wird synchronisiert…",
+  "No writable QuickMail account is selected": "Kein beschreibbares QuickMail-Konto ausgewählt",
+  "Unknown QuickMail error": "Unbekannter QuickMail-Fehler",
+  "QuickMail task update failed: %1": "QuickMail-Aufgabe konnte nicht aktualisiert werden: %1",
+  "QuickMail: %1": "QuickMail: %1",
+  "Due date": "Fälligkeitsdatum",
+  "Due date: %1": "Fälligkeitsdatum: %1",
+  "Google Tasks stores due dates without a time.": "Google Tasks speichert Fälligkeitsdaten ohne Uhrzeit.",
+  "Use a valid date": "Gültiges Datum eingeben"
 }

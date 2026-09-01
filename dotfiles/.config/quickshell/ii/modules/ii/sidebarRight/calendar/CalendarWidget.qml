@@ -73,6 +73,20 @@ Item {
         return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
     }
 
+    function dateOnlyMatchesDay(timestamp, dayDate) {
+        const utcDate = new Date(timestamp);
+        return utcDate.getUTCFullYear() === dayDate.getFullYear()
+            && utcDate.getUTCMonth() === dayDate.getMonth()
+            && utcDate.getUTCDate() === dayDate.getDate();
+    }
+
+    function dateOnlyDisplayDate(timestamp) {
+        const utcDate = new Date(timestamp);
+        // Rebuild the provider's UTC calendar date locally before formatting;
+        // otherwise negative UTC offsets render it as the previous day.
+        return new Date(utcDate.getUTCFullYear(), utcDate.getUTCMonth(), utcDate.getUTCDate(), 12, 0, 0, 0);
+    }
+
     function localTasksForDay(dayDate) {
         const start = startOfDay(dayDate).getTime();
         const end = endOfDay(dayDate).getTime();
@@ -90,6 +104,8 @@ Item {
             const due = task.dueAt ?? 0;
             const entry = task.entryAt ?? 0;
             const ts = due > 0 ? due : entry;
+            if (due > 0 && root.isDateOnlyTask(task))
+                return root.dateOnlyMatchesDay(due, dayDate);
             return ts > 0 && ts >= range.startMs && ts < range.endMs;
         });
         return [...localTasksForDay(dayDate), ...imported];
@@ -110,6 +126,12 @@ Item {
 
     function allUpcomingItems() {
         const minTs = root.startOfDay(root.selectedDate).getTime();
+        const minDateOnlyTs = Date.UTC(
+            root.selectedDate.getFullYear(),
+            root.selectedDate.getMonth(),
+            root.selectedDate.getDate(),
+            0, 0, 0, 0
+        );
         const eventItems = root.remoteEvents
             .filter(item => {
                 const start = parseInt(item?.startAt ?? 0) || 0;
@@ -139,7 +161,10 @@ Item {
         const importedTaskItems = root.remoteTasks
             .filter(task => {
                 if (task.done) return false;
-                const ts = parseInt(task?.dueAt ?? task?.entryAt ?? 0) || 0;
+                const dueAt = parseInt(task?.dueAt ?? 0) || 0;
+                const ts = dueAt > 0 ? dueAt : (parseInt(task?.entryAt ?? 0) || 0);
+                if (dueAt > 0 && root.isDateOnlyTask(task))
+                    return dueAt >= minDateOnlyTs;
                 return ts >= minTs;
             })
             .map(task => ({
@@ -149,8 +174,10 @@ Item {
             "dueAt": task.dueAt || 0,
             "entryAt": task.entryAt || 0,
             "allDay": task.allDay === true,
+            "dateOnly": (parseInt(task?.dueAt ?? 0) || 0) > 0 && root.isDateOnlyTask(task),
+            "provider": task.provider || "QuickMail",
             "source": "quickmail-task",
-            "readOnly": true,
+            "readOnly": task.readOnly !== false,
         }));
 
         return [...eventItems, ...localTaskItems, ...importedTaskItems]
@@ -191,6 +218,10 @@ Item {
     function isAllDayTask(taskLike) {
         if (taskLike?.allDay === true)
             return true;
+        if (root.isDateOnlyTask(taskLike))
+            return true;
+        if (`${taskLike?.source ?? ""}` === "quickmail-task")
+            return false;
         if (!(taskLike?.readOnly || taskLike?.source === "quickmail-task"))
             return false;
         const ts = parseInt(taskLike?.dueAt ?? taskLike?.entryAt ?? taskLike?.at ?? 0) || 0;
@@ -203,12 +234,27 @@ Item {
             && d.getMilliseconds() === 0;
     }
 
+    function isDateOnlyTask(taskLike) {
+        if (taskLike?.dateOnly === true)
+            return true;
+        if (`${taskLike?.source ?? ""}` !== "quickmail-task")
+            return false;
+        return /gmail|google/.test(`${taskLike?.provider ?? ""}`.toLowerCase());
+    }
+
     function formatTaskDateTime(taskLike) {
-        const ts = parseInt(taskLike?.dueAt ?? taskLike?.entryAt ?? taskLike?.at ?? 0) || 0;
+        const dueAt = parseInt(taskLike?.dueAt ?? 0) || 0;
+        const ts = dueAt > 0
+            ? dueAt
+            : (parseInt(taskLike?.entryAt ?? taskLike?.at ?? 0) || 0);
         if (ts <= 0)
             return "";
         const d = new Date(ts);
-        const datePart = root.formatDateWithCapitalMonth(d, "dd MMM");
+        const dateOnly = dueAt > 0 && root.isDateOnlyTask(taskLike);
+        const displayDate = dateOnly ? root.dateOnlyDisplayDate(ts) : d;
+        const datePart = root.formatDateWithCapitalMonth(displayDate, "dd MMM");
+        if (dateOnly)
+            return datePart;
         const timePart = root.isAllDayTask(taskLike)
             ? "--:--"
             : d.toLocaleTimeString(Translation.locale, "HH:mm");
@@ -232,7 +278,7 @@ Item {
 
     function openQuickMailForDay(dateObj) {
         if (dateObj)
-            UnifiedAgenda.openCalendar();
+            UnifiedAgenda.openCalendarApp();
     }
 
     Keys.onPressed: (event) => {
@@ -299,7 +345,7 @@ Item {
             CalendarHeaderButton {
                 forceCircle: true
                 tooltipText: Translation.tr("Open QuickMail calendar")
-                downAction: () => UnifiedAgenda.openCalendar()
+                downAction: () => UnifiedAgenda.openCalendarApp()
                 contentItem: MaterialSymbol {
                     text: "open_in_new"
                     iconSize: Appearance.font.pixelSize.large

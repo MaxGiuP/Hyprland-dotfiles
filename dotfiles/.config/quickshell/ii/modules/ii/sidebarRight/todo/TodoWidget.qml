@@ -20,6 +20,17 @@ Item {
     property int fabSize: 38
     property int fabMargins: 10
     property bool dueEnabled: false
+    property int selectedDestinationIndex: 0
+    readonly property var taskDestinations: [{
+        id: "",
+        displayName: Translation.tr("Local device"),
+        provider: "local",
+        icon: "devices",
+        remote: false,
+    }].concat(UnifiedAgenda.writableTaskDestinations)
+    readonly property var selectedDestination: root.taskDestinations[Math.max(0, Math.min(root.selectedDestinationIndex, root.taskDestinations.length - 1))]
+    readonly property bool remoteDestinationSelected: !!root.selectedDestination?.remote
+    readonly property bool dateOnlyDueDestination: root.remoteDestinationSelected && !!root.selectedDestination?.dateOnlyDue
     readonly property bool dueInputValid: !root.dueEnabled || root.parseDueAt() > 0
     readonly property var localTodoList: {
         return Todo.list.map((item, i) => Object.assign({}, item, {
@@ -72,6 +83,11 @@ Item {
         }
     }
 
+    onTaskDestinationsChanged: {
+        if (root.selectedDestinationIndex >= root.taskDestinations.length)
+            root.selectedDestinationIndex = 0;
+    }
+
     function resetComposer() {
         titleInput.text = "";
         descriptionInput.text = "";
@@ -91,19 +107,38 @@ Item {
             dueTimeInput.text = "09:00";
     }
 
+    function parseDateOnlyDueAt(year, month, day) {
+        const timestamp = Date.UTC(year, month - 1, day, 0, 0, 0, 0);
+        const parsedUtc = new Date(timestamp);
+        if (parsedUtc.getUTCFullYear() !== year
+            || parsedUtc.getUTCMonth() !== month - 1
+            || parsedUtc.getUTCDate() !== day)
+            return -1;
+        return timestamp;
+    }
+
     function parseDueAt() {
         if (!root.dueEnabled)
             return 0;
         const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueDateInput.text.trim());
         const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(dueTimeInput.text.trim());
-        if (!dateMatch || !timeMatch)
+        if (!dateMatch || (!root.dateOnlyDueDestination && !timeMatch))
             return -1;
         const year = parseInt(dateMatch[1]);
         const month = parseInt(dateMatch[2]);
         const day = parseInt(dateMatch[3]);
+        if (month < 1 || month > 12 || day < 1 || day > 31)
+            return -1;
+
+        // Google Tasks persists due.date_naive() in UTC. Keep the selected
+        // calendar date canonical at UTC midnight so UTC+ offsets cannot move
+        // it to the previous day before QuickMail sends it to the provider.
+        if (root.dateOnlyDueDestination)
+            return root.parseDateOnlyDueAt(year, month, day);
+
         const hour = parseInt(timeMatch[1]);
         const minute = parseInt(timeMatch[2]);
-        if (month < 1 || month > 12 || day < 1 || day > 31 || hour < 0 || hour > 23 || minute < 0 || minute > 59)
+        if (hour < 0 || hour > 23 || minute < 0 || minute > 59)
             return -1;
         const parsed = new Date(year, month - 1, day, hour, minute, 0, 0);
         if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day)
@@ -156,6 +191,31 @@ Item {
                     buttonText: modelData.name
                     buttonIcon: modelData.icon
                 }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            spacing: 8
+            visible: UnifiedAgenda.mutationBusy || UnifiedAgenda.mutationError.length > 0
+
+            MaterialLoadingIndicator {
+                visible: UnifiedAgenda.mutationBusy
+                implicitSize: 18
+                loading: UnifiedAgenda.mutationBusy
+            }
+
+            StyledText {
+                Layout.fillWidth: true
+                text: UnifiedAgenda.mutationError.length > 0
+                    ? UnifiedAgenda.mutationError
+                    : Translation.tr("Syncing QuickMail task…")
+                color: UnifiedAgenda.mutationError.length > 0
+                    ? Appearance.colors.colError
+                    : Appearance.colors.colSubtext
+                font.pixelSize: Appearance.font.pixelSize.smaller
+                wrapMode: Text.Wrap
             }
         }
 
@@ -243,16 +303,31 @@ Item {
 
             function addTask() {
                 if (titleInput.text.trim().length > 0 && root.dueInputValid) {
-                    Todo.addTask(titleInput.text.trim(), descriptionInput.text.trim(), root.parseDueAt())
-                    root.showAddDialog = false
-                    tabBar.setCurrentIndex(0)
+                    const title = titleInput.text.trim();
+                    const description = descriptionInput.text.trim();
+                    const dueAt = root.parseDueAt();
+                    let accepted = true;
+                    if (root.remoteDestinationSelected) {
+                        accepted = UnifiedAgenda.createRemoteTask(
+                            root.selectedDestination.id,
+                            title,
+                            description,
+                            dueAt
+                        );
+                    } else {
+                        Todo.addTask(title, description, dueAt);
+                    }
+                    if (accepted) {
+                        root.showAddDialog = false;
+                        tabBar.setCurrentIndex(0);
+                    }
                 }
             }
 
             ColumnLayout {
                 id: dialogColumnLayout
                 anchors.fill: parent
-                spacing: 8
+                spacing: 6
 
                 StyledText {
                     Layout.topMargin: 10
@@ -301,7 +376,7 @@ Item {
                     Layout.leftMargin: 10
                     Layout.rightMargin: 10
                     padding: 8
-                    implicitHeight: 58
+                    implicitHeight: 48
                     color: activeFocus ? Appearance.m3colors.m3onSurface : Appearance.m3colors.m3onSurfaceVariant
                     renderType: Text.NativeRendering
                     selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
@@ -309,7 +384,7 @@ Item {
                     placeholderText: Translation.tr("Task description")
                     placeholderTextColor: Appearance.m3colors.m3outline
                     wrapMode: TextEdit.Wrap
-                    KeyNavigation.tab: dueDateInput
+                    KeyNavigation.tab: destinationInput
                     Keys.onPressed: event => {
                         if ((event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                                 && (event.modifiers & Qt.ControlModifier)) {
@@ -330,10 +405,37 @@ Item {
                     Layout.fillWidth: true
                     Layout.leftMargin: 10
                     Layout.rightMargin: 10
+                    spacing: 8
+
+                    StyledText {
+                        text: Translation.tr("Task destination")
+                        color: Appearance.m3colors.m3onSurface
+                        font.weight: Font.DemiBold
+                    }
+
+                    StyledComboBox {
+                        id: destinationInput
+                        Layout.fillWidth: true
+                        implicitHeight: 36
+                        model: root.taskDestinations
+                        textRole: "displayName"
+                        currentIndex: root.selectedDestinationIndex
+                        enabled: !UnifiedAgenda.mutationBusy
+                        onActivated: index => root.selectedDestinationIndex = index
+                        KeyNavigation.tab: dueDateInput
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 10
+                    Layout.rightMargin: 10
                     spacing: 6
 
                     StyledText {
-                        text: Translation.tr("Due")
+                        text: root.dateOnlyDueDestination
+                            ? Translation.tr("Due date")
+                            : Translation.tr("Due")
                         color: Appearance.m3colors.m3onSurface
                         font.weight: Font.DemiBold
                     }
@@ -391,8 +493,13 @@ Item {
                         color: Appearance.m3colors.m3onSurface
                         selectedTextColor: Appearance.m3colors.m3onSecondaryContainer
                         selectionColor: Appearance.colors.colSecondaryContainer
-                        KeyNavigation.tab: dueTimeInput
-                        onAccepted: dueTimeInput.forceActiveFocus()
+                        KeyNavigation.tab: root.dateOnlyDueDestination ? titleInput : dueTimeInput
+                        onAccepted: {
+                            if (root.dateOnlyDueDestination)
+                                dialogCard.addTask();
+                            else
+                                dueTimeInput.forceActiveFocus();
+                        }
                         background: Rectangle {
                             radius: Appearance.rounding.verysmall
                             color: "transparent"
@@ -408,7 +515,8 @@ Item {
                     TextField {
                         id: dueTimeInput
                         Layout.preferredWidth: 90
-                        enabled: root.dueEnabled
+                        visible: !root.dateOnlyDueDestination
+                        enabled: root.dueEnabled && visible
                         placeholderText: "HH:MM"
                         inputMethodHints: Qt.ImhTime
                         horizontalAlignment: TextInput.AlignHCenter
@@ -435,8 +543,21 @@ Item {
                     Layout.leftMargin: 10
                     Layout.rightMargin: 10
                     Layout.fillWidth: true
+                    visible: root.dueEnabled && root.dateOnlyDueDestination
+                    text: Translation.tr("Google Tasks stores due dates without a time.")
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                    wrapMode: Text.Wrap
+                }
+
+                StyledText {
+                    Layout.leftMargin: 10
+                    Layout.rightMargin: 10
+                    Layout.fillWidth: true
                     visible: root.dueEnabled && !root.dueInputValid
-                    text: Translation.tr("Use a valid date and 24-hour time")
+                    text: root.dateOnlyDueDestination
+                        ? Translation.tr("Use a valid date")
+                        : Translation.tr("Use a valid date and 24-hour time")
                     color: Appearance.colors.colError
                     font.pixelSize: Appearance.font.pixelSize.smaller
                 }
@@ -454,7 +575,9 @@ Item {
                     }
                     DialogButton {
                         buttonText: Translation.tr("Add")
-                        enabled: titleInput.text.trim().length > 0 && root.dueInputValid
+                        enabled: titleInput.text.trim().length > 0
+                            && root.dueInputValid
+                            && (!root.remoteDestinationSelected || !UnifiedAgenda.mutationBusy)
                         onClicked: dialogCard.addTask()
                     }
                 }

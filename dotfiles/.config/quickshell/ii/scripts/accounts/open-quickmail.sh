@@ -62,7 +62,7 @@ case "$mode" in
       printf 'open-quickmail.sh: calendar does not accept a target\n' >&2
       exit 2
     fi
-    exec qs -c ii ipc call quickMail calendar
+    launch_quickmail --calendar
     ;;
   *)
     printf 'usage: %s [mail [mailto:URI] | accounts | calendar]\n' "${0##*/}" >&2

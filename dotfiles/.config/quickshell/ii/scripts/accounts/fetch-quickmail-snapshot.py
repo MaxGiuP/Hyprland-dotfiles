@@ -15,6 +15,17 @@ import subprocess
 from pathlib import Path
 
 
+WRITABLE_TASK_PROVIDERS = {
+    "gmail",
+    "google",
+    "outlook",
+    "hotmail",
+    "microsoft",
+    "microsoft365",
+    "office365",
+}
+
+
 def quickmailctl_path():
     override = os.environ.get("QUICKMAILCTL", "").strip()
     candidates = [
@@ -72,6 +83,51 @@ def author_text(author):
     return str(author or "").strip()
 
 
+def provider_supports_tasks(provider):
+    return str(provider or "").strip().lower() in WRITABLE_TASK_PROVIDERS
+
+
+def provider_uses_date_only_tasks(provider):
+    normalized = str(provider or "").strip().lower()
+    return "gmail" in normalized or "google" in normalized
+
+
+def capability(mapping, *keys, default=False):
+    capabilities = first(mapping, "capabilities", default={}) or {}
+    explicit = first(mapping, *keys, default=None)
+    if explicit is None and isinstance(capabilities, dict):
+        explicit = first(capabilities, *keys, default=None)
+    return bool(default if explicit is None else explicit)
+
+
+def derive_event_account_id(calendar_id, calendar_name, accounts):
+    """Recover an event's account when older snapshots omit accountId."""
+    calendar_id_folded = str(calendar_id or "").strip().casefold()
+    calendar_name_folded = str(calendar_name or "").strip().casefold()
+    for account in accounts:
+        account_id = str(account.get("id", "")).strip()
+        if not account_id:
+            continue
+        account_id_folded = account_id.casefold()
+        names = {
+            account_id_folded,
+            str(account.get("address", "")).strip().casefold(),
+            str(account.get("displayName", "")).strip().casefold(),
+        }
+        names.discard("")
+        if calendar_id_folded in names or calendar_name_folded in names:
+            return account_id
+        if any(
+            calendar_id_folded.startswith(f"{account_id_folded}{separator}")
+            or calendar_id_folded.endswith(f"{separator}{account_id_folded}")
+            for separator in (":", "/", "|", "#")
+        ):
+            return account_id
+    if len(accounts) == 1:
+        return str(accounts[0].get("id", ""))
+    return ""
+
+
 def normalize(snapshot):
     if isinstance(snapshot.get("snapshot"), dict):
         snapshot = snapshot["snapshot"]
@@ -79,19 +135,53 @@ def normalize(snapshot):
     raw_accounts = first(snapshot, "accounts", default=[]) or []
     accounts = []
     account_addresses = {}
+    account_providers = {}
+    account_task_writable = {}
+    account_task_date_only = {}
     for raw in raw_accounts:
         account_id = str(first(raw, "id", "accountId", "account_id", default=""))
         address = str(first(raw, "address", "email", default=""))
+        provider = str(first(raw, "provider", default="QuickMail"))
+        task_writable = capability(
+            raw,
+            "taskWritable",
+            "task_writable",
+            "tasksWrite",
+            "tasks_write",
+            default=provider_supports_tasks(provider),
+        )
+        task_date_only = capability(
+            raw,
+            "taskDateOnly",
+            "task_date_only",
+            "taskDueDateOnly",
+            "task_due_date_only",
+            default=provider_uses_date_only_tasks(provider),
+        )
         account_addresses[account_id] = address
+        account_providers[account_id] = provider
+        account_task_writable[account_id] = task_writable
+        account_task_date_only[account_id] = task_date_only
         accounts.append({
             "id": account_id,
             "address": address,
             "displayName": str(first(raw, "displayName", "display_name", default="")),
             "host": str(first(raw, "host", default="")),
-            "provider": str(first(raw, "provider", default="QuickMail")),
+            "provider": provider,
             "protocol": str(first(raw, "protocol", default="")),
             "unread": int(first(raw, "unread", "unreadCount", "unread_count", default=0) or 0),
             "total": int(first(raw, "total", "messageCount", "message_count", default=0) or 0),
+            "taskWritable": task_writable,
+            "taskDateOnly": task_date_only,
+            "calendarWritable": capability(
+                raw,
+                "calendarWritable",
+                "calendar_writable",
+                "calendarWrite",
+                "calendar_write",
+                default=False,
+            ),
+            "capabilities": first(raw, "capabilities", default={}) or {},
         })
 
     raw_messages = first(snapshot, "recentMail", "recent_mail", "messages", default=[]) or []
@@ -112,6 +202,25 @@ def normalize(snapshot):
 
     tasks = []
     for raw in first(snapshot, "tasks", default=[]) or []:
+        account_id = str(first(raw, "accountId", "account_id", "account", default=""))
+        provider = str(first(raw, "provider", default=account_providers.get(account_id, "QuickMail")))
+        writable = capability(
+            raw,
+            "writable",
+            "taskWritable",
+            "task_writable",
+            default=account_task_writable.get(account_id, provider_supports_tasks(provider)),
+        )
+        read_only = bool(first(raw, "readOnly", "read_only", default=not writable))
+        writable = writable and not read_only
+        date_only = bool(first(
+            raw,
+            "dateOnly",
+            "date_only",
+            "dueDateOnly",
+            "due_date_only",
+            default=account_task_date_only.get(account_id, provider_uses_date_only_tasks(provider)),
+        ))
         tasks.append({
             "id": str(first(raw, "id", default="")),
             "externalId": str(first(raw, "externalId", "external_id", "id", default="")),
@@ -121,25 +230,49 @@ def normalize(snapshot):
             "done": bool(first(raw, "done", "completed", default=False)),
             "dueAt": timestamp_ms(first(raw, "dueAt", "due_at", default=0)),
             "entryAt": timestamp_ms(first(raw, "createdAt", "created_at", default=0)),
-            "calendarName": str(first(raw, "account", "calendarName", "calendar_name", default="QuickMail")),
+            "accountId": account_id,
+            "account": account_addresses.get(account_id, account_id),
+            "provider": provider,
+            "calendarName": str(first(
+                raw,
+                "calendarName",
+                "calendar_name",
+                default=account_addresses.get(account_id, account_id) or "QuickMail",
+            )),
+            "taskListId": str(first(raw, "taskListId", "task_list_id", default="")),
             "source": "quickmail-task",
-            "readOnly": True,
+            "writable": writable,
+            "readOnly": read_only,
+            "dateOnly": date_only,
+            "capabilities": first(raw, "capabilities", default={}) or {},
         })
 
     events = []
     for raw in first(snapshot, "events", default=[]) or []:
         calendar_id = str(first(raw, "calendarId", "calendar_id", default=""))
+        calendar_name = str(first(raw, "calendarName", "calendar_name", default="QuickMail"))
+        account_id = str(first(raw, "accountId", "account_id", "account", default=""))
+        if not account_id:
+            account_id = derive_event_account_id(calendar_id, calendar_name, accounts)
+        provider = str(first(raw, "provider", default=account_providers.get(account_id, "QuickMail")))
+        read_only = bool(first(raw, "readOnly", "read_only", default=True))
+        writable = capability(raw, "writable", "calendarWritable", "calendar_writable", default=not read_only) and not read_only
         events.append({
             "id": str(first(raw, "id", default="")),
             "externalId": str(first(raw, "externalId", "external_id", "id", default="")),
             "calId": calendar_id,
-            "calendarName": str(first(raw, "calendarName", "calendar_name", default="QuickMail")),
+            "accountId": account_id,
+            "account": account_addresses.get(account_id, account_id),
+            "provider": provider,
+            "calendarName": calendar_name,
             "title": str(first(raw, "title", default="")),
             "description": str(first(raw, "description", default="")),
             "startAt": timestamp_ms(first(raw, "startAt", "start_at", default=0)),
             "endAt": timestamp_ms(first(raw, "endAt", "end_at", default=0)),
             "allDay": bool(first(raw, "allDay", "all_day", default=False)),
-            "readOnly": bool(first(raw, "readOnly", "read_only", default=True)),
+            "writable": writable,
+            "readOnly": read_only,
+            "capabilities": first(raw, "capabilities", default={}) or {},
             "source": "quickmail-event",
         })
 
