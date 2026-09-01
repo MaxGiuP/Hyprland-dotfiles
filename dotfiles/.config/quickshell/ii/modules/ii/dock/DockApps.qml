@@ -294,12 +294,17 @@ Item {
 
                                 ButtonGroup {
                                     contentWidth: parent.width - anchors.margins * 2
-                                    WrapperRectangle {
+                                    Rectangle {
+                                        id: previewTitleBackground
                                         Layout.fillWidth: true
+                                        implicitWidth: previewTitle.implicitWidth + 10
+                                        implicitHeight: previewTitle.implicitHeight + 10
                                         color: ColorUtils.transparentize(Appearance.colors.colSurfaceContainer)
                                         radius: Appearance.rounding.small
-                                        margin: 5
                                         StyledText {
+                                            id: previewTitle
+                                            anchors.fill: parent
+                                            anchors.margins: 5
                                             Layout.fillWidth: true
                                             font.pixelSize: Appearance.font.pixelSize.small
                                             text: windowButton.modelData?.title

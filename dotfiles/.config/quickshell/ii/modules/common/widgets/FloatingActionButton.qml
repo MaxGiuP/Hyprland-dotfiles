@@ -45,6 +45,10 @@ RippleButton {
             sourceComponent: Revealer {
                 reveal: root.expanded
                 implicitWidth: reveal ? (buttonText.implicitWidth + root.elementSpacing + contentRowLayout.horizontalMargins) : 0
+                // Avoid deriving our height through childrenRect: the child is
+                // vertically centred against this item, which otherwise makes
+                // implicitHeight depend on itself.
+                implicitHeight: buttonText.implicitHeight
                 StyledText {
                     id: buttonText
                     anchors {
