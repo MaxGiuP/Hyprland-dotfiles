@@ -1,24 +1,24 @@
 [Desktop Entry]
 Type=Application
 Name=QuickMail
+GenericName=Email Client
 Comment=Fast local-first mail, accounts and agenda
-Icon=mail-unread
-Exec=qs -c ii ipc call quickMail open
+Exec=/home/linmax/.config/quickshell/ii/scripts/accounts/open-quickmail.sh mail %u
+TryExec=/home/linmax/.config/quickshell/ii/scripts/accounts/open-quickmail.sh
+Icon=mail-unread-symbolic
 Terminal=false
+StartupNotify=true
 Categories=Network;Email;
 Keywords=mail;email;gmail;imap;calendar;agenda;quickmail;
-MimeType=x-scheme-handler/mailto;message/rfc822;
-StartupNotify=true
-Actions=Accounts;Calendar;Refresh;
+MimeType=x-scheme-handler/mailto;
+StartupWMClass=org.quickshell
+SingleMainWindow=true
+Actions=Accounts;Calendar;
 
 [Desktop Action Accounts]
 Name=Accounts
-Exec=qs -c ii ipc call quickMail accounts
+Exec=/home/linmax/.config/quickshell/ii/scripts/accounts/open-quickmail.sh accounts
 
 [Desktop Action Calendar]
 Name=Calendar
-Exec=qs -c ii ipc call quickMail calendar
-
-[Desktop Action Refresh]
-Name=Refresh dashboard data
-Exec=qs -c ii ipc call quickMail refresh
+Exec=/home/linmax/.config/quickshell/ii/scripts/accounts/open-quickmail.sh calendar

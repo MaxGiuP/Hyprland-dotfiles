@@ -1,56 +1,71 @@
 #!/usr/bin/env bash
-set -u
+set -euo pipefail
 
 mode="${1:-mail}"
 target="${2:-}"
 project_dir="${QUICKMAIL_PROJECT:-$HOME/QuickMail}"
 
-if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  running_address=$(hyprctl clients -j 2>/dev/null \
-    | jq -r '.[] | select((.title // "") | startswith("QuickMail")) | .address' \
-    | head -n 1)
-  if [ -n "$running_address" ]; then
-    hyprctl dispatch "hl.dsp.focus({ window = \"address:$running_address\" })" >/dev/null 2>&1 || true
-    exit 0
-  fi
+if (( $# > 2 )); then
+  printf 'usage: %s [mail [mailto:URI] | accounts | calendar]\n' "${0##*/}" >&2
+  exit 2
 fi
 
-launch_binary() {
-  local binary="$1"
-  if [ -n "$target" ]; then
-    exec "$binary" "$target"
+find_launcher() {
+  local candidate
+  candidate="$(command -v quickmail 2>/dev/null || true)"
+  if [[ -n "$candidate" && -x "$candidate" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
   fi
-  exec "$binary"
+
+  candidate="$project_dir/packaging/quickmail"
+  if [[ -x "$candidate" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  return 1
 }
 
-if command -v quickmail >/dev/null 2>&1; then
-  launch_binary "$(command -v quickmail)"
-fi
-
-for binary in \
-  "$project_dir/target/release/quickmail" \
-  "$project_dir/target/debug/quickmail"; do
-  if [ -x "$binary" ]; then
-    launch_binary "$binary"
+launch_quickmail() {
+  local launcher
+  if ! launcher="$(find_launcher)"; then
+    if command -v notify-send >/dev/null 2>&1; then
+      notify-send --app-name=QuickMail --icon=mail-unread \
+        'QuickMail is not installed' \
+        'Install QuickMail or set QUICKMAIL_PROJECT to its source checkout.'
+    fi
+    return 127
   fi
-done
+  exec "$launcher" "$@"
+}
 
-if [ -x "$project_dir/packaging/quickmail" ]; then
-  exec "$project_dir/packaging/quickmail"
-fi
-
-for entry in "$project_dir/qml/main.qml" "$project_dir/qml/shell.qml"; do
-  if [ -f "$entry" ]; then
-    exec qs -p "$entry"
-  fi
-done
-
-if command -v notify-send >/dev/null 2>&1; then
-  notify-send \
-    --app-name="QuickMail" \
-    --icon=mail-unread \
-    "QuickMail is still being built" \
-    "The dashboard bridge is ready and will connect automatically when the client and daemon are installed. Requested view: $mode."
-fi
-
-exit 1
+case "$mode" in
+  mail)
+    if [[ -n "$target" ]]; then
+      if [[ ! "$target" =~ ^[mM][aA][iI][lL][tT][oO]: ]]; then
+        printf 'open-quickmail.sh: mail target must be a mailto URI\n' >&2
+        exit 2
+      fi
+      launch_quickmail -- "$target"
+    fi
+    launch_quickmail
+    ;;
+  accounts)
+    if [[ -n "$target" ]]; then
+      printf 'open-quickmail.sh: accounts does not accept a target\n' >&2
+      exit 2
+    fi
+    launch_quickmail --accounts
+    ;;
+  calendar)
+    if [[ -n "$target" ]]; then
+      printf 'open-quickmail.sh: calendar does not accept a target\n' >&2
+      exit 2
+    fi
+    exec qs -c ii ipc call quickMail calendar
+    ;;
+  *)
+    printf 'usage: %s [mail [mailto:URI] | accounts | calendar]\n' "${0##*/}" >&2
+    exit 2
+    ;;
+esac
