@@ -411,6 +411,7 @@ Item {
                         required property int index
                         property var app: appCell.modelData
                         readonly property int navigationIndex: (rowItem.modelData.navigationOffset ?? 0) + appCell.index
+                        readonly property bool selected: appCell.navigationIndex === root.selectedAppIndex
                         width: appList.width / root.columns
                         height: root.cellHeight
 
@@ -418,13 +419,8 @@ Item {
                             anchors.fill: parent
                             anchors.margins: 6
                             radius: Appearance.rounding.normal
-                            color: appCell.navigationIndex === root.selectedAppIndex
-                                ? Qt.rgba(
-                                    Appearance.colors.colPrimary.r,
-                                    Appearance.colors.colPrimary.g,
-                                    Appearance.colors.colPrimary.b,
-                                    0.24
-                                  )
+                            color: appCell.selected
+                                ? Appearance.colors.colPrimary
                                 : appArea.containsMouse
                                 ? Qt.rgba(
                                     Appearance.colors.colPrimary.r,
@@ -454,8 +450,11 @@ Item {
                                 Layout.alignment: Qt.AlignHCenter
                                 Layout.preferredWidth: (appList.width / root.columns) - 16
                                 text: appCell.app?.name ?? ""
-                                color: Appearance.colors.colOnSurface
+                                color: appCell.selected
+                                    ? Appearance.colors.colOnPrimary
+                                    : Appearance.colors.colOnSurface
                                 font.pixelSize: Appearance.font.pixelSize.small - 1
+                                font.weight: appCell.selected ? Font.DemiBold : Font.Normal
                                 horizontalAlignment: Text.AlignHCenter
                                 elide: Text.ElideRight
                                 wrapMode: Text.WordWrap
