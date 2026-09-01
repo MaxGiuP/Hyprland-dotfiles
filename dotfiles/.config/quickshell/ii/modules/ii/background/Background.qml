@@ -54,6 +54,10 @@ Variants {
         property bool wallpaperRevealPending: false
         property bool wallpaperRevealWarming: false
         property int wallpaperRevealWarmupFrames: 0
+        property bool wallpaperRevealHandoffPending: false
+        property bool wallpaperRevealHandoffWarming: false
+        property int wallpaperRevealHandoffFrames: 0
+        property string wallpaperRevealHandoffPath: ""
         property bool wallpaperPreloadWarming: false
         property int wallpaperPreloadWarmupFrames: 0
         property real wallpaperRevealProgress: 1
@@ -145,6 +149,10 @@ Variants {
             wallpaperRevealPending = false
             wallpaperRevealWarming = false
             wallpaperRevealWarmupFrames = 0
+            wallpaperRevealHandoffPending = false
+            wallpaperRevealHandoffWarming = false
+            wallpaperRevealHandoffFrames = 0
+            wallpaperRevealHandoffPath = ""
             wallpaperRevealProgress = 1
         }
 
@@ -155,6 +163,10 @@ Variants {
             wallpaperRevealPending = true
             wallpaperRevealWarming = false
             wallpaperRevealWarmupFrames = 0
+            wallpaperRevealHandoffPending = false
+            wallpaperRevealHandoffWarming = false
+            wallpaperRevealHandoffFrames = 0
+            wallpaperRevealHandoffPath = ""
             wallpaperRevealProgress = 0
             Qt.callLater(bgRoot.startWallpaperRevealIfReady)
         }
@@ -183,16 +195,52 @@ Variants {
         }
 
         function finishWallpaperReveal() {
-            const nextPath = queuedRevealWallpaperPath
-            displayedWallpaperPath = revealWallpaperPath
-            revealWallpaperPath = ""
-            queuedRevealWallpaperPath = ""
-            wallpaperRevealActive = false
+            const completedPath = revealWallpaperPath
+            displayedWallpaperPath = completedPath
             wallpaperRevealPending = false
             wallpaperRevealWarming = false
             wallpaperRevealWarmupFrames = 0
             wallpaperRevealProgress = 1
+            wallpaperRevealHandoffPath = completedPath
+            wallpaperRevealHandoffPending = true
+            wallpaperRevealHandoffWarming = false
+            wallpaperRevealHandoffFrames = 0
             updateZoomScale()
+            Qt.callLater(bgRoot.startWallpaperRevealHandoffIfReady)
+        }
+
+        function wallpaperRevealHandoffReady() {
+            if (!wallpaperRevealHandoffPending || wallpaperRevealHandoffPath.length === 0)
+                return false
+            const expectedSource = Qt.resolvedUrl(wallpaperRevealHandoffPath).toString()
+            return wallpaper.status === Image.Ready && wallpaper.source.toString() === expectedSource
+        }
+
+        function startWallpaperRevealHandoffIfReady() {
+            if (!wallpaperRevealHandoffReady()) {
+                wallpaperRevealHandoffWarming = false
+                wallpaperRevealHandoffFrames = 0
+                return
+            }
+            wallpaperRevealHandoffFrames = 0
+            wallpaperRevealHandoffWarming = true
+        }
+
+        function completeWallpaperRevealHandoff() {
+            if (!wallpaperRevealHandoffReady()) {
+                wallpaperRevealHandoffWarming = false
+                wallpaperRevealHandoffFrames = 0
+                return
+            }
+
+            const nextPath = queuedRevealWallpaperPath
+            wallpaperRevealHandoffPending = false
+            wallpaperRevealHandoffWarming = false
+            wallpaperRevealHandoffFrames = 0
+            wallpaperRevealHandoffPath = ""
+            revealWallpaperPath = ""
+            queuedRevealWallpaperPath = ""
+            wallpaperRevealActive = false
             if (nextPath.length > 0 && nextPath !== displayedWallpaperPath && nextPath === wallpaperPath && !wallpaperIsVideo && !wallpaperSafetyTriggered)
                 Qt.callLater(() => bgRoot.beginWallpaperReveal(nextPath))
         }
@@ -268,6 +316,20 @@ Variants {
                 bgRoot.wallpaperRevealWarmupFrames += 1
                 if (bgRoot.wallpaperRevealWarmupFrames >= 3)
                     bgRoot.startWallpaperRevealAnimation()
+            }
+        }
+
+        FrameAnimation {
+            running: bgRoot.wallpaperRevealHandoffWarming
+            onTriggered: {
+                if (!bgRoot.wallpaperRevealHandoffReady()) {
+                    bgRoot.wallpaperRevealHandoffWarming = false
+                    bgRoot.wallpaperRevealHandoffFrames = 0
+                    return
+                }
+                bgRoot.wallpaperRevealHandoffFrames += 1
+                if (bgRoot.wallpaperRevealHandoffFrames >= 3)
+                    bgRoot.completeWallpaperRevealHandoff()
             }
         }
 
@@ -361,6 +423,8 @@ Variants {
                 }
                 width: bgRoot.wallpaperWidth / bgRoot.wallpaperToScreenRatio * bgRoot.effectiveWallpaperScale
                 height: bgRoot.wallpaperHeight / bgRoot.wallpaperToScreenRatio * bgRoot.effectiveWallpaperScale
+                onSourceChanged: bgRoot.startWallpaperRevealHandoffIfReady()
+                onStatusChanged: bgRoot.startWallpaperRevealHandoffIfReady()
             }
 
             Item {
