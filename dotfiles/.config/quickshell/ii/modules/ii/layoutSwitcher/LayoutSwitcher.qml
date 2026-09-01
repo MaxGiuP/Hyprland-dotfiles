@@ -17,7 +17,7 @@ Scope {
     readonly property var targetScreen: Quickshell.screens.find(screen => screen.name === targetScreenName)
                                         ?? Quickshell.screens[0]
                                         ?? null
-    // Deliberately translucent while testing the compositor's layer blur.
+    // Slight translucency for the small dialog card behind the entries.
     readonly property real frostedOpacity: 0.65
 
     function prepareTargetScreen() {
@@ -123,7 +123,8 @@ Scope {
 
         sourceComponent: PanelWindow {
             id: panelWindow
-            // This surface is only the dialog card.
+            // This surface is only the dialog card, so Hyprland blurs the card
+            // rather than the full-screen dimming layer.
             visible: root.isOpen
             screen: root.targetScreen
 
@@ -179,7 +180,10 @@ Scope {
                     }
                 }
 
+                // The small box behind the layout entries. This feeds the
+                // dialog-only blur layer and never alters the desktop cover.
                 Rectangle {
+                    id: dialogBackground
                     anchors.fill: parent
                     color: ColorUtils.applyAlpha(Appearance.colors.colLayer0Base, root.frostedOpacity)
                     border.width: 1
@@ -238,13 +242,13 @@ Scope {
                             width: listColumn.width
                             height: 76
                             radius: Appearance.rounding.small
-                            color: selected
-                                ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 0.08)
-                                : (current
-                                    ? ColorUtils.transparentize(Appearance.colors.colSecondaryContainer, 0.18)
+                            color: current
+                                ? ColorUtils.applyAlpha(Appearance.colors.colLayer1Base, 0.94)
+                                : (selected
+                                    ? ColorUtils.transparentize(Appearance.colors.colLayer1Hover, 0.08)
                                     : "transparent")
                             border.width: (selected || current) ? 1 : 0
-                            border.color: current ? Appearance.colors.colPrimary : Appearance.colors.colLayer0Border
+                            border.color: current ? Appearance.colors.colOutline : Appearance.colors.colLayer0Border
 
                             Behavior on color { ColorAnimation { duration: 100 } }
 
@@ -257,7 +261,7 @@ Scope {
                                 width: 4
                                 height: 36
                                 radius: width / 2
-                                color: Appearance.colors.colPrimary
+                                color: Appearance.colors.colOutline
                                 visible: current
                             }
 
@@ -303,7 +307,7 @@ Scope {
 
                                 Text {
                                     text: modelData.name
-                                    color: current ? Appearance.colors.colPrimary : Appearance.colors.colOnLayer0
+                                    color: Appearance.colors.colOnLayer0
                                     font.family: Appearance.font.family.main
                                     font.pixelSize: Appearance.font.pixelSize.normal
                                     font.weight: Font.DemiBold
@@ -338,7 +342,9 @@ Scope {
                                         width: modelData.w * preview.width - 6
                                         height: modelData.h * preview.height - 6
                                         radius: 4
-                                        color: selected ? Appearance.colors.colPrimary : Appearance.colors.colSecondaryContainer
+                                        color: current
+                                            ? Appearance.colors.colOutline
+                                            : (selected ? Appearance.colors.colPrimary : Appearance.colors.colSecondaryContainer)
                                     }
                                 }
                             }

@@ -6,6 +6,7 @@
 
 # machine-specific
 monitors.xml*
+dotfiles/.config/quickshell/ii/desktop_positions.json
 *.swp
 *.swo
 

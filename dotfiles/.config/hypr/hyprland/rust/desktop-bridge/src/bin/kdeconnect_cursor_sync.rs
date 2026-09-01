@@ -114,6 +114,7 @@ impl ScrollEngine {
             .spawn();
     }
 }
+
 fn env_f64(name: &str, default: f64) -> f64 {
     env::var(name)
         .ok()

@@ -76,6 +76,7 @@ fn normalize_address(address: &str) -> String {
         format!("0x{address}")
     }
 }
+
 fn address_selector(address: &str) -> String {
     format!("address:{}", normalize_address(address))
 }

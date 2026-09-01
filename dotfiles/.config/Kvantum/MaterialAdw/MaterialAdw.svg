@@ -42,16 +42,16 @@
     <style
        type="text/css"
        id="current-color-scheme">.ColorScheme-Highlight {
-        color:#3e4852;
-        stop-color:#3e4852;
+        color:#394a46;
+        stop-color:#394a46;
       }
       .ColorScheme-Background {
         color:#19120c;
         stop-color:#19120c;
       }
       .ColorScheme-Highlight {
-        color:#3e4852;
-        stop-color:#3e4852;
+        color:#394a46;
+        stop-color:#394a46;
       }
       .ColorScheme-ViewText {
         color:#19120c;

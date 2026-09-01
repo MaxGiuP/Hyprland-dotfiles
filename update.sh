@@ -25,6 +25,9 @@ RSYNC_ARGS=(
     --no-group
     --exclude=__pycache__/
     --exclude=*.pyc
+    --exclude=.git/
+    --exclude=target/
+    --exclude=desktop_positions.json
     --exclude=anon_inode:*
     --exclude=pipe:*
     --exclude=socket:*
@@ -129,6 +132,9 @@ for cfg in "${MANAGED[@]}"; do
         changed=$(rsync -rin --delete \
             --exclude=__pycache__/ \
             --exclude='*.pyc' \
+            --exclude='.git/' \
+            --exclude='target/' \
+            --exclude='desktop_positions.json' \
             --exclude='anon_inode:*' \
             --exclude='pipe:*' \
             --exclude='socket:*' \

@@ -1037,17 +1037,20 @@ Item {
                                 visible: deviceCard.quickActions.length > 0
                                 Layout.fillWidth: true
                                 spacing: 6
+
                                 RowLayout {
                                     Layout.fillWidth: true
                                     MaterialSymbol { text: "tune"; iconSize: 15; color: Appearance.colors.colPrimary }
                                     StyledText { text: Translation.tr("Device controls"); font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; Layout.fillWidth: true }
                                 }
+
                                 GridLayout {
                                     Layout.fillWidth: true
                                     columns: 2
                                     columnSpacing: 6
                                     rowSpacing: 6
                                     uniformCellWidths: true
+
                                     Repeater {
                                         model: deviceCard.quickActions
                                         delegate: RippleButton {
@@ -1082,16 +1085,19 @@ Item {
                                 visible: deviceCard.supports("share")
                                 Layout.fillWidth: true
                                 spacing: 6
+
                                 RowLayout {
                                     Layout.fillWidth: true
                                     MaterialSymbol { text: "ios_share"; iconSize: 15; color: Appearance.colors.colPrimary }
                                     StyledText { text: Translation.tr("Share with device"); font.pixelSize: Appearance.font.pixelSize.small; font.weight: Font.Medium; Layout.fillWidth: true }
                                 }
+
                                 Rectangle {
                                     Layout.fillWidth: true
                                     implicitHeight: 36
                                     radius: Appearance.rounding.small
                                     color: Appearance.colors.colLayer3
+
                                     RowLayout {
                                         anchors.fill: parent
                                         anchors.leftMargin: 8
@@ -1101,13 +1107,16 @@ Item {
                                         spacing: 4
                                         MaterialSymbol { text: "attach_file"; iconSize: 15; color: Appearance.colors.colSubtext }
                                         TextField {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
                                             text: root.sharePath
                                             onTextChanged: root.sharePath = text
                                             placeholderText: Translation.tr("Choose a file")
-                                            color: Appearance.colors.colOnLayer3; placeholderTextColor: Appearance.colors.colSubtext
+                                            color: Appearance.colors.colOnLayer3
+                                            placeholderTextColor: Appearance.colors.colSubtext
                                             verticalAlignment: TextInput.AlignVCenter
-                                            leftPadding: 4; rightPadding: 4; topPadding: 0; bottomPadding: 0
+                                            leftPadding: 4; rightPadding: 4
+                                            topPadding: 0; bottomPadding: 0
                                             font.pixelSize: Appearance.font.pixelSize.small
                                             background: Item {}
                                         }
@@ -1126,6 +1135,7 @@ Item {
                                         }
                                     }
                                 }
+
                                 Rectangle {
                                     Layout.fillWidth: true
                                     implicitHeight: 32
@@ -1133,16 +1143,22 @@ Item {
                                     color: Appearance.colors.colLayer3
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.leftMargin: 8; anchors.rightMargin: 4; anchors.topMargin: 3; anchors.bottomMargin: 3
+                                        anchors.leftMargin: 8
+                                        anchors.rightMargin: 4
+                                        anchors.topMargin: 3
+                                        anchors.bottomMargin: 3
                                         spacing: 4
                                         TextField {
-                                            Layout.fillWidth: true; Layout.fillHeight: true
+                                            Layout.fillWidth: true
+                                            Layout.fillHeight: true
                                             placeholderText: Translation.tr("Send a note")
                                             text: deviceCard.keyPayload
                                             onTextChanged: deviceCard.keyPayload = text
-                                            color: Appearance.colors.colOnLayer3; placeholderTextColor: Appearance.colors.colSubtext
+                                            color: Appearance.colors.colOnLayer3
+                                            placeholderTextColor: Appearance.colors.colSubtext
                                             verticalAlignment: TextInput.AlignVCenter
-                                            leftPadding: 0; rightPadding: 0; topPadding: 0; bottomPadding: 0
+                                            leftPadding: 0; rightPadding: 0
+                                            topPadding: 0; bottomPadding: 0
                                             font.pixelSize: Appearance.font.pixelSize.smaller
                                             background: Item {}
                                         }

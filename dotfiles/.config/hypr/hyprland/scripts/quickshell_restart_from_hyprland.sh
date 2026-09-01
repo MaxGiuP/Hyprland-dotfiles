@@ -16,11 +16,13 @@ fi
 sleep "${QS_HYPRLAND_START_DELAY:-0.1}"
 "$EVENT_LOG" hyprland-exec-once-start "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
 
-if command -v systemctl >/dev/null 2>&1 && systemctl --user start "$SERVICE_NAME" >/dev/null 2>&1; then
+if command -v systemctl >/dev/null 2>&1 \
+    && systemctl --user start "$SERVICE_NAME" >/dev/null 2>&1 \
+    && systemctl --user is-active --quiet "$SERVICE_NAME"; then
   "$EVENT_LOG" hyprland-systemd-started "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
 else
   "$EVENT_LOG" hyprland-systemd-start-failed "config=$QS_CONFIG" "service=$SERVICE_NAME" || true
-  setsid -f "$SCRIPT_DIR/start_quickshell.sh" "$QS_CONFIG" >/dev/null 2>&1 &
+  exit 1
 fi
 
 if command -v systemctl >/dev/null 2>&1; then

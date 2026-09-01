@@ -120,6 +120,7 @@ fn capabilities(connection: &Connection, id: &str) -> Capabilities {
         remote_commands: has("kdeconnect_runcommand"),
     }
 }
+
 fn string_property(connection: &Connection, path: &str, interface: &str, name: &str) -> String {
     proxy(connection, path, interface)
         .and_then(|p| p.get_property::<String>(name).map_err(Into::into))

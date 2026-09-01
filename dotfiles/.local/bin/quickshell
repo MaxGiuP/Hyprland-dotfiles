@@ -1,0 +1,55 @@
+#!/usr/bin/env sh
+
+QS_EVENT_LOG="$HOME/.config/hypr/hyprland/scripts/quickshell_event_log.sh"
+QS_REAL_BIN="${QS_REAL_BIN:-$HOME/.local/libexec/quickshell/quickshell}"
+if [ ! -x "$QS_REAL_BIN" ] || ! "$QS_REAL_BIN" --private-check-compat >/dev/null 2>&1; then
+    QS_REAL_BIN=/usr/bin/quickshell
+fi
+
+QS_LOG_WRAPPER=1
+QS_PASSTHROUGH=0
+for arg in "$@"; do
+    case "$arg" in
+        --private-check-compat)
+            QS_LOG_WRAPPER=0
+            QS_PASSTHROUGH=1
+            break
+            ;;
+        ipc)
+            QS_LOG_WRAPPER=0
+            QS_PASSTHROUGH=1
+            break
+            ;;
+        kill|list|log|msg)
+            QS_PASSTHROUGH=1
+            break
+            ;;
+    esac
+done
+if [ "$QS_LOG_WRAPPER" -eq 1 ] && [ -x "$QS_EVENT_LOG" ]; then
+    "$QS_EVENT_LOG" quickshell-wrapper-invoked "argv=$*" "real_bin=$QS_REAL_BIN" || true
+fi
+unset QS_EVENT_LOG QS_LOG_WRAPPER
+
+if [ "$QS_PASSTHROUGH" -eq 1 ]; then
+    exec "$QS_REAL_BIN" "$@"
+fi
+
+if [ -d "$HOME/.local/lib/qt6/qml" ]; then
+    export QML_IMPORT_PATH="$HOME/.local/lib/qt6/qml${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}"
+    export QML2_IMPORT_PATH="$HOME/.local/lib/qt6/qml${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}"
+fi
+
+if [ -n "${QT_LOGGING_RULES:-}" ]; then
+    export QT_LOGGING_RULES="${QT_LOGGING_RULES};qt.svg=false;qt.svg.draw=false;quickshell.desktopentry.warning=false"
+else
+    export QT_LOGGING_RULES="qt.svg=false;qt.svg.draw=false;quickshell.desktopentry.warning=false"
+fi
+
+for arg in "$@"; do
+    if [ "$arg" = "--no-duplicate" ] || [ "$arg" = "-n" ]; then
+        exec "$QS_REAL_BIN" "$@"
+    fi
+done
+
+exec "$QS_REAL_BIN" --no-duplicate "$@"

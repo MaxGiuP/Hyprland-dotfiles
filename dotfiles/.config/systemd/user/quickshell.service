@@ -1,0 +1,21 @@
+[Unit]
+Description=Quickshell shell
+After=graphical-session-pre.target wireplumber.service pipewire.service
+Wants=wireplumber.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStartPre=%h/.config/hypr/hyprland/scripts/quickshell_event_log.sh service-start-pre quickshell.service
+ExecStart=%h/.config/hypr/hyprland/scripts/start_quickshell.sh ii
+ExecStopPost=%h/.config/hypr/hyprland/scripts/quickshell_event_log.sh service-stop-post quickshell.service
+ExecStopPost=%h/.config/hypr/hyprland/scripts/quickshell_cleanup_helpers.sh
+ExitType=main
+KillMode=control-group
+TimeoutStopSec=5s
+Restart=on-failure
+RestartSec=1
+RestartPreventExitStatus=42
+
+[Install]
+WantedBy=graphical-session.target
