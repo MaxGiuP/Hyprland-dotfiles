@@ -324,6 +324,7 @@ Item {
             Item { Layout.fillWidth: true }
             CalendarHeaderButton {
                 forceCircle: true
+                tooltipText: Translation.tr("Previous month")
                 downAction: () => monthShift--
                 contentItem: MaterialSymbol {
                     text: "chevron_left"
@@ -334,6 +335,7 @@ Item {
             }
             CalendarHeaderButton {
                 forceCircle: true
+                tooltipText: Translation.tr("Next month")
                 downAction: () => monthShift++
                 contentItem: MaterialSymbol {
                     text: "chevron_right"

@@ -1367,5 +1367,9 @@
   "Due date": "Data di scadenza",
   "Due date: %1": "Data di scadenza: %1",
   "Google Tasks stores due dates without a time.": "Google Tasks salva le date di scadenza senza un orario.",
-  "Use a valid date": "Inserisci una data valida"
+  "Use a valid date": "Inserisci una data valida",
+  "Previous month": "Mese precedente",
+  "Next month": "Mese successivo",
+  "Open QuickMail calendar": "Apri il calendario QuickMail",
+  "Refresh QuickMail agenda": "Aggiorna l'agenda QuickMail"
 }

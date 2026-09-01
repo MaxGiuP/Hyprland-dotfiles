@@ -1432,5 +1432,7 @@
   "Due date": "Fälligkeitsdatum",
   "Due date: %1": "Fälligkeitsdatum: %1",
   "Google Tasks stores due dates without a time.": "Google Tasks speichert Fälligkeitsdaten ohne Uhrzeit.",
-  "Use a valid date": "Gültiges Datum eingeben"
+  "Use a valid date": "Gültiges Datum eingeben",
+  "Previous month": "Vorheriger Monat",
+  "Next month": "Nächster Monat"
 }

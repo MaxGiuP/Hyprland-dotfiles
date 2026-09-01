@@ -154,6 +154,17 @@ Item {
             property bool enableHeightAnimation: false
             readonly property bool highlighted: root.itemMatchesHighlight(todoItem.modelData)
             readonly property bool selected: root.itemMatchesSelection(todoItem.modelData)
+            readonly property bool accentHighlighted: root.accentHighlightMatches && todoItem.highlighted && !todoItem.selected
+            readonly property color foregroundColor: todoItem.selected
+                ? Appearance.colors.colOnPrimary
+                : todoItem.accentHighlighted
+                    ? Appearance.colors.colOnPrimaryContainer
+                    : Appearance.colors.colOnLayer1
+            readonly property color mutedForegroundColor: todoItem.selected
+                ? Appearance.colors.colOnPrimary
+                : todoItem.accentHighlighted
+                    ? Appearance.colors.colOnPrimaryContainer
+                    : Appearance.colors.colSubtext
 
             implicitHeight: todoItemRectangle.implicitHeight
             width: ListView.view.width
@@ -174,12 +185,16 @@ Item {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 implicitHeight: todoContentRowLayout.implicitHeight
-                color: todoItem.selected || (root.accentHighlightMatches && todoItem.highlighted)
+                color: todoItem.selected
                     ? Appearance.colors.colPrimary
-                    : todoItem.highlighted
-                        ? Appearance.colors.colSecondaryContainer
+                    : todoItem.accentHighlighted
+                        ? Appearance.colors.colPrimaryContainer
+                        : todoItem.highlighted
+                            ? Appearance.colors.colSecondaryContainer
                         : Appearance.colors.colLayer2
                 radius: Appearance.rounding.small
+                border.width: todoItem.accentHighlighted ? 1 : 0
+                border.color: Appearance.colors.colPrimary
 
                 MouseArea {
                     anchors.fill: parent
@@ -200,9 +215,7 @@ Item {
                         Layout.topMargin: todoListItemPadding
                         text: `${todoItem.modelData.title ?? todoItem.modelData.content ?? ""}`
                         wrapMode: Text.Wrap
-                        color: (todoItem.selected || (root.accentHighlightMatches && todoItem.highlighted))
-                            ? Appearance.colors.colOnPrimary
-                            : Appearance.colors.colOnLayer1
+                        color: todoItem.foregroundColor
                         font.weight: todoItem.modelData.description ? Font.DemiBold : Font.Normal
                     }
                     StyledText {
@@ -212,9 +225,7 @@ Item {
                         visible: `${todoItem.modelData.description ?? ""}`.trim().length > 0
                         text: `${todoItem.modelData.description ?? ""}`
                         wrapMode: Text.Wrap
-                        color: (todoItem.selected || (root.accentHighlightMatches && todoItem.highlighted))
-                            ? Appearance.colors.colOnPrimary
-                            : Appearance.colors.colOnLayer1
+                        color: todoItem.foregroundColor
                     }
                     StyledText {
                         Layout.fillWidth: true
@@ -222,8 +233,8 @@ Item {
                         Layout.rightMargin: 10
                         visible: text.length > 0
                         text: root.formatDueLabel(todoItem.modelData)
-                        color: (todoItem.selected || (root.accentHighlightMatches && todoItem.highlighted))
-                            ? Appearance.colors.colOnPrimary
+                        color: todoItem.selected || todoItem.accentHighlighted
+                            ? todoItem.mutedForegroundColor
                             : todoItem.modelData.source === "local"
                                 && (parseInt(todoItem.modelData.dueAt ?? 0) || 0) > 0
                                 && (parseInt(todoItem.modelData.dueAt ?? 0) || 0) < Date.now()
@@ -248,9 +259,7 @@ Item {
                                 ? Translation.tr("Source: %1 (read-only)").arg(sourceName)
                                 : Translation.tr("Source: QuickMail (read-only)");
                         }
-                        color: (todoItem.selected || (root.accentHighlightMatches && todoItem.highlighted))
-                            ? Appearance.colors.colOnPrimary
-                            : Appearance.colors.colSubtext
+                        color: todoItem.mutedForegroundColor
                         font.pixelSize: Appearance.font.pixelSize.smaller
                     }
                     RowLayout {
@@ -269,7 +278,7 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                                 text: root.readOnlyActionIcon
                                 iconSize: Appearance.font.pixelSize.larger
-                                color: Appearance.colors.colOnLayer1
+                                color: todoItem.foregroundColor
                             }
                         }
                         TodoItemActionButton {
@@ -293,7 +302,7 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                                 text: todoItem.modelData.done ? "remove_done" : "check"
                                 iconSize: Appearance.font.pixelSize.larger
-                                color: Appearance.colors.colOnLayer1
+                                color: todoItem.foregroundColor
                             }
                         }
                         TodoItemActionButton {
@@ -311,7 +320,7 @@ Item {
                                 horizontalAlignment: Text.AlignHCenter
                                 text: "delete_forever"
                                 iconSize: Appearance.font.pixelSize.larger
-                                color: Appearance.colors.colOnLayer1
+                                color: todoItem.foregroundColor
                             }
                         }
                     }
