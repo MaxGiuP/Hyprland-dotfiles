@@ -371,9 +371,9 @@ Singleton {
 
     function resolvedSidebarRightScreen(preferredScreen = "") {
         return preferredScreen
-            || root.sidebarRightScreen
-            || HyprlandData.monitors.find(m => m.focused)?.name
+            || (root.sidebarRightOpen ? root.sidebarRightScreen : "")
             || Hyprland.focusedMonitor?.name
+            || HyprlandData.monitors.find(m => m.focused)?.name
             || Quickshell.screens[0]?.name
             || ""
     }
@@ -402,6 +402,14 @@ Singleton {
     function openTimer(preferredScreen = "") {
         if (Persistent.ready) {
             Persistent.states.sidebar.bottomGroup.tab = 3
+            Persistent.states.sidebar.bottomGroup.collapsed = false
+        }
+        root.openSidebarRight(preferredScreen)
+    }
+
+    function openCalendar(preferredScreen = "") {
+        if (Persistent.ready) {
+            Persistent.states.sidebar.bottomGroup.tab = 0
             Persistent.states.sidebar.bottomGroup.collapsed = false
         }
         root.openSidebarRight(preferredScreen)

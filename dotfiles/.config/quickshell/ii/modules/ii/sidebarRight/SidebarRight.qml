@@ -142,6 +142,10 @@ Scope {
             GlobalStates.openTimer();
         }
 
+        function calendar(): void {
+            GlobalStates.openCalendar();
+        }
+
         function todo(): void {
             GlobalStates.openTodo();
         }

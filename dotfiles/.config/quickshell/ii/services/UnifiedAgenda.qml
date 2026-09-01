@@ -1,6 +1,7 @@
 pragma Singleton
 pragma ComponentBehavior: Bound
 
+import qs
 import qs.modules.common
 import QtQuick
 import Quickshell
@@ -137,7 +138,7 @@ Singleton {
     }
 
     function openMail() { root.launch("mail"); }
-    function openCalendar() { root.launch("calendar"); }
+    function openCalendar() { GlobalStates.openCalendar(); }
     function openAccountSettings() { root.launch("accounts"); }
 
     Timer {
