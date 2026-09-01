@@ -1,4 +1,0 @@
-[Logitech G502 X Plus single-notch scrolling]
-MatchUdevType=mouse
-MatchName=Logitech G502 X PLUS
-AttrEventCode=-REL_WHEEL_HI_RES;-REL_HWHEEL_HI_RES;

@@ -449,7 +449,7 @@ ContentPage {
             Layout.rightMargin: 8
             wrapMode: Text.Wrap
             color: Appearance.colors.colSubtext
-            text: Translation.tr("1.00 is the normal distance; 2.00 doubles how far each wheel notch moves without adding extra wheel events.")
+            text: Translation.tr("1.00 is the normal distance. High-resolution events keep application scrolling smooth; discrete shell controls still act once per wheel notch.")
         }
 
         ContentSubsection {
@@ -982,8 +982,8 @@ ContentPage {
             ConfigSwitch {
                 enabled: false
                 buttonIcon: "mouse"
-                text: Translation.tr("Multiple events per wheel notch")
-                checked: false
+                text: Translation.tr("High-resolution application scrolling")
+                checked: true
             }
 
             StyledText {
@@ -992,7 +992,7 @@ ContentPage {
                 Layout.rightMargin: 8
                 wrapMode: Text.Wrap
                 color: Appearance.colors.colSubtext
-                text: Translation.tr("Disabled system-wide for this G502: applications receive one event per physical notch. Use Wheel speed above to control how far it moves.")
+                text: Translation.tr("Enabled for smooth scrolling in applications. Quickshell combines the fractional events into one action for volume, brightness, tabs, and workspaces.")
             }
         }
 
