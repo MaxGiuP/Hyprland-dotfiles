@@ -4,7 +4,6 @@ set -euo pipefail
 
 action="${1:-}"
 qs_config="${2:-${QS_CONFIG:-ii}}"
-qs_path="$HOME/.config/quickshell/$qs_config"
 state_dir="${XDG_RUNTIME_DIR:-/tmp}/hyprland-super-search"
 state_file="$state_dir/armed"
 
@@ -63,13 +62,15 @@ case "$action" in
         fi
         rm -f "$state_file"
 
+        # Bound IPC calls so a stalled or reloading shell cannot leave every
+        # Super release stuck before the fallback launcher is reached.
         target_monitor="$(cursor_monitor || true)"
         if [[ -n "$target_monitor" ]] \
-            && qs -p "$qs_path" ipc call search toggleOnScreen "$target_monitor" >/dev/null 2>&1; then
+            && timeout 1s qs -c "$qs_config" ipc call search toggleOnScreen "$target_monitor" >/dev/null 2>&1; then
             exit 0
         fi
 
-        if qs -p "$qs_path" ipc call search toggle >/dev/null 2>&1; then
+        if timeout 1s qs -c "$qs_config" ipc call search toggle >/dev/null 2>&1; then
             exit 0
         fi
 
