@@ -46,7 +46,6 @@ ContentPage {
     property int g502Dpi: 3200
     property string g502ReportRate: "2ms"
     property string g502OnboardProfile: "Disabled"
-    property bool g502HighResolutionScroll: true
     property bool g502InvertScroll: false
     readonly property bool g502OnboardDisabled: root.g502OnboardProfile.toLowerCase() === "disabled"
     readonly property var g502ReportRateOptions: root.g502Options("report_rate", ["1ms", "2ms", "4ms", "8ms"], "speed")
@@ -328,7 +327,6 @@ ContentPage {
         root.g502Dpi = Math.round(root.m75Number(LogitechG502.settingValue("dpi", "3200"), 3200));
         root.g502ReportRate = LogitechG502.settingValue("report_rate", "2ms");
         root.g502OnboardProfile = LogitechG502.settingValue("onboard_profile", "Disabled");
-        root.g502HighResolutionScroll = root.g502Boolean(LogitechG502.settingValue("high_res_scroll", "False"));
         root.g502InvertScroll = root.g502Boolean(LogitechG502.settingValue("scroll_invert", "False"));
     }
 
@@ -451,7 +449,7 @@ ContentPage {
             Layout.rightMargin: 8
             wrapMode: Text.Wrap
             color: Appearance.colors.colSubtext
-            text: Translation.tr("1.00 is one standard wheel step. Lower values slow scrolling; higher values speed it up.")
+            text: Translation.tr("1.00 is the normal distance; 2.00 doubles how far each wheel notch moves without adding extra wheel events.")
         }
 
         ContentSubsection {
@@ -978,26 +976,14 @@ ContentPage {
         }
 
         ContentSubsection {
-            visible: LogitechG502.controlAvailable("high_res_scroll")
+            visible: LogitechG502.connected
             title: Translation.tr("Wheel event mode")
 
-            ConfigRow {
-                uniform: true
-
-                ConfigSwitch {
-                    buttonIcon: "mouse"
-                    text: Translation.tr("High-resolution wheel events")
-                    checked: root.g502HighResolutionScroll
-                    onCheckedChanged: root.g502HighResolutionScroll = checked
-                }
-
-                RippleButtonWithIcon {
-                    Layout.fillWidth: true
-                    enabled: LogitechG502.connected && !LogitechG502.actionRunning
-                    materialIcon: "save"
-                    mainText: Translation.tr("Apply wheel mode")
-                    onClicked: LogitechG502.set("high_res_scroll", root.g502HighResolutionScroll ? "on" : "off")
-                }
+            ConfigSwitch {
+                enabled: false
+                buttonIcon: "mouse"
+                text: Translation.tr("Multiple events per wheel notch")
+                checked: false
             }
 
             StyledText {
@@ -1005,12 +991,8 @@ ContentPage {
                 Layout.leftMargin: 8
                 Layout.rightMargin: 8
                 wrapMode: Text.Wrap
-                color: root.g502HighResolutionScroll
-                    ? Appearance.colors.colOnLayer1
-                    : Appearance.colors.colSubtext
-                text: root.g502HighResolutionScroll
-                    ? Translation.tr("Recommended. Smooth, responsive scrolling in browsers; Quickshell combines the partial events into one action per wheel notch.")
-                    : Translation.tr("Compatibility mode sends coarser wheel events and can feel unusually slow in browsers.")
+                color: Appearance.colors.colSubtext
+                text: Translation.tr("Disabled system-wide for this G502: applications receive one event per physical notch. Use Wheel speed above to control how far it moves.")
             }
         }
 

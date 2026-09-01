@@ -372,7 +372,7 @@
       "accelProfile": "flat",
       "followMouse": 1,
       "leftHanded": false,
-      "scrollFactor": 1,
+      "scrollFactor": 2,
       "sensitivity": -0.8663772597526167
     },
     "touchpad": {

@@ -12,6 +12,14 @@ QtObject {
         if (!isFinite(delta) || delta === 0 || root.stepSize <= 0)
             return 0;
 
+        // A compositor may amplify a normal wheel event beyond 120. It is
+        // still one physical notch, so discrete controls must act only once.
+        if (Math.abs(delta) >= root.stepSize) {
+            root.angleRemainder = 0;
+            resetTimer.stop();
+            return delta < 0 ? -1 : 1;
+        }
+
         // Do not combine the tail of one direction with a reversal.
         if (root.angleRemainder !== 0 && Math.sign(root.angleRemainder) !== Math.sign(delta))
             root.angleRemainder = 0;
