@@ -180,6 +180,82 @@ MouseArea {
         return "0"
     }
 
+    component TimeoutStepper: Rectangle {
+        id: timeoutStepper
+        property string iconName: "timer"
+        property string label: ""
+        property int minutes: 1
+        property int minimumMinutes: 1
+        property int maximumMinutes: 480
+        property int stepMinutes: 1
+        signal valueRequested(int value)
+
+        Layout.fillWidth: true
+        implicitHeight: 58
+        radius: Appearance.rounding.normal
+        color: Appearance.colors.colLayer2
+        border.width: 1
+        border.color: ColorUtils.transparentize(Appearance.colors.colOnLayer2, 0.88)
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 12
+            anchors.rightMargin: 8
+            spacing: 8
+
+            MaterialSymbol {
+                text: timeoutStepper.iconName
+                iconSize: 20
+                color: Appearance.colors.colPrimary
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                StyledText {
+                    text: timeoutStepper.label
+                    font.pixelSize: Appearance.font.pixelSize.small
+                    color: Appearance.colors.colSubtext
+                }
+                StyledText {
+                    text: Translation.tr("%1 min").arg(timeoutStepper.minutes)
+                    font.pixelSize: Appearance.font.pixelSize.normal
+                    font.weight: Font.Medium
+                    color: Appearance.colors.colOnLayer2
+                }
+            }
+            RippleButton {
+                implicitWidth: 38
+                implicitHeight: 38
+                enabled: timeoutStepper.minutes > timeoutStepper.minimumMinutes
+                onClicked: timeoutStepper.valueRequested(Math.max(
+                    timeoutStepper.minimumMinutes,
+                    timeoutStepper.minutes - timeoutStepper.stepMinutes
+                ))
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "remove"
+                    iconSize: 19
+                    color: parent.enabled ? Appearance.colors.colOnLayer2 : Appearance.colors.colSubtext
+                }
+            }
+            RippleButton {
+                implicitWidth: 38
+                implicitHeight: 38
+                enabled: timeoutStepper.minutes < timeoutStepper.maximumMinutes
+                onClicked: timeoutStepper.valueRequested(Math.min(
+                    timeoutStepper.maximumMinutes,
+                    timeoutStepper.minutes + timeoutStepper.stepMinutes
+                ))
+                contentItem: MaterialSymbol {
+                    anchors.centerIn: parent
+                    text: "add"
+                    iconSize: 19
+                    color: parent.enabled ? Appearance.colors.colOnLayer2 : Appearance.colors.colSubtext
+                }
+            }
+        }
+    }
+
     Timer { interval: 1000; running: true; repeat: true; onTriggered: netView.reload() }
     FileView {
         id: netView
@@ -1154,6 +1230,63 @@ MouseArea {
             }
 
             // ── Divider ───────────────────────────────────────────────────
+            Rectangle {
+                Layout.fillWidth: true; height: 1
+                color: ColorUtils.transparentize(Appearance.colors.colOnLayer1, 0.86)
+            }
+
+            // ── Idle lock and sleep schedule ─────────────────────────────
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    MaterialSymbol {
+                        text: "schedule"
+                        iconSize: 18
+                        color: Appearance.colors.colPrimary
+                    }
+                    StyledText {
+                        text: Translation.tr("Idle schedule")
+                        font.pixelSize: Appearance.font.pixelSize.normal
+                        font.weight: Font.Medium
+                        color: Appearance.colors.colOnLayer1
+                    }
+                    Item { Layout.fillWidth: true }
+                    StyledText {
+                        text: Translation.tr("Changes apply immediately")
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        color: Appearance.colors.colSubtext
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 10
+
+                    TimeoutStepper {
+                        iconName: "lock_clock"
+                        label: Translation.tr("Lock after inactivity")
+                        minutes: IdleLockConfig.lockTimeoutMinutes()
+                        minimumMinutes: 1
+                        maximumMinutes: 240
+                        stepMinutes: 1
+                        onValueRequested: value => IdleLockConfig.setLockTimeout(value)
+                    }
+                    TimeoutStepper {
+                        iconName: "bedtime"
+                        label: Translation.tr("Sleep after inactivity")
+                        minutes: IdleLockConfig.suspendTimeoutMinutes()
+                        minimumMinutes: IdleLockConfig.lockTimeoutMinutes() + 5
+                        maximumMinutes: 480
+                        stepMinutes: 5
+                        onValueRequested: value => IdleLockConfig.setSuspendTimeout(value)
+                    }
+                }
+            }
+
             Rectangle {
                 Layout.fillWidth: true; height: 1
                 color: ColorUtils.transparentize(Appearance.colors.colOnLayer1, 0.86)

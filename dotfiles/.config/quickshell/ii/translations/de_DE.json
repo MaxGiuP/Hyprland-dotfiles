@@ -1411,6 +1411,15 @@
   "Next week": "Nächste Woche",
   "Overdue: %1": "Überfällig: %1",
   "Use a valid date and 24-hour time": "Gültiges Datum und Uhrzeit im 24-Stunden-Format eingeben",
+  "%1 min": "%1 Min.",
+  "Idle schedule": "Leerlaufplan",
+  "Changes apply immediately": "Änderungen werden sofort übernommen",
+  "Lock after inactivity": "Sperren nach Inaktivität",
+  "Sleep after inactivity": "Ruhezustand nach Inaktivität",
+  "Choose when inactivity locks the session and when the already-locked system goes to sleep.": "Lege fest, wann die Sitzung bei Inaktivität gesperrt und das bereits gesperrte System in den Ruhezustand versetzt wird.",
+  "Sleep delay": "Verzögerung bis Ruhezustand",
+  "Automatic sleep delay": "Automatischer Ruhezustand",
+  "Controls the idle lock timeout used by hypridle. Use Keep awake in the right sidebar to pause idle actions temporarily.": "Steuert die von Hypridle verwendete Leerlauf-Sperrzeit. Mit ‚Wach halten‘ in der rechten Seitenleiste können Leerlaufaktionen vorübergehend pausiert werden.",
   "Set timer": "Timer stellen",
   "Type a value or use the arrows, mouse wheel, and ↑/↓ keys": "Wert eingeben oder Pfeile, Mausrad und ↑/↓ verwenden"
 }

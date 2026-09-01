@@ -318,6 +318,7 @@
       "unlockKeyring": true
     },
     "showLockedText": true,
+    "suspendTimeout": 45,
     "timeout": 20,
     "useHyprlock": false
   },

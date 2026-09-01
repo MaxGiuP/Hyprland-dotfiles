@@ -15,15 +15,39 @@ Singleton {
             syncTimer.restart();
     }
 
-    function timeoutMinutes() {
-        return Math.max(0, parseInt(Config.options?.lock?.timeout) || 0);
+    function lockTimeoutMinutes() {
+        return Math.max(1, Math.min(240, parseInt(Config.options?.lock?.timeout) || 10));
+    }
+
+    function suspendTimeoutMinutes() {
+        const configured = parseInt(Config.options?.lock?.suspendTimeout) || 45;
+        return Math.max(root.lockTimeoutMinutes() + 5, Math.min(480, configured));
+    }
+
+    function setLockTimeout(minutes) {
+        const nextLock = Math.max(1, Math.min(240, parseInt(minutes) || 1));
+        Config.options.lock.timeout = nextLock;
+        if (parseInt(Config.options.lock.suspendTimeout) < nextLock + 5)
+            Config.options.lock.suspendTimeout = Math.min(480, nextLock + 5);
+    }
+
+    function setSuspendTimeout(minutes) {
+        Config.options.lock.suspendTimeout = Math.max(
+            root.lockTimeoutMinutes() + 5,
+            Math.min(480, parseInt(minutes) || 45)
+        );
     }
 
     function apply() {
         if (!Config.ready)
             return;
 
-        Quickshell.execDetached(["bash", root.syncScriptPath, `${root.timeoutMinutes()}`]);
+        Quickshell.execDetached([
+            "bash",
+            root.syncScriptPath,
+            `${root.lockTimeoutMinutes()}`,
+            `${root.suspendTimeoutMinutes()}`
+        ]);
     }
 
     Timer {
@@ -44,6 +68,9 @@ Singleton {
     Connections {
         target: Config.options.lock
         function onTimeoutChanged() {
+            syncTimer.restart();
+        }
+        function onSuspendTimeoutChanged() {
             syncTimer.restart();
         }
     }

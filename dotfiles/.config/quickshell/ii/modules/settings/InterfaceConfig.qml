@@ -202,14 +202,26 @@ ContentPage {
             icon: "timer"
             text: Translation.tr("Auto-lock delay")
             value: Config.options.lock.timeout
-            from: 0
+            from: 1
             to: 240
             stepSize: 1
             onValueChanged: {
-                Config.options.lock.timeout = value;
+                IdleLockConfig.setLockTimeout(value);
             }
             StyledToolTip {
-                text: Translation.tr("Controls the idle lock timeout used by hypridle. Set to 0 to disable automatic idle locking.")
+                text: Translation.tr("Controls the idle lock timeout used by hypridle. Use Keep awake in the right sidebar to pause idle actions temporarily.")
+            }
+        }
+
+        ConfigSpinBox {
+            icon: "bedtime"
+            text: Translation.tr("Automatic sleep delay")
+            value: Config.options.lock.suspendTimeout
+            from: IdleLockConfig.lockTimeoutMinutes() + 5
+            to: 480
+            stepSize: 5
+            onValueChanged: {
+                IdleLockConfig.setSuspendTimeout(value);
             }
         }
 

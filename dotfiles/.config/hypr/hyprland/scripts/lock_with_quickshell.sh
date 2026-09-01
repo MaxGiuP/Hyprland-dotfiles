@@ -46,5 +46,11 @@ while [ "$i" -lt "$WAIT_FOR_IPC_TENTHS" ]; do
 done
 
 "$EVENT_LOG" lock-ipc-activate-failed "config=$QS_CONFIG" "attempts=$WAIT_FOR_IPC_TENTHS" "bin=$QS_BIN" || true
-echo "Errore: impossibile attivare il lockscreen Quickshell." >&2
+if command -v hyprlock >/dev/null 2>&1; then
+  "$EVENT_LOG" lock-fallback-hyprlock "config=$QS_CONFIG" || true
+  hyprlock >/dev/null 2>&1 &
+  exit 0
+fi
+
+echo "Error: unable to activate either the Quickshell lock screen or hyprlock." >&2
 exit 1

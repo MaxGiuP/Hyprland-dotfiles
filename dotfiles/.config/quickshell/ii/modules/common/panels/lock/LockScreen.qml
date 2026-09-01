@@ -304,6 +304,11 @@ Scope {
         if (GlobalStates.screenLocked)
             return;
 
+        // A deliberate lock ends any temporary coffee-mode request. This lets
+        // the locked machine continue through display-off and suspend even if
+        // Keep awake had been enabled earlier.
+        Idle.toggleInhibit(false);
+
         if (Config.options.lock.useHyprlock) {
             Quickshell.execDetached(["bash", "-c", "pidof hyprlock || hyprlock"]);
             return;
@@ -322,11 +327,12 @@ Scope {
 
     IpcHandler {
         target: "lock"
+        readonly property bool locked: GlobalStates.screenLocked
+            || root.sessionLockActive
+            || root.releaseInProgress
 
         function status() {
-            return (GlobalStates.screenLocked || root.sessionLockActive || root.releaseInProgress)
-                ? "locked"
-                : "unlocked";
+            return locked ? "locked" : "unlocked";
         }
 
         function activate(): void {

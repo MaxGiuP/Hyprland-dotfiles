@@ -41,15 +41,15 @@ fi
 LOCK_STATUS=""
 if [ -n "$QS_BIN" ]; then
   if command -v timeout >/dev/null 2>&1; then
-    LOCK_STATUS="$(timeout 1 "$QS_BIN" -c "$QS_CONFIG" ipc call lock status 2>/dev/null || true)"
+    LOCK_STATUS="$(timeout 1 "$QS_BIN" -c "$QS_CONFIG" ipc prop get lock locked 2>/dev/null || true)"
   else
-    LOCK_STATUS="$("$QS_BIN" -c "$QS_CONFIG" ipc call lock status 2>/dev/null || true)"
+    LOCK_STATUS="$("$QS_BIN" -c "$QS_CONFIG" ipc prop get lock locked 2>/dev/null || true)"
   fi
 fi
 
 case "$LOCK_STATUS" in
-  *unlocked*) ;;
-  *locked*)
+  false) ;;
+  true)
     "$EVENT_LOG" restart-blocked-session-lock "config=$QS_CONFIG" "service=$SERVICE_NAME" "status=$LOCK_STATUS" || true
     echo "Errore: impossibile riavviare Quickshell mentre il blocco schermo è attivo." >&2
     exit 1

@@ -215,7 +215,7 @@ Item {
 
     component IdleLockDialogComponent: WindowDialog {
         id: idleLockDialog
-        backgroundHeight: 260
+        backgroundHeight: 340
 
         WindowDialogTitle {
             text: Translation.tr("Auto-lock")
@@ -231,7 +231,7 @@ Item {
             Layout.fillWidth: true
             color: Appearance.colors.colOnSecondaryContainer
             wrapMode: Text.WordWrap
-            text: Translation.tr("Adjust how many idle minutes pass before the session locks automatically. Set it to 0 to disable idle auto-lock.")
+            text: Translation.tr("Choose when inactivity locks the session and when the already-locked system goes to sleep.")
         }
 
         ConfigSpinBox {
@@ -239,15 +239,26 @@ Item {
             icon: "timer"
             text: Translation.tr("Lock delay")
             value: Config.options.lock.timeout
-            from: 0
+            from: 1
             to: 240
             stepSize: 1
-            onValueChanged: Config.options.lock.timeout = value
+            onValueChanged: IdleLockConfig.setLockTimeout(value)
+        }
+
+        ConfigSpinBox {
+            Layout.fillWidth: true
+            icon: "bedtime"
+            text: Translation.tr("Sleep delay")
+            value: Config.options.lock.suspendTimeout
+            from: IdleLockConfig.lockTimeoutMinutes() + 5
+            to: 480
+            stepSize: 5
+            onValueChanged: IdleLockConfig.setSuspendTimeout(value)
         }
 
         WindowDialogButtonRow {
             DialogButton {
-                buttonText: Translation.tr("Disable")
+                buttonText: Translation.tr("Keep awake")
                 onClicked: {
                     Idle.toggleInhibit(true);
                     idleLockDialog.dismiss();
