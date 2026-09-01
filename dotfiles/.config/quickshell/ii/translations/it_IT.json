@@ -1343,6 +1343,18 @@
   "Tap-to-click": "Tocco per fare clic",
   "Touchpad": "Touchpad",
   "Loading customisation settings": "Caricamento delle impostazioni di personalizzazione",
+  "%1 min": "%1 min",
+  "Auto-lock": "Blocco automatico",
+  "Lock delay": "Ritardo blocco",
+  "Keep awake": "Mantieni attivo",
+  "Idle schedule": "Programmazione inattività",
+  "Changes apply immediately": "Le modifiche vengono applicate immediatamente",
+  "Lock after inactivity": "Blocca dopo inattività",
+  "Sleep after inactivity": "Sospendi dopo inattività",
+  "Choose when inactivity locks the session and when the already-locked system goes to sleep.": "Scegli quando l'inattività blocca la sessione e quando il sistema già bloccato entra in sospensione.",
+  "Sleep delay": "Ritardo sospensione",
+  "Automatic sleep delay": "Ritardo sospensione automatica",
+  "Controls the idle lock timeout used by hypridle. Use Keep awake in the right sidebar to pause idle actions temporarily.": "Controlla il timeout di blocco per inattività usato da Hypridle. Usa ‘Mantieni attivo’ nella barra laterale destra per sospendere temporaneamente le azioni di inattività.",
   "Customisation settings failed to load": "Impossibile caricare le impostazioni di personalizzazione",
   "Try again": "Riprova"
 }
