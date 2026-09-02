@@ -354,7 +354,9 @@ Variants {
                 anchors.fill: parent
                 visible: false
                 asynchronous: true
-                cache: true
+                // Dynamic wallpapers are already retained by the active image
+                // buffers; the global pixmap cache must not retain old frames.
+                cache: false
                 smooth: false
                 source: shouldPreload ? Wallpapers.preloadWallpaperPath : ""
                 fillMode: Image.PreserveAspectCrop
@@ -373,7 +375,7 @@ Variants {
                 id: wallpaper
                 visible: opacity > 0
                 opacity: (status === Image.Ready && !bgRoot.wallpaperIsVideo) ? 1 : 0
-                cache: true
+                cache: false
                 smooth: false
                 // Range = groups that workspaces span on
                 property int chunkSize: Config?.options.bar.workspaces.shown ?? 10
@@ -438,7 +440,7 @@ Variants {
                     visible: true
                     opacity: 1
                     asynchronous: true
-                    cache: true
+                    cache: false
                     smooth: false
                     source: bgRoot.wallpaperSafetyTriggered ? "" : bgRoot.revealWallpaperPath
                     fillMode: Image.PreserveAspectCrop

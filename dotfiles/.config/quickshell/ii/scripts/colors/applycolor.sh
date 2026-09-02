@@ -14,6 +14,12 @@ term_alpha=100 #Set this to < 100 make all your terminals transparent
 if [ ! -d "$STATE_DIR"/user/generated ]; then
   mkdir -p "$STATE_DIR"/user/generated
 fi
+
+# Drop overlapping palette runs. The lock stays inherited by the short-lived
+# background helpers, so another wallpaper change cannot stack duplicate work.
+exec 9>"$STATE_DIR/user/applycolor.lock"
+flock -n 9 || exit 0
+
 cd "$CONFIG_DIR" || exit
 
 colorlist=()
@@ -46,13 +52,11 @@ apply_term() {
   sed -i -f "$sed_program" "$STATE_DIR/user/generated/terminal/sequences.txt"
   rm -f "$sed_program"
 
-  for file in /dev/pts/*; do
-    if [[ $file =~ ^/dev/pts/[0-9]+$ ]]; then
-      {
-      cat "$STATE_DIR"/user/generated/terminal/sequences.txt >"$file"
-      } & disown || true
-    fi
-  done
+  # PTYs can belong to stale or non-reading sessions. A normal redirected cat
+  # blocks forever once such a PTY's output buffer fills, so use one bounded,
+  # non-blocking pass and reap it before continuing.
+  python3 "$SCRIPT_DIR/broadcast_terminal_colors.py" \
+    "$STATE_DIR/user/generated/terminal/sequences.txt"
 }
 
 apply_qt() {
@@ -89,7 +93,7 @@ if [ -f "$CONFIG_FILE" ]; then
     ] | @tsv' "$CONFIG_FILE"
   )
   if [ "$enable_terminal" = "true" ]; then
-    apply_term &
+    apply_term
   fi
 
   if [ "$enable_gtk" = "true" ]; then
@@ -104,7 +108,7 @@ if [ -f "$CONFIG_FILE" ]; then
 else
   echo "Config file not found at $CONFIG_FILE. Applying terminal theming by default."
   apply_gnome_accent || true
-  apply_term &
+  apply_term
   apply_gtk
   apply_browsers &
   apply_qt &

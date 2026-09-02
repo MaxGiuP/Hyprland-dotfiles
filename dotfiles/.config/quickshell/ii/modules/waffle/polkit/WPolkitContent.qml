@@ -23,6 +23,7 @@ Rectangle {
         anchors.fill: parent
         source: Config.options.background.wallpaperPath
         fillMode: Image.PreserveAspectCrop
+        cache: false
 
         Rectangle {
             anchors.fill: parent

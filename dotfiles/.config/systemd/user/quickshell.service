@@ -12,6 +12,7 @@ ExecStopPost=%h/.config/hypr/hyprland/scripts/quickshell_event_log.sh service-st
 ExecStopPost=%h/.config/hypr/hyprland/scripts/quickshell_cleanup_helpers.sh
 ExitType=main
 KillMode=control-group
+TasksMax=512
 TimeoutStopSec=5s
 Restart=on-failure
 RestartSec=1

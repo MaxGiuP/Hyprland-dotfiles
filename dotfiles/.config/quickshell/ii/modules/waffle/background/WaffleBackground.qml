@@ -49,6 +49,7 @@ Variants {
             visible: !panelRoot.showingTvModeWorkspace
             source: Config.options.background.wallpaperPath
             fillMode: Image.PreserveAspectCrop
+            cache: false
         }
 
         Rectangle {
