@@ -6,7 +6,7 @@ target="${2:-}"
 project_dir="${QUICKMAIL_PROJECT:-$HOME/QuickMail}"
 
 if (( $# > 2 )); then
-  printf 'usage: %s [mail [mailto:URI] | accounts | calendar]\n' "${0##*/}" >&2
+  printf 'usage: %s [show | compose [mailto:URI] | mail [mailto:URI] | accounts | calendar]\n' "${0##*/}" >&2
   exit 2
 fi
 
@@ -40,15 +40,30 @@ launch_quickmail() {
 }
 
 case "$mode" in
+  show)
+    if [[ -n "$target" ]]; then
+      printf 'open-quickmail.sh: show does not accept a target\n' >&2
+      exit 2
+    fi
+    launch_quickmail
+    ;;
   mail)
     if [[ -n "$target" ]]; then
       if [[ ! "$target" =~ ^[mM][aA][iI][lL][tT][oO]: ]]; then
         printf 'open-quickmail.sh: mail target must be a mailto URI\n' >&2
         exit 2
       fi
-      launch_quickmail -- "$target"
+      launch_quickmail "$target"
     fi
     launch_quickmail
+    ;;
+  compose)
+    target="${target:-mailto:}"
+    if [[ ! "$target" =~ ^[mM][aA][iI][lL][tT][oO]: ]]; then
+      printf 'open-quickmail.sh: compose target must be a mailto URI\n' >&2
+      exit 2
+    fi
+    launch_quickmail "$target"
     ;;
   accounts)
     if [[ -n "$target" ]]; then
@@ -65,7 +80,7 @@ case "$mode" in
     launch_quickmail --calendar
     ;;
   *)
-    printf 'usage: %s [mail [mailto:URI] | accounts | calendar]\n' "${0##*/}" >&2
+    printf 'usage: %s [show | compose [mailto:URI] | mail [mailto:URI] | accounts | calendar]\n' "${0##*/}" >&2
     exit 2
     ;;
 esac

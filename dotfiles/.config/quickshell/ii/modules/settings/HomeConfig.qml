@@ -267,6 +267,7 @@ ContentPage {
             visible: root.dashboardTab <= 2
             uniform: true
             RippleButtonWithIcon { visible: root.dashboardTab === 0 || root.dashboardTab === 2; Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open mail"); onClicked: UnifiedAgenda.openMail() }
+            RippleButtonWithIcon { visible: root.dashboardTab === 0 || root.dashboardTab === 2; Layout.fillWidth: true; materialIcon: "edit"; mainText: Translation.tr("Compose"); onClicked: UnifiedAgenda.openCompose() }
             RippleButtonWithIcon { visible: root.dashboardTab === 0 || root.dashboardTab === 1; Layout.fillWidth: true; materialIcon: "calendar_month"; mainText: Translation.tr("Open calendar"); onClicked: UnifiedAgenda.openCalendar() }
             RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "manage_accounts"; mainText: Translation.tr("Connected accounts"); onClicked: root.navigate(6) }
             RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "refresh"; mainText: Translation.tr("Refresh all"); onClicked: UnifiedAgenda.refresh() }

@@ -1,24 +1,28 @@
 [Desktop Entry]
 Type=Application
 Name=QuickMail
-GenericName=Email Client
-Comment=Fast local-first mail, accounts and agenda
-Exec=/home/linmax/.config/quickshell/ii/scripts/accounts/open-quickmail.sh mail %u
-TryExec=/home/linmax/.config/quickshell/ii/scripts/accounts/open-quickmail.sh
+GenericName=Mail, Calendar and Tasks
+Comment=Mail, calendars and tasks in one focused workspace
+Exec=quickmail -- %u
+TryExec=quickmail
 Icon=mail-unread-symbolic
 Terminal=false
 StartupNotify=true
-Categories=Network;Email;
-Keywords=mail;email;gmail;imap;calendar;agenda;quickmail;
+Categories=Office;Email;Calendar;
+Keywords=mail;email;calendar;agenda;tasks;todo;gmail;outlook;
 MimeType=x-scheme-handler/mailto;
-StartupWMClass=org.quickshell
+StartupWMClass=io.github.MaxGiuP.QuickMail
 SingleMainWindow=true
-Actions=Accounts;Calendar;
+Actions=Compose;Calendar;Accounts;
 
-[Desktop Action Accounts]
-Name=Accounts
-Exec=/home/linmax/.config/quickshell/ii/scripts/accounts/open-quickmail.sh accounts
+[Desktop Action Compose]
+Name=New Message
+Exec=quickmail mailto:
 
 [Desktop Action Calendar]
-Name=Calendar
-Exec=/home/linmax/.config/quickshell/ii/scripts/accounts/open-quickmail.sh calendar
+Name=Open Calendar & Tasks
+Exec=quickmail --calendar
+
+[Desktop Action Accounts]
+Name=Manage Accounts
+Exec=quickmail --accounts

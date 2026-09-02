@@ -258,10 +258,11 @@ Singleton {
         Quickshell.execDetached(["bash", root.launcherScriptPath, view || "mail"]);
     }
 
-    function openMail() { root.launch("mail"); }
+    function openMail() { root.launch("show"); }
+    function openCompose() { root.launch("compose"); }
     function openCalendarApp() { root.launch("calendar"); }
     function openSidebarCalendar() { GlobalStates.openCalendar(); }
-    function openCalendar() { root.openSidebarCalendar(); }
+    function openCalendar() { root.openCalendarApp(); }
     function openAccountSettings() { root.launch("accounts"); }
 
     signal taskMutationFinished(string action, string taskId, bool success, string errorMessage)
@@ -401,7 +402,10 @@ Singleton {
         target: "quickMail"
 
         function open(): void { root.openMail(); }
-        function calendar(): void { root.openSidebarCalendar(); }
+        function show(): void { root.openMail(); }
+        function compose(): void { root.openCompose(); }
+        function calendar(): void { root.openCalendarApp(); }
+        function sidebarCalendar(): void { root.openSidebarCalendar(); }
         function accounts(): void { root.openAccountSettings(); }
         function refresh(): void { root.refresh(true); }
     }
