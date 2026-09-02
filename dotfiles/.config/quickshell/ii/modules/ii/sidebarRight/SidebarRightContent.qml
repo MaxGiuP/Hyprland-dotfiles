@@ -216,6 +216,7 @@ Item {
     component IdleLockDialogComponent: WindowDialog {
         id: idleLockDialog
         backgroundHeight: 340
+        readonly property bool timeoutSettingsEnabled: !Idle.inhibit
 
         WindowDialogTitle {
             text: Translation.tr("Auto-lock")
@@ -236,6 +237,7 @@ Item {
 
         ConfigSpinBox {
             Layout.fillWidth: true
+            enabled: idleLockDialog.timeoutSettingsEnabled
             icon: "timer"
             text: Translation.tr("Lock delay")
             value: Config.options.lock.timeout
@@ -247,6 +249,7 @@ Item {
 
         ConfigSpinBox {
             Layout.fillWidth: true
+            enabled: idleLockDialog.timeoutSettingsEnabled
             icon: "bedtime"
             text: Translation.tr("Sleep delay")
             value: Config.options.lock.suspendTimeout
@@ -258,11 +261,10 @@ Item {
 
         WindowDialogButtonRow {
             DialogButton {
-                buttonText: Translation.tr("Keep awake")
-                onClicked: {
-                    Idle.toggleInhibit(true);
-                    idleLockDialog.dismiss();
-                }
+                buttonText: Idle.inhibit
+                    ? Translation.tr("Idle schedule")
+                    : Translation.tr("Keep awake")
+                onClicked: Idle.toggleInhibit()
             }
 
             Item {
