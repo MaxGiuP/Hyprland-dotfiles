@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Return a Quickshell-friendly QuickMail dashboard snapshot.
+"""Return a Quickshell-friendly QuickMail dashboard and agenda snapshot.
 
 QuickMail remains the source of truth. This adapter only invokes its public
 CLI and normalizes account/message/agenda metadata; it never requests message
-bodies or credentials.
+bodies or credentials. Calendar reads intentionally use the same broad range
+as QuickMail's calendar instead of the dashboard snapshot's short horizon.
 """
 
 import argparse
@@ -24,6 +25,8 @@ WRITABLE_TASK_PROVIDERS = {
     "microsoft365",
     "office365",
 }
+
+AGENDA_SYNC_TIMEOUT_SECONDS = 120
 
 
 def quickmailctl_path():
@@ -61,18 +64,108 @@ def timestamp_ms(value):
         return 0
 
 
-def run_cli(binary, *arguments):
+def run_cli(binary, *arguments, timeout=10):
     result = subprocess.run(
         [str(binary), "--compact", *arguments],
         capture_output=True,
         check=False,
         text=True,
-        timeout=10,
+        timeout=timeout,
     )
     if result.returncode != 0:
         detail = result.stderr.strip().splitlines()
         raise RuntimeError(detail[-1] if detail else f"quickmailctl exited with code {result.returncode}")
     return json.loads(result.stdout)
+
+
+def agenda_range_ms(now=None):
+    """Match QuickMail's Jan(previous year) through Jan(+2 years) range."""
+    anchor = now or dt.datetime.now()
+    # Naive datetime.timestamp() applies the machine's real local timezone,
+    # including the offset in January. datetime.now().astimezone().tzinfo can
+    # be a fixed current offset and would be wrong across DST boundaries.
+    start = dt.datetime(anchor.year - 1, 1, 1)
+    end = dt.datetime(anchor.year + 2, 1, 1)
+    return int(start.timestamp() * 1000), int(end.timestamp() * 1000)
+
+
+def list_result(payload, key):
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict) and isinstance(payload.get(key), list):
+        return payload[key]
+    raise RuntimeError(f"QuickMail returned an invalid {key} response")
+
+
+def agenda_sync_error(payload):
+    if not isinstance(payload, dict) or not isinstance(payload.get("errors"), list):
+        return ""
+    for item in payload["errors"]:
+        if isinstance(item, dict):
+            message = str(first(item, "message", "error", "detail", default="") or "").strip()
+        else:
+            message = str(item or "").strip()
+        if message:
+            return f"QuickMail calendar: {message}"
+    return ""
+
+
+def load_quickmail_data(binary, request_sync=False, now=None):
+    """Load dashboard metadata plus the authoritative task/calendar lists."""
+    warnings = []
+    agenda_sync = None
+    if request_sync:
+        try:
+            agenda_sync = run_cli(
+                binary,
+                "agenda-sync",
+                timeout=AGENDA_SYNC_TIMEOUT_SECONDS,
+            )
+            sync_warning = agenda_sync_error(agenda_sync)
+            if sync_warning:
+                warnings.append(sync_warning)
+        except (OSError, RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+            warnings.append(f"QuickMail calendar synchronization failed: {error}")
+
+    snapshot = run_cli(binary, "snapshot")
+    if isinstance(snapshot, dict) and isinstance(snapshot.get("snapshot"), dict):
+        snapshot = snapshot["snapshot"]
+    if not isinstance(snapshot, dict):
+        raise RuntimeError("QuickMail returned an invalid dashboard snapshot")
+    snapshot = dict(snapshot)
+
+    try:
+        snapshot["tasks"] = list_result(
+            run_cli(binary, "tasks", "--include-done"),
+            "tasks",
+        )
+    except (OSError, RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+        warnings.append(f"QuickMail tasks could not be refreshed: {error}")
+
+    range_start, range_end = agenda_range_ms(now)
+    try:
+        snapshot["events"] = list_result(
+            run_cli(
+                binary,
+                "events",
+                "--start-at",
+                str(range_start),
+                "--end-at",
+                str(range_end),
+            ),
+            "events",
+        )
+    except (OSError, RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+        warnings.append(f"QuickMail events could not be refreshed: {error}")
+
+    normalized = normalize(snapshot)
+    if isinstance(agenda_sync, dict):
+        normalized["agendaSync"] = agenda_sync
+    existing_error = str(normalized.get("error", "") or "").strip()
+    if existing_error:
+        warnings.append(existing_error)
+    normalized["error"] = "\n".join(dict.fromkeys(warnings))
+    return normalized
 
 
 def author_text(author):
@@ -203,13 +296,16 @@ def normalize(snapshot):
     tasks = []
     for raw in first(snapshot, "tasks", default=[]) or []:
         account_id = str(first(raw, "accountId", "account_id", "account", default=""))
+        origin_source = str(first(raw, "source", default="") or "")
         provider = str(first(raw, "provider", default=account_providers.get(account_id, "QuickMail")))
+        provider_default = provider_supports_tasks(provider) or provider_supports_tasks(origin_source)
+        local_task = not account_id and origin_source.strip().lower() in ("", "local")
         writable = capability(
             raw,
             "writable",
             "taskWritable",
             "task_writable",
-            default=account_task_writable.get(account_id, provider_supports_tasks(provider)),
+            default=account_task_writable.get(account_id, local_task or provider_default),
         )
         read_only = bool(first(raw, "readOnly", "read_only", default=not writable))
         writable = writable and not read_only
@@ -219,7 +315,10 @@ def normalize(snapshot):
             "date_only",
             "dueDateOnly",
             "due_date_only",
-            default=account_task_date_only.get(account_id, provider_uses_date_only_tasks(provider)),
+            default=account_task_date_only.get(
+                account_id,
+                provider_uses_date_only_tasks(provider) or provider_uses_date_only_tasks(origin_source),
+            ),
         ))
         tasks.append({
             "id": str(first(raw, "id", default="")),
@@ -241,6 +340,7 @@ def normalize(snapshot):
             )),
             "taskListId": str(first(raw, "taskListId", "task_list_id", default="")),
             "source": "quickmail-task",
+            "originSource": origin_source,
             "writable": writable,
             "readOnly": read_only,
             "dateOnly": date_only,
@@ -291,7 +391,9 @@ def normalize(snapshot):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--sync", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--sync", action="store_true")
+    mode.add_argument("--watch", action="store_true")
     args = parser.parse_args()
     binary = quickmailctl_path()
     if binary is None:
@@ -306,13 +408,13 @@ def main():
         }))
         return
 
-    if args.sync:
-        try:
-            run_cli(binary, "sync")
-        except (OSError, RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError):
-            pass
-    snapshot = run_cli(binary, "snapshot")
-    print(json.dumps(normalize(snapshot), ensure_ascii=False))
+    if args.watch:
+        os.execv(
+            str(binary),
+            [str(binary), "--compact", "watch", "agenda"],
+        )
+
+    print(json.dumps(load_quickmail_data(binary, args.sync), ensure_ascii=False))
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import qs.modules.common
 import qs.modules.common.widgets
 import qs.services
+import "../calendar/agenda_dates.js" as AgendaDates
 import Qt5Compat.GraphicalEffects
 import QtQuick
 import QtQuick.Controls
@@ -51,6 +52,12 @@ Item {
     function itemMatchesHighlight(task) {
         if (root.highlightDayStartMs < 0 || root.highlightDayEndMs <= root.highlightDayStartMs)
             return false;
+        if (`${task?.kind ?? ""}` === "event")
+            return AgendaDates.eventIntersectsRange(
+                task,
+                root.highlightDayStartMs,
+                root.highlightDayEndMs
+            );
         const dueAt = parseInt(task?.dueAt ?? 0) || 0;
         if (root.isDateOnlyTask(task) && dueAt > 0) {
             const dueDate = new Date(dueAt);
@@ -105,7 +112,10 @@ Item {
         if (!dueAt || dueAt <= 0) return "";
         const dueDate = new Date(dueAt);
         const dateOnly = root.isDateOnlyTask(task);
-        const displayDate = dateOnly ? root.dateOnlyDisplayDate(dueAt) : dueDate;
+        const eventAllDay = `${task?.kind ?? ""}` === "event" && task?.allDay === true;
+        const displayDate = dateOnly || eventAllDay
+            ? root.dateOnlyDisplayDate(dueAt)
+            : dueDate;
         const datePart = displayDate.toLocaleDateString(Translation.locale, "dd MMM");
         if (dateOnly) {
             const today = new Date();

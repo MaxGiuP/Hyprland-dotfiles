@@ -2,6 +2,7 @@ import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
 import "calendar_layout.js" as CalendarLayout
+import "agenda_dates.js" as AgendaDates
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -101,26 +102,19 @@ Item {
         const range = root.dateRangeForDay(dayDate);
         const imported = root.remoteTasks.filter(task => {
             if (task.done) return false;
-            const due = task.dueAt ?? 0;
-            const entry = task.entryAt ?? 0;
-            const ts = due > 0 ? due : entry;
-            if (due > 0 && root.isDateOnlyTask(task))
+            const due = parseInt(task?.dueAt ?? 0) || 0;
+            if (due <= 0)
+                return false;
+            if (root.isDateOnlyTask(task))
                 return root.dateOnlyMatchesDay(due, dayDate);
-            return ts > 0 && ts >= range.startMs && ts < range.endMs;
+            return due >= range.startMs && due < range.endMs;
         });
         return [...localTasksForDay(dayDate), ...imported];
     }
 
     function eventsForDay(dayDate) {
-        const range = root.dateRangeForDay(dayDate);
         return root.remoteEvents
-            .filter(event => {
-                const start = event.startAt ?? 0;
-                const end = event.endAt ?? start;
-                if (start <= 0)
-                    return false;
-                return start < range.endMs && (end <= 0 ? start : end) >= range.startMs;
-            })
+            .filter(event => AgendaDates.eventIntersectsDate(event, dayDate))
             .sort((a, b) => (a.startAt ?? 0) - (b.startAt ?? 0));
     }
 
@@ -133,11 +127,7 @@ Item {
             0, 0, 0, 0
         );
         const eventItems = root.remoteEvents
-            .filter(item => {
-                const start = parseInt(item?.startAt ?? 0) || 0;
-                const end = parseInt(item?.endAt ?? start) || start;
-                return start > 0 && (end >= minTs || start >= minTs);
-            })
+            .filter(item => AgendaDates.eventEndsAfterDate(item, root.selectedDate))
             .map(item => ({
             "kind": "event",
             "title": item.title ?? "",
@@ -162,15 +152,16 @@ Item {
             .filter(task => {
                 if (task.done) return false;
                 const dueAt = parseInt(task?.dueAt ?? 0) || 0;
-                const ts = dueAt > 0 ? dueAt : (parseInt(task?.entryAt ?? 0) || 0);
-                if (dueAt > 0 && root.isDateOnlyTask(task))
+                if (dueAt <= 0)
+                    return false;
+                if (root.isDateOnlyTask(task))
                     return dueAt >= minDateOnlyTs;
-                return ts >= minTs;
+                return dueAt >= minTs;
             })
             .map(task => ({
             "kind": "task",
             "title": task.content ?? "",
-            "at": task.dueAt || task.entryAt,
+            "at": task.dueAt,
             "dueAt": task.dueAt || 0,
             "entryAt": task.entryAt || 0,
             "allDay": task.allDay === true,
@@ -267,7 +258,8 @@ Item {
             if (ts <= 0)
                 return "";
             const d = new Date(ts);
-            const datePart = root.formatDateWithCapitalMonth(d, "dd MMM");
+            const displayDate = item?.allDay === true ? root.dateOnlyDisplayDate(ts) : d;
+            const datePart = root.formatDateWithCapitalMonth(displayDate, "dd MMM");
             const timePart = item?.allDay === true
                 ? "--:--"
                 : d.toLocaleTimeString(Translation.locale, "HH:mm");

@@ -20,6 +20,8 @@ Singleton {
     property var syncStatus: ({})
     property bool serviceAvailable: false
     property bool syncRequested: false
+    property bool refreshQueued: false
+    property bool syncQueued: false
     property string lastError: ""
     readonly property string mailError: lastError
     property date lastRefresh: new Date(0)
@@ -49,6 +51,19 @@ Singleton {
     readonly property var agendaItems: {
         const now = Date.now();
         const horizon = now + 14 * 24 * 60 * 60 * 1000;
+        const dayMs = 24 * 60 * 60 * 1000;
+        const nowDate = new Date(now);
+        const horizonDate = new Date(horizon);
+        const todayCalendarDay = Math.floor(Date.UTC(
+            nowDate.getFullYear(),
+            nowDate.getMonth(),
+            nowDate.getDate()
+        ) / dayMs);
+        const horizonCalendarDay = Math.floor(Date.UTC(
+            horizonDate.getFullYear(),
+            horizonDate.getMonth(),
+            horizonDate.getDate()
+        ) / dayMs);
         const local = Todo.list
             .map((item, index) => ({
                 kind: "task", source: item.source || "local", title: item.title,
@@ -60,7 +75,7 @@ Singleton {
         const importedTasks = root.remoteTasks
             .map(item => ({
                 kind: "task", source: "quickmail-task", title: item.content || item.title || "",
-                description: item.description || "", timestamp: Number(item.dueAt || item.entryAt) || 0,
+                description: item.description || "", timestamp: Number(item.dueAt) || 0,
                 allDay: !!item.dateOnly, done: !!item.done, readOnly: !!item.readOnly, originalIndex: -1,
                 account: item.calendarName || "QuickMail", externalId: item.externalId || item.id || "",
                 accountId: item.accountId || "", provider: item.provider || "QuickMail",
@@ -73,12 +88,26 @@ Singleton {
                 kind: "event", source: "quickmail-event", title: item.title || "",
                 description: item.description || "", timestamp: Number(item.startAt) || 0,
                 endAt: Number(item.endAt) || 0, allDay: !!item.allDay,
-                done: false, readOnly: item.readOnly !== false, originalIndex: -1,
+                done: false, readOnly: true, originalIndex: -1,
                 account: item.calendarName || "QuickMail", externalId: item.externalId || item.id || "",
                 accountId: item.accountId || "", provider: item.provider || "QuickMail",
                 writable: !!item.writable, id: item.id || "", calId: item.calId || ""
             }))
-            .filter(item => item.title.length > 0 && item.timestamp >= now - 24 * 60 * 60 * 1000 && item.timestamp <= horizon);
+            .filter(item => {
+                if (item.title.length === 0 || item.timestamp <= 0)
+                    return false;
+                if (item.allDay) {
+                    const startDay = Math.floor(item.timestamp / dayMs);
+                    let endDay = Math.floor(item.endAt / dayMs);
+                    if (item.endAt <= item.timestamp || endDay <= startDay)
+                        endDay = startDay + 1;
+                    return startDay <= horizonCalendarDay && endDay > todayCalendarDay;
+                }
+                if (item.timestamp > horizon)
+                    return false;
+                const end = item.endAt > item.timestamp ? item.endAt : item.timestamp + 1;
+                return end > now;
+            });
         return local.concat(importedTasks, events).sort((a, b) => {
             const aTime = a.timestamp > 0 ? a.timestamp : Number.MAX_SAFE_INTEGER;
             const bTime = b.timestamp > 0 ? b.timestamp : Number.MAX_SAFE_INTEGER;
@@ -96,9 +125,12 @@ Singleton {
     }
 
     function refresh(requestSync = true) {
-        if (snapshotProcess.running)
+        if (snapshotProcess.running) {
+            root.refreshQueued = true;
+            root.syncQueued = root.syncQueued || requestSync;
             return;
-        root.syncRequested = requestSync;
+        }
+        root.syncRequested = requestSync === true;
         snapshotProcess.running = true;
     }
 
@@ -239,7 +271,45 @@ Singleton {
         repeat: true
         running: true
         triggeredOnStart: true
+        onTriggered: root.refresh(true)
+    }
+
+    Timer {
+        id: agendaWatchRefresh
+        interval: 150
+        repeat: false
         onTriggered: root.refresh(false)
+    }
+
+    Timer {
+        id: agendaWatchRestart
+        interval: 3000
+        repeat: false
+        onTriggered: {
+            if (!agendaWatchProcess.running)
+                agendaWatchProcess.running = true;
+        }
+    }
+
+    Process {
+        id: agendaWatchProcess
+        running: true
+        command: ["python3", root.bridgeScriptPath, "--watch"]
+
+        stdout: SplitParser {
+            splitMarker: "\n"
+            onRead: line => {
+                try {
+                    const message = JSON.parse(line);
+                    if (`${message?.method ?? ""}` === "agenda.changed")
+                        agendaWatchRefresh.restart();
+                } catch (error) {
+                    // A malformed notification must not stop cache polling.
+                }
+            }
+        }
+
+        onExited: agendaWatchRestart.restart()
     }
 
     Process {
@@ -253,19 +323,32 @@ Singleton {
             onStreamFinished: {
                 try {
                     const payload = JSON.parse(snapshotOutput.text || "{}");
-                    root.accounts = payload.accounts ?? [];
-                    root.recentMail = payload.messages ?? [];
-                    root.remoteTasks = payload.tasks ?? [];
-                    root.remoteEvents = payload.events ?? [];
-                    root.syncStatus = payload.sync ?? ({});
-                    root.serviceAvailable = !!payload.available;
+                    const available = !!payload.available;
+                    if (available) {
+                        root.accounts = payload.accounts ?? [];
+                        root.recentMail = payload.messages ?? [];
+                        root.remoteTasks = payload.tasks ?? [];
+                        root.remoteEvents = payload.events ?? [];
+                        root.syncStatus = payload.sync ?? ({});
+                        root.lastRefresh = new Date();
+                    }
+                    root.serviceAvailable = available;
                     root.lastError = payload.error ?? "";
-                    root.lastRefresh = new Date();
                 } catch (error) {
                     root.serviceAvailable = false;
                     root.lastError = `${error}`;
                 }
             }
+        }
+
+        onExited: {
+            const shouldRefresh = root.refreshQueued;
+            const shouldSync = root.syncQueued;
+            root.syncRequested = false;
+            root.refreshQueued = false;
+            root.syncQueued = false;
+            if (shouldRefresh)
+                Qt.callLater(() => root.refresh(shouldSync));
         }
     }
 

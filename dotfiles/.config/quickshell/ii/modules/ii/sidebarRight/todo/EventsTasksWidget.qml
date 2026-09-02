@@ -1,6 +1,7 @@
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
+import "../calendar/agenda_dates.js" as AgendaDates
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -14,27 +15,43 @@ Item {
         {"name": Translation.tr("Tasks"), "icon": "assignment"},
         {"name": Translation.tr("Mail"), "icon": "mail"}
     ]
-    readonly property int dayMs: 24 * 60 * 60 * 1000
     property var remoteTasks: UnifiedAgenda.remoteTasks ?? []
     property var remoteEvents: UnifiedAgenda.remoteEvents ?? []
     property string lastError: UnifiedAgenda.mutationError || UnifiedAgenda.lastError
     readonly property bool loading: UnifiedAgenda.loading
-    readonly property bool hasAnyData: UnifiedAgenda.agendaItems.length > 0 || UnifiedAgenda.recentMail.length > 0
+    readonly property bool hasAnyData: UnifiedAgenda.agendaItems.length > 0
+        || root.remoteEvents.length > 0
+        || root.remoteTasks.length > 0
+        || UnifiedAgenda.recentMail.length > 0
     property real focusedDayStartMs: UnifiedAgenda.focusedDayStartMs
     property real focusedDayEndMs: UnifiedAgenda.focusedDayEndMs
     property string selectedEventExternalId: UnifiedAgenda.selectedEventExternalId
     property string selectedEventCalId: UnifiedAgenda.selectedEventCalId
 
-    onFocusedDayStartMsChanged: {
+    function applyFocusedDay() {
         if (root.focusedDayStartMs >= 0 && root.focusedDayEndMs > root.focusedDayStartMs) {
             tabBar.setCurrentIndex(0);
-            const firstMatch = root.mergedEventList.find(item =>
-                (parseInt(item?.dueAt ?? 0) || 0) >= root.focusedDayStartMs
-                && (parseInt(item?.dueAt ?? 0) || 0) < root.focusedDayEndMs
-            );
-            if (firstMatch)
+            const firstMatch = root.remoteEvents.find(item => AgendaDates.eventIntersectsRange(
+                item,
+                root.focusedDayStartMs,
+                root.focusedDayEndMs
+            ));
+            if (firstMatch
+                && (`${firstMatch?.externalId ?? ""}` !== root.selectedEventExternalId
+                    || `${firstMatch?.calId ?? ""}` !== root.selectedEventCalId))
                 UnifiedAgenda.selectEvent(firstMatch);
         }
+    }
+
+    onFocusedDayStartMsChanged: focusDaySelectionTimer.restart()
+    onFocusedDayEndMsChanged: focusDaySelectionTimer.restart()
+    onRemoteEventsChanged: focusDaySelectionTimer.restart()
+
+    Timer {
+        id: focusDaySelectionTimer
+        interval: 0
+        repeat: false
+        onTriggered: root.applyFocusedDay()
     }
 
     readonly property var sortedTaskList: {
@@ -62,28 +79,88 @@ Item {
             });
     }
 
-    readonly property var unifiedAgendaList: UnifiedAgenda.agendaItems.map(item => ({
-        content: item.title,
-        title: item.title,
-        description: item.description || "",
-        dueAt: Number(item.timestamp) || 0,
-        endAt: Number(item.endAt) || 0,
-        allDay: !!item.allDay,
-        done: !!item.done,
-        readOnly: !!item.readOnly,
-        source: item.source,
-        kind: item.kind,
-        originalIndex: item.originalIndex,
-        id: item.id || "",
-        externalId: item.externalId || "",
-        calId: item.calId || "",
-        calendarName: item.account || "",
-        account: item.account || "",
-        accountId: item.accountId || "",
-        provider: item.provider || "QuickMail",
-        writable: !!item.writable,
-        dateOnly: !!item.dateOnly,
-    }))
+    function normalizedAgendaEvent(event) {
+        return {
+            content: event?.title ?? "",
+            title: event?.title ?? "",
+            description: event?.description ?? "",
+            dueAt: parseInt(event?.startAt ?? 0) || 0,
+            endAt: parseInt(event?.endAt ?? 0) || 0,
+            allDay: !!event?.allDay,
+            done: false,
+            readOnly: true,
+            source: "quickmail-event",
+            kind: "event",
+            originalIndex: -1,
+            id: `${event?.id ?? ""}`,
+            externalId: `${event?.externalId ?? event?.id ?? ""}`,
+            calId: `${event?.calId ?? ""}`,
+            calendarName: `${event?.calendarName ?? ""}`,
+            account: `${event?.calendarName ?? event?.account ?? ""}`,
+            accountId: `${event?.accountId ?? ""}`,
+            provider: `${event?.provider ?? "QuickMail"}`,
+            writable: !!event?.writable,
+            dateOnly: false,
+        };
+    }
+
+    function eventKey(item) {
+        return `${item?.calId ?? ""}\u0000${item?.externalId ?? item?.id ?? ""}`;
+    }
+
+    readonly property var unifiedAgendaList: {
+        const items = UnifiedAgenda.agendaItems.map(item => ({
+            content: item.title,
+            title: item.title,
+            description: item.description || "",
+            dueAt: Number(item.timestamp) || 0,
+            endAt: Number(item.endAt) || 0,
+            allDay: !!item.allDay,
+            done: !!item.done,
+            readOnly: !!item.readOnly,
+            source: item.source,
+            kind: item.kind,
+            originalIndex: item.originalIndex,
+            id: item.id || "",
+            externalId: item.externalId || "",
+            calId: item.calId || "",
+            calendarName: item.account || "",
+            account: item.account || "",
+            accountId: item.accountId || "",
+            provider: item.provider || "QuickMail",
+            writable: !!item.writable,
+            dateOnly: !!item.dateOnly,
+        }));
+
+        if (root.focusedDayStartMs >= 0 && root.focusedDayEndMs > root.focusedDayStartMs) {
+            const existingEvents = new Set(items
+                .filter(item => item.kind === "event")
+                .map(item => root.eventKey(item)));
+            root.remoteEvents
+                .filter(event => AgendaDates.eventIntersectsRange(
+                    event,
+                    root.focusedDayStartMs,
+                    root.focusedDayEndMs
+                ))
+                .map(event => root.normalizedAgendaEvent(event))
+                .forEach(event => {
+                    if (!existingEvents.has(root.eventKey(event)))
+                        items.push(event);
+                });
+        }
+
+        return items.sort((a, b) => {
+            const aTime = (parseInt(a?.dueAt ?? 0) || 0) > 0
+                ? parseInt(a.dueAt)
+                : Number.MAX_SAFE_INTEGER;
+            const bTime = (parseInt(b?.dueAt ?? 0) || 0) > 0
+                ? parseInt(b.dueAt)
+                : Number.MAX_SAFE_INTEGER;
+            if (aTime !== bTime)
+                return aTime - bTime;
+            return `${a?.title ?? ""}`.localeCompare(`${b?.title ?? ""}`);
+        });
+    }
 
     readonly property var mailList: UnifiedAgenda.recentMail.map(message => ({
         content: message.title || Translation.tr("Untitled message"),
@@ -108,44 +185,6 @@ Item {
         const externalId = `task:${item.externalId}`;
         if (!UnifiedAgenda.hasTaskForExternalId(externalId))
             Todo.addTask(item.title, item.calendarName ? Translation.tr("From %1").arg(item.calendarName) : "", item.dueAt, "calendar", { externalId, account: item.calendarName || "" });
-    }
-
-    readonly property var mergedEventList: {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        let minTs = today.getTime();
-        let maxTs = minTs + (7 * root.dayMs);
-        if (root.focusedDayStartMs >= 0 && root.focusedDayEndMs > root.focusedDayStartMs) {
-            minTs = Math.min(minTs, root.focusedDayStartMs);
-            maxTs = Math.max(maxTs, root.focusedDayEndMs);
-        }
-
-        return root.remoteEvents
-            .map(event => ({
-                content: event.title ?? "",
-                title: event.title ?? "",
-                description: "",
-                dueAt: parseInt(event?.startAt ?? 0) || 0,
-                endAt: parseInt(event?.endAt ?? 0) || 0,
-                allDay: !!event?.allDay,
-                done: false,
-                readOnly: true,
-                source: "quickmail-event",
-                originalIndex: -1,
-                externalId: `${event?.externalId ?? ""}`,
-                calId: `${event?.calId ?? ""}`,
-                calendarName: `${event?.calendarName ?? ""}`,
-            }))
-            .filter(item =>
-                item.dueAt >= minTs
-                && item.dueAt < maxTs
-                && `${item.content}`.trim().length > 0
-            )
-            .sort((a, b) => {
-                if ((a.dueAt ?? 0) !== (b.dueAt ?? 0))
-                    return (a.dueAt ?? 0) - (b.dueAt ?? 0);
-                return `${a.content}`.localeCompare(`${b.content}`);
-            });
     }
 
     Keys.onPressed: (event) => {
