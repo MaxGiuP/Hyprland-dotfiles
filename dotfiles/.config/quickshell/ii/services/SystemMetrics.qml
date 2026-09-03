@@ -63,7 +63,11 @@ Singleton {
     Process {
         id: gpuQuery
         environment: ({ LANG: "C", LC_ALL: "C" })
-        command: ["nvidia-smi", "-i", root.gpuId, "-q", "-d", "UTILIZATION,MEMORY"]
+        command: [
+            "nvidia-smi", "-i", root.gpuId,
+            "--query-gpu=utilization.gpu,memory.used,memory.total",
+            "--format=csv,noheader,nounits"
+        ]
         property string output: ""
         property string errors: ""
         stdout: SplitParser {
@@ -98,13 +102,10 @@ Singleton {
             root.gpuAvailable = true;
             root.gpuDriverMismatch = false;
             root.gpuMismatchNotified = false;
-            const utilization = output.match(/Gpu\s*:\s*(\d+)\s*%/i);
-            root.gpuUtil = utilization ? (parseInt(utilization[1]) || 0) : 0;
-            const memory = output.match(/FB Memory Usage[\s\S]*?Total\s*:\s*(\d+)\s*MiB[\s\S]*?Used\s*:\s*(\d+)\s*MiB/i);
-            if (memory) {
-                root.vramTotalMB = parseInt(memory[1]) || 0;
-                root.vramUsedMB = parseInt(memory[2]) || 0;
-            }
+            const fields = output.trim().split(",").map(value => parseInt(value.trim()) || 0);
+            root.gpuUtil = fields[0] ?? 0;
+            root.vramUsedMB = fields[1] ?? 0;
+            root.vramTotalMB = fields[2] ?? 0;
         }
     }
 

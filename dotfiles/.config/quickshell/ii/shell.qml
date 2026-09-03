@@ -72,6 +72,12 @@ ShellRoot {
         }
     }
 
+    IpcHandler {
+        target: "health"
+
+        function ping(): string { return "ok"; }
+    }
+
     GlobalShortcut {
         name: "panelFamilyCycle"
         description: "Cycles panel family"

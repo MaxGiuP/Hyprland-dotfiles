@@ -329,7 +329,9 @@ Singleton {
         Quickshell.execDetached([
             "bash",
             "-c",
-            `printf '%s' '${serialized}' > '${statePath}'`
+            `state_path='${statePath}'; tmp_path="$state_path.tmp.$$"; ` +
+            `trap 'rm -f -- "$tmp_path"' EXIT; umask 077; ` +
+            `printf '%s' '${serialized}' > "$tmp_path" && mv -f -- "$tmp_path" "$state_path"`
         ])
     }
 
@@ -497,7 +499,7 @@ Singleton {
         root.persistStatePayload(root.clearState("loading", Translation.tr("Starting live captions…")))
         Quickshell.execDetached(buildBackendLaunchCommand())
         launchTimeoutTimer.restart()
-        workerStatusTimer.restart()
+        initialWorkerProbeTimer.restart()
     }
 
     function stop(preserveRunIntent = false) {
@@ -510,6 +512,7 @@ Singleton {
         root.stopRequested = true
         root.launchPending = false
         root.workerActive = false
+        initialWorkerProbeTimer.stop()
         Quickshell.execDetached(buildStopCommand())
         root.persistStatePayload(root.clearState("stopped", Translation.tr("Live captions stopped.")))
         if (preserveRunIntent && root.restartPending)
@@ -569,7 +572,9 @@ Singleton {
 
     Timer {
         id: statePollTimer
-        interval: 60
+        // File notifications provide live captions; this is only a fallback
+        // for atomic replacements or missed inotify events.
+        interval: 1000
         repeat: true
         running: root.active || GlobalStates.liveCaptionsOpen
         onTriggered: stateFileView.reload()
@@ -577,7 +582,7 @@ Singleton {
 
     Timer {
         id: workerStatusTimer
-        interval: 350
+        interval: 2500
         repeat: true
         running: root.active || GlobalStates.liveCaptionsOpen
         onTriggered: {
@@ -589,8 +594,15 @@ Singleton {
     }
 
     Timer {
+        id: initialWorkerProbeTimer
+        interval: 400
+        repeat: false
+        onTriggered: root.probeWorker()
+    }
+
+    Timer {
         id: launchTimeoutTimer
-        interval: 2500
+        interval: 6000
         repeat: false
         onTriggered: {
             if (root.launchPending && !root.workerActive)
@@ -601,7 +613,8 @@ Singleton {
     FileView {
         id: stateFileView
         path: Directories.liveCaptionsStatePath
-        watchChanges: false
+        watchChanges: true
+        onFileChanged: stateReloadDebounce.restart()
         onLoaded: {
             try {
                 const parsed = JSON.parse(stateFileView.text() || "{}")
@@ -624,6 +637,13 @@ Singleton {
                 })
             }
         }
+    }
+
+    Timer {
+        id: stateReloadDebounce
+        interval: 20
+        repeat: false
+        onTriggered: stateFileView.reload()
     }
 
     Process {
@@ -650,7 +670,10 @@ Singleton {
     Process {
         id: workerStatusProc
         onExited: (exitCode, exitStatus) => {
-            root.updateWorkerState(exitCode === 0)
+            if (exitCode === 0)
+                root.updateWorkerState(true)
+            else if (!root.launchPending || !launchTimeoutTimer.running)
+                root.updateWorkerState(false)
         }
     }
 

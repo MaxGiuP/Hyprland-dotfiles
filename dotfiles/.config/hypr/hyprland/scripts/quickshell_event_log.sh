@@ -5,6 +5,12 @@
 
 set -u
 
+# Detailed process/systemd snapshots are diagnostic-only. They fan out into
+# several helper processes, so keep the normal start/reload path effectively
+# free and enable tracing explicitly when investigating a restart loop.
+[ "${QS_EVENT_LOG_DISABLE:-0}" != 1 ] || exit 0
+[ "${QS_TRACE_RESTARTS:-0}" = 1 ] || exit 0
+
 LOG_DIR="${QS_DEBUG_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/quickshell-debug}"
 LOG_FILE="${QS_DEBUG_LOG_FILE:-$LOG_DIR/restart-trace.log}"
 MAX_BYTES="${QS_DEBUG_LOG_MAX_BYTES:-1048576}"

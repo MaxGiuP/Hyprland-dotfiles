@@ -63,18 +63,15 @@ Singleton {
     property string userAvatarPathAccountsService: FileUtils.trimFileProtocol(`/var/lib/AccountsService/icons/${SystemInfo.username}`)
     property string userAvatarPathRicersAndWeirdSystems: FileUtils.trimFileProtocol(`${Directories.home}.face`)
     property string userAvatarPathRicersAndWeirdSystems2: FileUtils.trimFileProtocol(`${Directories.home}.face.icon`)
-    // Cleanup on init
+    // Create the shell's working directories in one bounded process. Persistent
+    // cover-art and LaTeX output are real caches and must survive QML reloads.
     Component.onCompleted: {
-        Quickshell.execDetached(["mkdir", "-p", `${shellConfig}`])
-        Quickshell.execDetached(["mkdir", "-p", `${favicons}`])
-        Quickshell.execDetached(["bash", "-c", `rm -rf '${coverArt}'; mkdir -p '${coverArt}'`])
-        Quickshell.execDetached(["bash", "-c", `rm -rf '${latexOutput}'; mkdir -p '${latexOutput}'`])
-        Quickshell.execDetached(["bash", "-c", `rm -rf '${cliphistDecode}'; mkdir -p '${cliphistDecode}'`])
-        Quickshell.execDetached(["mkdir", "-p", `${aiChats}`])
-        Quickshell.execDetached(["mkdir", "-p", `${liveCaptionsDir}`])
-        Quickshell.execDetached(["mkdir", "-p", `${liveCaptionsModelCachePath}`])
-        Quickshell.execDetached(["mkdir", "-p", `${liveScreenTranslationDir}`])
-        Quickshell.execDetached(["mkdir", "-p", `${userActions}`])
-        Quickshell.execDetached(["rm", "-rf", `${tempImages}`])
+        Quickshell.execDetached([
+            "mkdir", "-p",
+            `${shellConfig}`, `${favicons}`, `${coverArt}`, `${latexOutput}`,
+            `${cliphistDecode}`, `${aiChats}`, `${liveCaptionsDir}`,
+            `${liveCaptionsModelCachePath}`, `${liveScreenTranslationDir}`,
+            `${userActions}`, `${tempImages}`
+        ])
     }
 }

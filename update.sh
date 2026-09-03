@@ -20,11 +20,13 @@ DEST_DIR="$REPO_DIR/dotfiles/.config"
 
 RSYNC_ARGS=(
     -a
-    --delete
     --no-owner
     --no-group
     --exclude=__pycache__/
     --exclude=*.pyc
+    --exclude='*.bak'
+    --exclude='*.bak.*'
+    --exclude='.claude/'
     --exclude=.git/
     --exclude=target/
     --exclude=desktop_positions.json
@@ -51,6 +53,8 @@ MANAGED=(
     Kvantum
     nwg-look
     fish
+    systemd
+    user-tmpfiles.d
 )
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
@@ -117,6 +121,15 @@ skipped=()
 for cfg in "${MANAGED[@]}"; do
     src="$HOME/.config/$cfg"
     dst="$DEST_DIR/$cfg"
+    sync_args=("${RSYNC_ARGS[@]}")
+    case "$cfg" in
+        systemd|user-tmpfiles.d)
+            # Shared XDG directories can contain unrelated machine-local
+            # units/rules. Refresh only files the repository already tracks.
+            sync_args+=(--existing --checksum --no-times --omit-dir-times)
+            ;;
+        *) sync_args+=(--delete) ;;
+    esac
 
     if [[ ! -d "$src" ]]; then
         warn "$cfg — not found in ~/.config/, skipping"
@@ -129,15 +142,7 @@ for cfg in "${MANAGED[@]}"; do
 
     # Show a quick summary of what will change
     if [[ -d "$dst" ]]; then
-        changed=$(rsync -rin --delete \
-            --exclude=__pycache__/ \
-            --exclude='*.pyc' \
-            --exclude='.git/' \
-            --exclude='target/' \
-            --exclude='desktop_positions.json' \
-            --exclude='anon_inode:*' \
-            --exclude='pipe:*' \
-            --exclude='socket:*' \
+        changed=$(rsync "${sync_args[@]}" -rin \
             "$src/" "$dst/" 2>/dev/null | grep -v '^\.' | head -20 || true)
         if [[ -z "$changed" ]]; then
             ok "$cfg — already up to date"
@@ -160,7 +165,7 @@ for cfg in "${MANAGED[@]}"; do
     fi
 
     mkdir -p "$dst"
-    rsync "${RSYNC_ARGS[@]}" "$src/" "$dst/"
+    rsync "${sync_args[@]}" "$src/" "$dst/"
     ok "$cfg synced"
     synced+=("$cfg")
 done

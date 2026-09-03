@@ -21,18 +21,23 @@ Scope {
     }
 
     function showCalculator() {
+        calculatorWindow.prepareContent();
         root.showWindow(calculatorWindow);
-        Qt.callLater(() => calculator.forceActiveFocus());
+        Qt.callLater(() => calculatorLoader.item?.focusContent());
     }
 
     function showTimers() {
         root.showWindow(timersWindow);
-        Qt.callLater(() => timers.forceActiveFocus());
+        Qt.callLater(() => timersLoader.item?.focusContent());
     }
 
     function showDashboard(tab = 0) {
-        dashboard.currentTab = Math.max(0, Math.min(4, Number(tab) || 0));
+        dashboardWindow.pendingTab = Math.max(0, Math.min(4, Number(tab) || 0));
         root.showWindow(dashboardWindow);
+        Qt.callLater(() => {
+            if (dashboardLoader.item)
+                dashboardLoader.item.currentTab = dashboardWindow.pendingTab;
+        });
     }
 
     component UtilityWindow: ApplicationWindow {
@@ -59,14 +64,71 @@ Scope {
         height: 760
         minimumWidth: 440
         minimumHeight: 620
+        property bool contentReady: false
+        property string savedExpression: ""
+        property string savedResult: "0"
+        property var savedHistory: []
 
-        Rectangle {
+        function prepareContent() {
+            calculatorReleaseTimer.stop();
+            calculatorWindow.contentReady = true;
+        }
+
+        function saveContentState() {
+            const content = calculatorLoader.item;
+            if (!content)
+                return;
+            calculatorWindow.savedExpression = content.expression;
+            calculatorWindow.savedResult = content.result;
+            calculatorWindow.savedHistory = [...content.history];
+        }
+
+        onVisibleChanged: {
+            if (visible)
+                calculatorWindow.prepareContent();
+            else if (calculatorWindow.contentReady)
+                calculatorReleaseTimer.restart();
+        }
+
+        Timer {
+            id: calculatorReleaseTimer
+            interval: 5000
+            repeat: false
+            onTriggered: {
+                if (calculatorWindow.visible)
+                    return;
+                calculatorWindow.saveContentState();
+                calculatorWindow.contentReady = false;
+            }
+        }
+
+        Loader {
+            id: calculatorLoader
             anchors.fill: parent
-            color: Appearance.colors.colLayer0
+            active: calculatorWindow.contentReady
+            onLoaded: {
+                item.expression = calculatorWindow.savedExpression;
+                item.result = calculatorWindow.savedResult;
+                item.history = [...calculatorWindow.savedHistory];
+                if (calculatorWindow.visible)
+                    item.focusContent();
+            }
 
-            Calculator {
-                id: calculator
+            sourceComponent: Rectangle {
                 anchors.fill: parent
+                color: Appearance.colors.colLayer0
+                property alias expression: calculator.expression
+                property alias result: calculator.result
+                property alias history: calculator.history
+
+                function focusContent() {
+                    calculator.forceActiveFocus();
+                }
+
+                Calculator {
+                    id: calculator
+                    anchors.fill: parent
+                }
             }
         }
     }
@@ -78,16 +140,16 @@ Scope {
         height: 760
         minimumWidth: 760
         minimumHeight: 580
+        property int pendingTab: 0
 
-        Rectangle {
+        Loader {
+            id: dashboardLoader
             anchors.fill: parent
-            color: Appearance.colors.colLayer0
+            anchors.margins: 12
+            active: dashboardWindow.visible
+            onLoaded: item.currentTab = dashboardWindow.pendingTab
 
-            SystemDashboard {
-                id: dashboard
-                anchors.fill: parent
-                anchors.margins: 12
-            }
+            sourceComponent: SystemDashboard {}
         }
     }
 
@@ -99,47 +161,57 @@ Scope {
         minimumWidth: 500
         minimumHeight: 440
 
-        Rectangle {
+        Loader {
+            id: timersLoader
             anchors.fill: parent
-            anchors.margins: 10
-            radius: Appearance.rounding.normal
-            color: Appearance.colors.colLayer1
+            active: timersWindow.visible
 
-            ColumnLayout {
+            sourceComponent: Rectangle {
                 anchors.fill: parent
-                anchors.margins: 14
-                spacing: 10
+                anchors.margins: 10
+                radius: Appearance.rounding.normal
+                color: Appearance.colors.colLayer1
 
-                RowLayout {
-                    Layout.fillWidth: true
-
-                    MaterialSymbol {
-                        text: "timer"
-                        iconSize: Appearance.font.pixelSize.huge
-                        color: Appearance.colors.colPrimary
-                    }
-
-                    StyledText {
-                        text: "Timers"
-                        font.pixelSize: Appearance.font.pixelSize.large
-                        font.weight: Font.DemiBold
-                        color: Appearance.colors.colOnLayer1
-                    }
-
-                    Item { Layout.fillWidth: true }
-
-                    StyledText {
-                        text: "Space: start/pause   R: reset   L: lap"
-                        color: Appearance.colors.colSubtext
-                        font.pixelSize: Appearance.font.pixelSize.small
-                    }
+                function focusContent() {
+                    timers.forceActiveFocus();
                 }
 
-                PomodoroWidget {
-                    id: timers
-                    Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    focus: true
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 10
+
+                    RowLayout {
+                        Layout.fillWidth: true
+
+                        MaterialSymbol {
+                            text: "timer"
+                            iconSize: Appearance.font.pixelSize.huge
+                            color: Appearance.colors.colPrimary
+                        }
+
+                        StyledText {
+                            text: "Timers"
+                            font.pixelSize: Appearance.font.pixelSize.large
+                            font.weight: Font.DemiBold
+                            color: Appearance.colors.colOnLayer1
+                        }
+
+                        Item { Layout.fillWidth: true }
+
+                        StyledText {
+                            text: "Space: start/pause   R: reset   L: lap"
+                            color: Appearance.colors.colSubtext
+                            font.pixelSize: Appearance.font.pixelSize.small
+                        }
+                    }
+
+                    PomodoroWidget {
+                        id: timers
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        focus: true
+                    }
                 }
             }
         }

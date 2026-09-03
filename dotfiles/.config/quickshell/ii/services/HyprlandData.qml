@@ -31,7 +31,9 @@ Singleton {
     property var activeWorkspaceIdsByMonitor: ({})
     property var workspaceEventTimesByMonitor: ({})
     property string eventFocusedMonitorName: ""
+    property double lastNativeHyprlandActivityAt: Date.now()
     readonly property string workspaceEventSocketPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr/${Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")}/.socket2.sock`
+    readonly property string workspaceEventBridgePath: `${Directories.scriptPath}/hyprland/workspace-event-stream.py`.replace(/file:\/\//, "")
 
     // Convenient stuff
 
@@ -337,11 +339,13 @@ Singleton {
         target: Hyprland
 
         function onFocusedWorkspaceChanged() {
+            root.lastNativeHyprlandActivityAt = Date.now();
             updateMonitors();
             updateWorkspaces();
         }
 
         function onRawEvent(event) {
+            root.lastNativeHyprlandActivityAt = Date.now();
             const name = event.name;
 
             // Window titles can change many times per second (for example a
@@ -403,14 +407,12 @@ Singleton {
 
     // Quickshell's built-in Hyprland event connection can remain disconnected
     // after PeerClosedError. Keep workspace highlighting independent from that
-    // connection and filter the noisy event stream before it reaches QML.
+    // connection. The bridge reads and filters the socket itself so QML reloads
+    // cannot orphan a bash/socat/grep process pipeline.
     Process {
         id: workspaceEventSocket
         running: root.workspaceEventSocketPath.length > 0
-        command: [
-            "bash", "-c",
-            `socat -u UNIX-CONNECT:${root.workspaceEventSocketPath} - | grep --line-buffered -E '^(workspace|workspacev2|focusedmon)>>'`
-        ]
+        command: ["python3", "-u", root.workspaceEventBridgePath, root.workspaceEventSocketPath]
         stdout: SplitParser {
             onRead: line => root.handleWorkspaceSocketLine(line)
         }
@@ -419,7 +421,9 @@ Singleton {
 
     Timer {
         id: workspaceEventSocketRestart
-        interval: 250
+        // The helper reconnects internally; this is only for an unexpected
+        // interpreter/helper exit, so avoid a tight process-spawn loop.
+        interval: 5000
         repeat: false
         onTriggered: {
             if (!workspaceEventSocket.running && root.workspaceEventSocketPath.length > 0)
@@ -427,22 +431,19 @@ Singleton {
         }
     }
 
-    // Fallback polling for cases where the Hyprland event stream stalls for this shell instance.
+    // Reconcile after the native Quickshell event path has been quiet long
+    // enough to be suspicious. The independent filtered bridge must not hide
+    // a dead native connection, since it updates only workspace highlighting.
     Timer {
-        interval: 1500
+        interval: 5000
         running: true
         repeat: true
         onTriggered: {
+            if (Date.now() - root.lastNativeHyprlandActivityAt < 15000)
+                return;
+            root.lastNativeHyprlandActivityAt = Date.now();
             root.updateMonitors();
             root.updateWorkspaces();
-        }
-    }
-
-    Timer {
-        interval: 3000
-        running: true
-        repeat: true
-        onTriggered: {
             root.updateWindowList();
         }
     }

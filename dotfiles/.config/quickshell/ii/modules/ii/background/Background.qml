@@ -261,8 +261,20 @@ Variants {
         function updateZoomScale() {
             if (!bgRoot.wallpaperPath || bgRoot.wallpaperPath.length === 0)
                 return;
-            getWallpaperSizeProc.path = bgRoot.wallpaperPath;
-            getWallpaperSizeProc.running = true;
+            wallpaperSizeRefresh.restart();
+        }
+        Timer {
+            id: wallpaperSizeRefresh
+            interval: 120
+            repeat: false
+            onTriggered: {
+                if (getWallpaperSizeProc.running) {
+                    wallpaperSizeRefresh.restart();
+                    return;
+                }
+                getWallpaperSizeProc.path = bgRoot.wallpaperPath;
+                getWallpaperSizeProc.running = true;
+            }
         }
         Process {
             id: getWallpaperSizeProc

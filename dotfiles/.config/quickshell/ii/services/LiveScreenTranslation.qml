@@ -143,7 +143,13 @@ Singleton {
     function persistStatePayload(payload) {
         const statePath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationStatePath)
         const serialized = CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(payload ?? {}))
-        Quickshell.execDetached(["bash", "-c", `printf '%s' '${serialized}' > '${statePath}'`])
+        Quickshell.execDetached([
+            "bash",
+            "-c",
+            `state_path='${statePath}'; tmp_path="$state_path.tmp.$$"; ` +
+            `trap 'rm -f -- "$tmp_path"' EXIT; umask 077; ` +
+            `printf '%s' '${serialized}' > "$tmp_path" && mv -f -- "$tmp_path" "$state_path"`
+        ])
     }
 
     function buildBackendLaunchCommand() {
@@ -256,7 +262,7 @@ Singleton {
         persistStatePayload(clearState("loading", Translation.tr("Starting live screen translation…")))
         Quickshell.execDetached(buildBackendLaunchCommand())
         launchTimeoutTimer.restart()
-        workerStatusTimer.restart()
+        initialWorkerProbeTimer.restart()
     }
 
     function stop(preserveRunIntent = false) {
@@ -269,6 +275,7 @@ Singleton {
         stopRequested = true
         launchPending = false
         workerActive = false
+        initialWorkerProbeTimer.stop()
         Quickshell.execDetached(buildStopCommand())
         persistStatePayload(clearState("stopped", Translation.tr("Live screen translation stopped.")))
         if (preserveRunIntent && root.restartPending)
@@ -356,7 +363,7 @@ Singleton {
 
     Timer {
         id: launchTimeoutTimer
-        interval: 2500
+        interval: 6000
         repeat: false
         onTriggered: {
             if (root.launchPending && !root.workerActive)
@@ -366,7 +373,7 @@ Singleton {
 
     Timer {
         id: statePollTimer
-        interval: 250
+        interval: 1000
         repeat: true
         running: root.active
         onTriggered: stateFileView.reload()
@@ -374,7 +381,7 @@ Singleton {
 
     Timer {
         id: workerStatusTimer
-        interval: 500
+        interval: 2500
         repeat: true
         running: root.active
         onTriggered: {
@@ -385,10 +392,18 @@ Singleton {
         }
     }
 
+    Timer {
+        id: initialWorkerProbeTimer
+        interval: 400
+        repeat: false
+        onTriggered: root.probeWorker()
+    }
+
     FileView {
         id: stateFileView
         path: Directories.liveScreenTranslationStatePath
-        watchChanges: false
+        watchChanges: true
+        onFileChanged: stateReloadDebounce.restart()
         onLoaded: {
             try {
                 root.state = JSON.parse(stateFileView.text() || "{}")
@@ -396,6 +411,13 @@ Singleton {
                 root.state = root.clearState("error", Translation.tr("Could not parse OCR state."))
             }
         }
+    }
+
+    Timer {
+        id: stateReloadDebounce
+        interval: 30
+        repeat: false
+        onTriggered: stateFileView.reload()
     }
 
     Process {
@@ -453,7 +475,12 @@ Singleton {
 
     Process {
         id: workerStatusProc
-        onExited: (exitCode, exitStatus) => root.updateWorkerState(exitCode === 0)
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0)
+                root.updateWorkerState(true)
+            else if (!root.launchPending || !launchTimeoutTimer.running)
+                root.updateWorkerState(false)
+        }
     }
 
     Connections {

@@ -14,12 +14,16 @@ Image {
     fillMode: Image.PreserveAspectFit
 
     readonly property bool isDesktopFile: !fileModelData.fileIsDir && fileModelData.filePath.endsWith(".desktop")
+    readonly property string fileExtension: {
+        const parts = fileModelData.fileName.toLowerCase().split(".");
+        return parts.length > 1 ? parts[parts.length - 1] : "";
+    }
+    readonly property bool isKnownImage: ["jpg", "jpeg", "png", "webp", "tif", "tiff", "svg"].includes(fileExtension)
 
     // Quick extension-based icon lookup — shown immediately, before any process runs.
     readonly property string initialFileIcon: {
         if (fileModelData.fileIsDir) return "";
-        const parts = fileModelData.fileName.toLowerCase().split(".");
-        const ext = parts.length > 1 ? parts[parts.length - 1] : "";
+        const ext = root.fileExtension;
         const map = {
             // Scripts / source code
             "py":   "text-x-python",
@@ -107,6 +111,8 @@ Image {
     }
 
     source: {
+        if (root.isKnownImage)
+            return fileModelData.fileUrl;
         if (!fileModelData.fileIsDir)
             return Quickshell.iconPath(initialFileIcon);
 
@@ -137,10 +143,14 @@ Image {
         }
     }
 
-    // For everything else: use xdg-mime for accurate MIME type (extension + magic bytes),
-    // then map to the freedesktop icon name. Falls back to the extension-based icon.
+    // Known extensions already map directly above. Probe only extensionless or
+    // unfamiliar files; doing this for every delegate duplicated xdg-mime work
+    // on every monitor at each shell reload.
     Process {
         running: !fileModelData.fileIsDir && !root.isDesktopFile
+            && !root.isKnownImage
+            && root.initialFileIcon === "text-plain"
+            && root.fileExtension !== "txt"
         command: ["xdg-mime", "query", "filetype", fileModelData.filePath]
         stdout: StdioCollector {
             onStreamFinished: {

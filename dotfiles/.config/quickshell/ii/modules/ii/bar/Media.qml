@@ -66,7 +66,12 @@ Item {
             "cover-art", artFilePath, targetFile
         ]
         onExited: (exitCode) => {
+            // A cancelled request also emits onExited. Do not publish its old
+            // (or empty-hash) path after the player/art URL has changed.
             root.downloaded = exitCode === 0
+                && coverArtDownloader.targetFile.length > 0
+                && coverArtDownloader.targetFile === (root.artUrl ?? "")
+                && coverArtDownloader.artFilePath === root.artFilePath
         }
     }
 

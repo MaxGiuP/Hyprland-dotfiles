@@ -295,6 +295,9 @@ Singleton {
     Process {
         id: agendaWatchProcess
         running: true
+        // quickmailctl performs one local socket read here. A single Tokio
+        // worker avoids reserving one worker per CPU for this tiny watcher.
+        environment: ({ TOKIO_WORKER_THREADS: "1" })
         command: ["python3", root.bridgeScriptPath, "--watch"]
 
         stdout: SplitParser {
@@ -315,6 +318,7 @@ Singleton {
 
     Process {
         id: snapshotProcess
+        environment: ({ TOKIO_WORKER_THREADS: "1" })
         command: root.syncRequested
             ? ["python3", root.bridgeScriptPath, "--sync"]
             : ["python3", root.bridgeScriptPath]
@@ -367,6 +371,7 @@ Singleton {
 
     Process {
         id: mutationProcess
+        environment: ({ TOKIO_WORKER_THREADS: "1" })
 
         stdout: StdioCollector {
             id: mutationOutput

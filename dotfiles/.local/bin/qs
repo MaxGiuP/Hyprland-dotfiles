@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 
 QS_EVENT_LOG="$HOME/.config/hypr/hyprland/scripts/quickshell_event_log.sh"
-QS_REAL_BIN="${QS_REAL_BIN:-$HOME/.local/libexec/quickshell/quickshell}"
-if [ ! -x "$QS_REAL_BIN" ] || ! "$QS_REAL_BIN" --private-check-compat >/dev/null 2>&1; then
-    QS_REAL_BIN=/usr/bin/quickshell
-fi
+QS_REQUESTED_BIN="${QS_REAL_BIN:-$HOME/.local/libexec/quickshell/quickshell}"
+QS_SYSTEM_BIN=/usr/bin/quickshell
+QS_RESOLVER_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/quickshell"
+QS_RESOLVER_CACHE="$QS_RESOLVER_DIR/resolved-binary"
 
 QS_LOG_WRAPPER=1
 QS_PASSTHROUGH=0
@@ -21,15 +21,62 @@ for arg in "$@"; do
             break
             ;;
         kill|list|log|msg)
+            QS_LOG_WRAPPER=0
             QS_PASSTHROUGH=1
             break
             ;;
     esac
 done
-if [ "$QS_LOG_WRAPPER" -eq 1 ] && [ -x "$QS_EVENT_LOG" ]; then
+
+if [ "${QS_EVENT_LOG_DISABLE:-0}" = 1 ]; then
+    QS_LOG_WRAPPER=0
+fi
+
+# Cache the compatible choice, not merely a yes/no result. The key follows
+# both candidate binaries and the core Qt runtime, so package/ABI updates force
+# a fresh probe while ordinary IPC calls pay only one stat and two shell reads.
+QS_RESOLVER_KEY=$(stat -L --printf='%n=%d:%i:%s:%Y;' \
+    "$QS_REQUESTED_BIN" "$QS_SYSTEM_BIN" \
+    /usr/lib/libQt6Core.so.6 /usr/lib/libQt6Gui.so.6 \
+    /usr/lib/libQt6Qml.so.6 /usr/lib/libQt6Quick.so.6 2>/dev/null || true)
+QS_CACHED_KEY=""
+QS_CACHED_BIN=""
+if [ -r "$QS_RESOLVER_CACHE" ]; then
+    {
+        IFS= read -r QS_CACHED_KEY || true
+        IFS= read -r QS_CACHED_BIN || true
+    } < "$QS_RESOLVER_CACHE"
+fi
+
+QS_REAL_BIN=""
+if [ "$QS_CACHED_KEY" = "$QS_RESOLVER_KEY" ] && [ -x "$QS_CACHED_BIN" ] \
+        && { [ "$QS_CACHED_BIN" = "$QS_REQUESTED_BIN" ] || [ "$QS_CACHED_BIN" = "$QS_SYSTEM_BIN" ]; }; then
+    QS_REAL_BIN="$QS_CACHED_BIN"
+else
+    for QS_CANDIDATE in "$QS_REQUESTED_BIN" "$QS_SYSTEM_BIN"; do
+        [ -x "$QS_CANDIDATE" ] || continue
+        [ "$QS_CANDIDATE" != "$QS_REAL_BIN" ] || continue
+        if "$QS_CANDIDATE" --private-check-compat >/dev/null 2>&1; then
+            QS_REAL_BIN="$QS_CANDIDATE"
+            break
+        fi
+    done
+    if [ -z "$QS_REAL_BIN" ]; then
+        echo "No ABI-compatible Quickshell binary is available." >&2
+        exit 42
+    fi
+    mkdir -p "$QS_RESOLVER_DIR"
+    chmod 700 "$QS_RESOLVER_DIR" 2>/dev/null || true
+    QS_RESOLVER_TMP="$QS_RESOLVER_CACHE.$$"
+    (umask 077; printf '%s\n%s\n' "$QS_RESOLVER_KEY" "$QS_REAL_BIN" > "$QS_RESOLVER_TMP")
+    mv -f "$QS_RESOLVER_TMP" "$QS_RESOLVER_CACHE"
+fi
+
+if [ "$QS_LOG_WRAPPER" -eq 1 ] && [ "${QS_TRACE_RESTARTS:-0}" = 1 ] && [ -x "$QS_EVENT_LOG" ]; then
     "$QS_EVENT_LOG" qs-wrapper-invoked "argv=$*" || true
 fi
-unset QS_EVENT_LOG QS_LOG_WRAPPER
+unset QS_EVENT_LOG QS_LOG_WRAPPER QS_REQUESTED_BIN QS_SYSTEM_BIN QS_RESOLVER_DIR \
+    QS_RESOLVER_CACHE QS_RESOLVER_KEY QS_CACHED_KEY QS_CACHED_BIN QS_CANDIDATE QS_RESOLVER_TMP
 
 if [ "$QS_PASSTHROUGH" -eq 1 ]; then
     exec "$QS_REAL_BIN" "$@"

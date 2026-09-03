@@ -19,8 +19,10 @@ Singleton {
     signal brightnessChanged()
 
     property var ddcMonitors: []
+    property bool ddcDetectionQueued: false
     property var lastChangedMonitor: null
     property list<string> softwareDimmingScreens: ["HDMI-A-1"]
+    readonly property string ddcDetectScriptPath: `${FileUtils.trimFileProtocol(Directories.scriptPath)}/system/detect-ddc-monitors.py`
     readonly property list<BrightnessMonitor> monitors: Quickshell.screens.map(screen => monitorComp.createObject(root, {
         screen
     }))
@@ -50,7 +52,23 @@ Singleton {
     reloadableId: "brightness"
 
     onMonitorsChanged: {
-        ddcMonitors = [];
+        ddcDetectDelay.restart();
+    }
+
+    Timer {
+        id: ddcDetectDelay
+        interval: 800
+        repeat: false
+        onTriggered: root.startDdcDetection()
+    }
+
+    function startDdcDetection(): void {
+        if (ddcProc.running) {
+            root.ddcDetectionQueued = true;
+            return;
+        }
+        root.ddcDetectionQueued = false;
+        root.ddcMonitors = [];
         ddcProc.running = true;
     }
 
@@ -60,37 +78,44 @@ Singleton {
         monitors[i].initialize();
     }
 
-    function ddcDetectFinished(): void {
-        initializeMonitor(0);
+    function applyDdcDetection(output: string): bool {
+        try {
+            const payload = JSON.parse(output || "{}");
+            if (payload.schema !== "quickshell.ddc-monitors.v1" || payload.ok !== true
+                    || !Array.isArray(payload.monitors))
+                return false;
+
+            const screenNames = new Set(root.monitors.map(monitor => monitor.screen?.name ?? ""));
+            root.ddcMonitors = payload.monitors.map(monitor => ({
+                name: `${monitor?.connector ?? ""}`,
+                busNum: `${monitor?.bus ?? ""}`
+            })).filter(monitor => screenNames.has(monitor.name) && /^\d+$/.test(monitor.busNum));
+            return true;
+        } catch (error) {
+            console.warn(`Could not parse DDC monitor discovery: ${error}`);
+            return false;
+        }
     }
 
     Process {
         id: ddcProc
 
-        command: ["ddcutil", "detect", "--brief"]
-        stdout: SplitParser {
-            splitMarker: "\n\n"
-            onRead: data => {
-                if (data.startsWith("Display ") || data.startsWith("Invalid display")) {
-                    const lines = data.split("\n").map(l => l.trim());
-                    const connectorLine = lines.find(l => l.startsWith("DRM connector:"));
-                    const busLine = lines.find(l => l.startsWith("I2C bus:"));
-                    if (!connectorLine || !busLine)
-                        return;
-
-                    const connector = connectorLine.split(":").slice(1).join(":").trim();
-                    const busNum = busLine.split("/dev/i2c-")[1]?.trim() ?? "";
-                    if (!connector || !busNum)
-                        return;
-
-                    root.ddcMonitors.push({
-                        name: connector.split("-").slice(1).join('-'),
-                        busNum
-                    });
-                }
-            }
+        command: [
+            "python3", root.ddcDetectScriptPath,
+            ...root.monitors.map(monitor => monitor.screen?.name ?? "").filter(name => name.length > 0).sort()
+        ]
+        stdout: StdioCollector {
+            id: ddcOutput
         }
-        onExited: root.ddcDetectFinished()
+        onExited: (exitCode, exitStatus) => {
+            if (exitCode === 0)
+                root.applyDdcDetection(ddcOutput.text);
+            if (root.ddcDetectionQueued) {
+                Qt.callLater(() => root.startDdcDetection());
+                return;
+            }
+            root.initializeMonitor(0);
+        }
     }
 
     Process {

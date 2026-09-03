@@ -25,6 +25,8 @@ Singleton {
     property bool micMuted: false
     property bool sinkRestorePending: true
     property bool sourceRestorePending: true
+    property bool sinkRefreshQueued: false
+    property bool sourceRefreshQueued: false
     property int restoreAttempts: 0
     property list<var> fallbackOutputDevices: []
     property list<var> fallbackInputDevices: []
@@ -88,12 +90,20 @@ Singleton {
     }
 
     function refreshSinkState() {
-        getSinkVolume.running = false;
+        if (getSinkVolume.running) {
+            root.sinkRefreshQueued = true;
+            return;
+        }
+        root.sinkRefreshQueued = false;
         getSinkVolume.running = true;
     }
 
     function refreshSourceState() {
-        getSourceVolume.running = false;
+        if (getSourceVolume.running) {
+            root.sourceRefreshQueued = true;
+            return;
+        }
+        root.sourceRefreshQueued = false;
         getSourceVolume.running = true;
     }
 
@@ -411,12 +421,16 @@ Singleton {
 
     Timer {
         id: volumePollTimer
-        interval: 5000
+        // PipeWire signals provide the live state. Poll only a side whose
+        // native audio object is unavailable.
+        interval: 30000
         repeat: true
         running: true
         onTriggered: {
-            root.refreshSinkState();
-            root.refreshSourceState();
+            if (!root.sink?.audio)
+                root.refreshSinkState();
+            if (!root.source?.audio)
+                root.refreshSourceState();
         }
     }
 
@@ -427,6 +441,10 @@ Singleton {
             id: sinkVolumeCollector
             onStreamFinished: root.applySinkStateFromOutput(sinkVolumeCollector.text)
         }
+        onExited: {
+            if (root.sinkRefreshQueued)
+                Qt.callLater(() => root.refreshSinkState());
+        }
     }
 
     Process {
@@ -435,6 +453,10 @@ Singleton {
         stdout: StdioCollector {
             id: sourceVolumeCollector
             onStreamFinished: root.applySourceStateFromOutput(sourceVolumeCollector.text)
+        }
+        onExited: {
+            if (root.sourceRefreshQueued)
+                Qt.callLater(() => root.refreshSourceState());
         }
     }
 
@@ -488,7 +510,18 @@ Singleton {
         repeat: true
         running: !root.settingsApp
         onTriggered: {
-            if (root.outputDevices.length === 0 || root.inputDevices.length === 0 || root.fallbackOutputDevices.length > 0 || root.fallbackInputDevices.length > 0)
+            if (root.outputDevices.length === 0 || root.inputDevices.length === 0)
+                root.refreshFallbackDevices();
+        }
+    }
+
+    Timer {
+        id: fallbackDiscoveryDelay
+        interval: 1500
+        repeat: false
+        running: !root.settingsApp
+        onTriggered: {
+            if (root.outputDevices.length === 0 || root.inputDevices.length === 0)
                 root.refreshFallbackDevices();
         }
     }
@@ -496,26 +529,27 @@ Singleton {
     onOutputDevicesChanged: {
         root.attemptRestoreSavedDefaults();
         if (root.outputDevices.length === 0)
-            root.refreshFallbackDevices();
+            fallbackDiscoveryDelay.restart();
     }
     onInputDevicesChanged: {
         root.attemptRestoreSavedDefaults();
         if (root.inputDevices.length === 0)
-            root.refreshFallbackDevices();
+            fallbackDiscoveryDelay.restart();
     }
     onSinkChanged: {
         root.scheduleSinkRefresh();
-        root.refreshFallbackDevices();
+        if (root.outputDevices.length === 0)
+            fallbackDiscoveryDelay.restart();
     }
     onSourceChanged: {
         root.scheduleSourceRefresh();
-        root.refreshFallbackDevices();
+        if (root.inputDevices.length === 0)
+            fallbackDiscoveryDelay.restart();
     }
 
     Component.onCompleted: {
         root.scheduleSinkRefresh();
         root.scheduleSourceRefresh();
-        root.refreshFallbackDevices();
 
         if (root.settingsApp)
             return;

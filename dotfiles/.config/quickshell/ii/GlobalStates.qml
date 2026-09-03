@@ -265,7 +265,10 @@ Singleton {
 
     Timer {
         id: desktopDragCursorPollTimer
-        interval: 20
+        // MouseArea motion supplies normal drag updates. This only bridges
+        // layer-shell/monitor boundaries, where 50 hyprctl forks per second is
+        // both unnecessary and capable of exhausting the service's task cap.
+        interval: 125
         repeat: true
         running: root.desktopDragActive
         onTriggered: {

@@ -5,7 +5,7 @@
 # This is the APPLY direction:  dotfiles/.config/X  →  ~/.config/X
 #
 # WARNING: This will OVERWRITE your existing system config files.
-# Existing files are backed up to <file>.bak.<timestamp> before overwriting.
+# Files that change are backed up under <config>.bak.<timestamp>.
 #
 # Usage:
 #   bash install.sh          # interactive (confirm before each config)
@@ -25,11 +25,28 @@ SETTINGSD_BIN_DST="$HOME/.local/bin/ii-settingsd"
 SETTINGSD_UNIT_DST="$HOME/.config/systemd/user/ii-settingsd.service"
 SETTINGSD_DOC_DST="$HOME/.local/share/doc/ii-settingsd/README.md"
 
+# Never deploy editor state, backups, build trees, or runtime pseudo-files as
+# desktop configuration. Excluded destination files are preserved by rsync.
+RSYNC_EXCLUDES=(
+    --exclude=__pycache__/
+    --exclude=*.pyc
+    --exclude='*.bak'
+    --exclude='*.bak.*'
+    --exclude='.claude/'
+    --exclude='.git/'
+    --exclude='target/'
+    --exclude='desktop_positions.json'
+    --exclude='anon_inode:*'
+    --exclude='pipe:*'
+    --exclude='socket:*'
+)
+
 # ── Configs managed by this repo ─────────────────────────────────────────────
 MANAGED=(
     hypr
     quickshell
     illogical-impulse
+    pkgtrim
     rofi
     kitty
     foot
@@ -42,6 +59,8 @@ MANAGED=(
     Kvantum
     nwg-look
     fish
+    systemd
+    user-tmpfiles.d
 )
 
 # ── Colour helpers ────────────────────────────────────────────────────────────
@@ -65,16 +84,6 @@ confirm() {
     [[ "$default" == "y" ]] && prompt="[Y/n]" || prompt="[y/N]"
     read -rp "$(echo -e "    ${YLW}${msg} ${prompt}${NC} ")" ans
     case "${ans:-$default}" in [Yy]*) return 0 ;; *) return 1 ;; esac
-}
-
-backup_dir() {
-    local target="$1"
-    if [[ -d "$target" && ! -L "$target" ]]; then
-        local stamp
-        stamp=$(date +%Y%m%d_%H%M%S)
-        mv "$target" "${target}.bak.${stamp}"
-        warn "Backed up existing $(basename "$target") → $(basename "${target}.bak.${stamp}")"
-    fi
 }
 
 backup_file() {
@@ -129,8 +138,8 @@ echo -e "  Target : ${CYN}~/.config/<name>${NC}"
 echo ""
 
 warn "⚠  This will OVERWRITE your live system config files."
-warn "⚠  Existing directories are backed up as <name>.bak.<timestamp>"
-warn "⚠  before being replaced — but review each prompt carefully."
+warn "⚠  Files that are replaced or deleted are backed up under"
+warn "⚠  <name>.bak.<timestamp> — but review each prompt carefully."
 echo ""
 warn "Configs that will be installed:"
 for cfg in "${MANAGED[@]}"; do
@@ -150,6 +159,14 @@ skipped=()
 for cfg in "${MANAGED[@]}"; do
     src="$SRC_DIR/$cfg"
     dst="$HOME/.config/$cfg"
+    sync_mode_args=(--delete)
+    case "$cfg" in
+        systemd|user-tmpfiles.d)
+            # These shared XDG directories may contain unrelated local files;
+            # install the curated repo entries as a non-destructive overlay.
+            sync_mode_args=(--checksum --no-times --omit-dir-times)
+            ;;
+    esac
 
     if [[ ! -d "$src" ]]; then
         warn "$cfg — not in repo, skipping"
@@ -162,7 +179,8 @@ for cfg in "${MANAGED[@]}"; do
 
     # Show what would change
     if [[ -d "$dst" ]]; then
-        changed=$(rsync -rin --delete "$src/" "$dst/" 2>/dev/null | grep -v '^\.' | head -20 || true)
+        changed=$(rsync -rin "${sync_mode_args[@]}" "${RSYNC_EXCLUDES[@]}" \
+            "$src/" "$dst/" 2>/dev/null | grep -v '^\.' | head -20 || true)
         if [[ -z "$changed" ]]; then
             ok "$cfg — already up to date"
             installed+=("$cfg")
@@ -170,7 +188,7 @@ for cfg in "${MANAGED[@]}"; do
         fi
         echo -e "    ${YLW}Changes that will be applied:${NC}"
         echo "$changed" | sed 's/^/      /'
-        warn "The existing ~/.config/$cfg will be backed up then replaced."
+        warn "Changed/deleted files will be backed up before this config is synchronized."
     else
         info "$cfg — new install (no existing config to overwrite)"
     fi
@@ -184,12 +202,36 @@ for cfg in "${MANAGED[@]}"; do
         confirm "Install $cfg?" || { warn "$cfg — skipped by user"; skipped+=("$cfg"); continue; }
     fi
 
-    backup_dir "$dst"
+    backup=""
+    if [[ -L "$dst" || ( -e "$dst" && ! -d "$dst" ) ]]; then
+        backup_file "$dst"
+    elif [[ -d "$dst" ]]; then
+        stamp=$(date +%Y%m%d_%H%M%S)
+        backup="${dst}.bak.${stamp}"
+        [[ ! -e "$backup" ]] || backup="${backup}.$$"
+        mkdir -p "$backup"
+    fi
     mkdir -p "$dst"
-    rsync -a --delete "$src/" "$dst/"
+    if [[ -n "$backup" ]]; then
+        rsync -a "${sync_mode_args[@]}" --no-owner --no-group --backup --backup-dir="$backup" \
+            "${RSYNC_EXCLUDES[@]}" "$src/" "$dst/"
+        if find "$backup" -mindepth 1 -print -quit | grep -q .; then
+            warn "Backed up replaced files → $(basename "$backup")"
+        else
+            rmdir -- "$backup"
+        fi
+    else
+        rsync -a "${sync_mode_args[@]}" --no-owner --no-group "${RSYNC_EXCLUDES[@]}" "$src/" "$dst/"
+    fi
     ok "$cfg installed"
     installed+=("$cfg")
 done
+
+if [[ $DRY -eq 0 && " ${installed[*]} " == *" systemd "* ]] \
+        && command -v systemctl >/dev/null 2>&1; then
+    systemctl --user daemon-reload
+    ok "systemd user units reloaded"
+fi
 
 # ── Curated dynamic wallpaper set ────────────────────────────────────────────
 if [[ -d "$WALLPAPER_SRC" ]]; then

@@ -59,6 +59,7 @@ Scope {
         screen: overviewScope.targetScreenObject
         property string searchingText: ""
         property bool overviewContentReady: false
+        property bool drawerContentReady: false
         property bool entranceShown: false
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
         property bool monitorIsFocused: (Hyprland.focusedMonitor?.id == monitor?.id)
@@ -110,11 +111,15 @@ Scope {
             }
         }
         Timer {
-            id: overviewPrewarmTimer
-            interval: 750
-            running: true
+            id: contentReleaseTimer
+            interval: 5000
             repeat: false
-            onTriggered: panelWindow.overviewContentReady = true
+            onTriggered: {
+                if (!GlobalStates.overviewOpen) {
+                    panelWindow.overviewContentReady = false;
+                    panelWindow.drawerContentReady = false;
+                }
+            }
         }
         Timer {
             id: entranceDelay
@@ -137,8 +142,12 @@ Scope {
                 }
             }
             function onOverviewDrawerModeChanged() {
-                if (GlobalStates.overviewDrawerMode && searchWidget.displayedText.length > 0) {
-                    searchWidget.setSearchingText("");
+                if (GlobalStates.overviewDrawerMode) {
+                    panelWindow.drawerContentReady = true;
+                    if (searchWidget.displayedText.length > 0)
+                        searchWidget.setSearchingText("");
+                } else if (GlobalStates.overviewOpen) {
+                    panelWindow.overviewContentReady = true;
                 }
                 panelWindow.syncFocusGrab();
             }
@@ -171,12 +180,12 @@ Scope {
             if (!GlobalStates.overviewDrawerMode) {
                 if (key === Qt.Key_Down && searchWidget.displayedText.length === 0) {
                     GlobalStates.overviewDrawerMode = true;
-                    drawerAppList.activateFirstApp();
+                    drawerLoader.item?.activateFirstApp();
                 }
                 return;
             }
 
-            drawerAppList.handleKey(key);
+            drawerLoader.item?.handleKey(key);
         }
 
         function handleOverviewClosed() {
@@ -186,11 +195,14 @@ Scope {
             overviewScope.dontAutoCancelSearch = false;
             GlobalFocusGrab.dismiss();
             GlobalStates.overviewDrawerMode = false;
+            contentReleaseTimer.restart();
         }
 
         function handleOverviewOpened() {
-            // Do not wait for the idle warm-up if the user opens immediately.
-            panelWindow.overviewContentReady = true;
+            contentReleaseTimer.stop();
+            const drawerMode = GlobalStates.overviewDrawerMode;
+            panelWindow.overviewContentReady = !drawerMode;
+            panelWindow.drawerContentReady = drawerMode;
             panelWindow.entranceShown = false;
             entranceDelay.restart();
             if (!overviewScope.dontAutoCancelSearch) {
@@ -325,7 +337,8 @@ Scope {
                 if (drawerActive) {
                     drawerTransitionDisarm.stop()
                     drawerTransitionArmed = true
-                    Qt.callLater(drawerAppList.activateFirstApp)
+                    panelWindow.drawerContentReady = true
+                    Qt.callLater(() => drawerLoader.item?.activateFirstApp())
                 } else if (drawerTransitionArmed) {
                     drawerTransitionDisarm.restart()
                 }
@@ -355,14 +368,22 @@ Scope {
                 }
             }
 
-            DrawerAppList {
-                id: drawerAppList
+            Loader {
+                id: drawerLoader
                 anchors.fill: parent
-                onAppLaunched: GlobalStates.overviewOpen = false
-                closeAction: () => GlobalStates.overviewOpen = false
-                returnToSearchAction: () => {
-                    GlobalStates.overviewDrawerMode = false
-                    Qt.callLater(() => searchWidget.focusSearchInput())
+                asynchronous: true
+                active: panelWindow.drawerContentReady
+                onLoaded: {
+                    if (drawerPanel.drawerActive)
+                        item?.activateFirstApp()
+                }
+                sourceComponent: DrawerAppList {
+                    onAppLaunched: GlobalStates.overviewOpen = false
+                    closeAction: () => GlobalStates.overviewOpen = false
+                    returnToSearchAction: () => {
+                        GlobalStates.overviewDrawerMode = false
+                        Qt.callLater(() => searchWidget.focusSearchInput())
+                    }
                 }
             }
         }

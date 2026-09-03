@@ -393,22 +393,116 @@ find_quickshell_git_dir() {
 
 # ── Count updates ─────────────────────────────────────────────────────────────
 count_updates() {
-    local n=0 p=0 a=0 f=0 helper=""
+    local n=0 p=0 a=0 f=0 helper="" output="" status=0
     # Use a process-unique temp DB to avoid lock conflicts with concurrent runs
-    local tmpdb="/tmp/checkup-db-${UID}-$$"
-    if command -v checkupdates-with-aur >/dev/null 2>&1; then
-        n=$(CHECKUPDATES_DB="$tmpdb" checkupdates-with-aur 2>/dev/null | wc -l | tr -d ' ')
-    else
-        command -v checkupdates >/dev/null 2>&1 && p=$(CHECKUPDATES_DB="$tmpdb" checkupdates 2>/dev/null | wc -l | tr -d ' ') || true
-        helper=$(preferred_aur_helper 2>/dev/null || true)
-        if [ -n "$helper" ]; then
-            a=$("$helper" -Qua 2>/dev/null | wc -l | tr -d ' ') || true
+    local tmpdb
+    tmpdb=$(mktemp -d "/tmp/checkup-db-${UID}-XXXXXX") || return 1
+
+    if command -v checkupdates >/dev/null 2>&1; then
+        output=$(CHECKUPDATES_DB="$tmpdb" checkupdates 2>/dev/null)
+        status=$?
+        if [ "$status" -ne 0 ] && [ "$status" -ne 2 ]; then
+            rm -rf -- "$tmpdb"
+            return 1
         fi
-        n=$((p + a))
+        p=$(awk 'NF { count++ } END { print count + 0 }' <<< "$output")
     fi
-    command -v flatpak >/dev/null 2>&1 && f=$(flatpak remote-ls --updates 2>/dev/null | wc -l | tr -d ' ') || true
-    rm -rf "$tmpdb"
-    echo $((n + f))
+
+    helper=$(preferred_aur_helper 2>/dev/null || true)
+    if [ -n "$helper" ]; then
+        if ! output=$("$helper" -Qua 2>/dev/null); then
+            rm -rf -- "$tmpdb"
+            return 1
+        fi
+        a=$(awk 'NF { count++ } END { print count + 0 }' <<< "$output")
+    fi
+    n=$((p + a))
+
+    if command -v flatpak >/dev/null 2>&1; then
+        if ! output=$(flatpak remote-ls --updates 2>/dev/null); then
+            rm -rf -- "$tmpdb"
+            return 1
+        fi
+        f=$(awk 'NF { count++ } END { print count + 0 }' <<< "$output")
+    fi
+
+    rm -rf -- "$tmpdb"
+    printf '%s\n' $((n + f))
+}
+
+count_updates_cached() {
+    local cache_dir cache_file lock_file now cached_at cached_count count tmp
+    local ttl="${UPDATE_COUNT_CACHE_TTL:-600}"
+    cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/hyprland-updater"
+    cache_file="$cache_dir/update-count"
+    lock_file="$cache_dir/update-count.lock"
+    if [[ ! "$ttl" =~ ^[0-9]+$ ]] || [ "${#ttl}" -gt 6 ]; then
+        ttl=600
+    else
+        ttl=$((10#$ttl))
+        [ "$ttl" -le 86400 ] || ttl=86400
+    fi
+    now=$(date +%s)
+
+    mkdir -p "$cache_dir"
+    chmod 700 "$cache_dir" 2>/dev/null || true
+
+    read_cache() {
+        cached_at=""
+        cached_count=""
+        [ -r "$cache_file" ] || return 1
+        read -r cached_at cached_count < "$cache_file" || return 1
+        [[ "$cached_at" =~ ^[0-9]+$ && "$cached_count" =~ ^[0-9]+$ ]] || return 1
+        [ "${#cached_at}" -le 12 ] && [ "${#cached_count}" -le 9 ] || return 1
+        cached_at=$((10#$cached_at))
+        cached_count=$((10#$cached_count))
+    }
+
+    cache_is_fresh() {
+        read_cache || return 1
+        [ "$cached_at" -le "$now" ] && [ $((now - cached_at)) -lt "$ttl" ]
+    }
+
+    if cache_is_fresh; then
+        printf '%s\n' "$cached_count"
+        return 0
+    fi
+
+    # Reloads can start several shell instances together. Only one is allowed
+    # to query package/AUR/Flatpak metadata; followers reuse its result.
+    exec 9>"$lock_file"
+    if command -v flock >/dev/null 2>&1; then
+        flock -w 2 9 || {
+            if read_cache && [ "$cached_at" -le "$now" ]; then
+                printf '%s\n' "$cached_count"
+                return 0
+            fi
+            return 1
+        }
+    fi
+
+    now=$(date +%s)
+    if cache_is_fresh; then
+        printf '%s\n' "$cached_count"
+        return 0
+    fi
+
+    if ! count=$(count_updates) || [[ ! "$count" =~ ^[0-9]+$ ]]; then
+        if read_cache && [ "$cached_at" -le "$now" ]; then
+            printf '%s\n' "$cached_count"
+            return 0
+        fi
+        return 1
+    fi
+    now=$(date +%s)
+    tmp=$(mktemp "$cache_dir/.update-count.XXXXXX") || {
+        printf '%s\n' "$count"
+        return 0
+    }
+    chmod 600 "$tmp" 2>/dev/null || true
+    printf '%s %s\n' "$now" "$count" > "$tmp"
+    mv -f "$tmp" "$cache_file" || rm -f -- "$tmp"
+    printf '%s\n' "$count"
 }
 
 pending_native_packages() {
@@ -500,7 +594,7 @@ fi
 
 # ── Fast path for badge ───────────────────────────────────────────────────────
 if [ "${1:-}" = "--count-only" ]; then
-    count_updates
+    count_updates_cached
     exit 0
 fi
 
@@ -1352,7 +1446,10 @@ echo -e "  ${DIM}─────────────────────
 # ── Count ─────────────────────────────────────────────────────────────────────
 echo
 echo -e "  ${DIM}${T[CHECKING]}${R}"
-TOTAL=$(count_updates)
+if ! TOTAL=$(count_updates); then
+    echo -e "  ${FAIL}  ${RED}Could not query package updates; no changes were made.${R}"
+    exit 1
+fi
 if [ "$TOTAL" -eq 0 ]; then
     echo -e "  ${PASS}  ${GREEN}${T[UP_TO_DATE]}${R}"
 else

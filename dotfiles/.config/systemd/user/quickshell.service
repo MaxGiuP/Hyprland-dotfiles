@@ -7,6 +7,7 @@ PartOf=graphical-session.target
 [Service]
 Type=simple
 ExecStartPre=%h/.config/hypr/hyprland/scripts/quickshell_event_log.sh service-start-pre quickshell.service
+ExecStartPre=%h/.config/quickshell/ii/scripts/system/prepare-runtime-dirs.sh
 ExecStart=%h/.config/hypr/hyprland/scripts/start_quickshell.sh ii
 ExecStopPost=%h/.config/hypr/hyprland/scripts/quickshell_event_log.sh service-stop-post quickshell.service
 ExecStopPost=%h/.config/hypr/hyprland/scripts/quickshell_cleanup_helpers.sh
