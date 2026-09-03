@@ -60,9 +60,8 @@ WindowDialog {
         DialogButton {
             buttonText: Translation.tr("Details")
             onClicked: {
-                GlobalStates.sidebarRightOpen = false;
-                root.dismiss();
                 GlobalStates.openSettingsPage("connectivity", 1, "devices");
+                GlobalStates.closeSidebarRight();
             }
         }
 

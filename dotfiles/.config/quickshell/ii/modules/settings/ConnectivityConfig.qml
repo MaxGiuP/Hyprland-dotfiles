@@ -10,6 +10,8 @@ Item {
     id: root
     property var settingsHost: null
     property bool pageActive: true
+    property int pendingSubTab: -1
+    property string pendingSectionId: ""
 
     function syncChildActivity() {
         if (internetLoader.item && "pageActive" in internetLoader.item)
@@ -27,22 +29,28 @@ Item {
 
     // Called by settings.qml after the page loads (from search navigation)
     function applySubTab(subTab, sectionId = "") {
-        tabBar.currentIndex = Math.max(0, Math.min(subTab, 2))
-        navTimer.sectionId = sectionId
-        navTimer.subTab = tabBar.currentIndex
-        navTimer.restart()
+        root.pendingSubTab = Math.max(0, Math.min(subTab, 2))
+        root.pendingSectionId = sectionId
+        tabBar.currentIndex = root.pendingSubTab
+        root.applyPendingNavigation()
     }
 
-    Timer {
-        id: navTimer
-        interval: 80
-        property string sectionId: ""
-        property int subTab: 0
-        onTriggered: {
-            const loader = subTab === 0 ? internetLoader : subTab === 1 ? bluetoothLoader : sharingLoader
-            if (loader.status === Loader.Ready && loader.item && typeof loader.item.scrollToSection === "function")
-                loader.item.scrollToSection(sectionId)
-        }
+    function applyPendingNavigation() {
+        if (root.pendingSubTab < 0)
+            return
+
+        const loader = root.pendingSubTab === 0
+            ? internetLoader
+            : root.pendingSubTab === 1 ? bluetoothLoader : sharingLoader
+        if (loader.status !== Loader.Ready || !loader.item)
+            return
+
+        const item = loader.item
+        const sectionId = root.pendingSectionId
+        root.pendingSubTab = -1
+        root.pendingSectionId = ""
+        if (sectionId && typeof item.scrollToSection === "function")
+            Qt.callLater(() => item.scrollToSection(sectionId))
     }
 
     ColumnLayout {
@@ -90,6 +98,7 @@ Item {
                     if (item && "settingsHost" in item)
                         item.settingsHost = root.settingsHost
                     root.syncChildActivity()
+                    root.applyPendingNavigation()
                 }
             }
 
@@ -100,7 +109,11 @@ Item {
                 property bool _btLoaded: false
                 onStatusChanged: if (status === Loader.Ready) _btLoaded = true
                 source: "BluetoothDevicesConfig.qml"
-                onLoaded: if (item && "settingsHost" in item) item.settingsHost = root.settingsHost
+                onLoaded: {
+                    if (item && "settingsHost" in item)
+                        item.settingsHost = root.settingsHost
+                    root.applyPendingNavigation()
+                }
             }
 
             Loader {
@@ -109,6 +122,7 @@ Item {
                 property bool _sharingLoaded: false
                 onStatusChanged: if (status === Loader.Ready) _sharingLoaded = true
                 source: "SharingConfig.qml"
+                onLoaded: root.applyPendingNavigation()
             }
         }
     }
