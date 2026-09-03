@@ -330,9 +330,14 @@ Scope {
         readonly property bool locked: GlobalStates.screenLocked
             || root.sessionLockActive
             || root.releaseInProgress
+        readonly property bool idleInhibited: Idle.inhibit
 
         function status() {
             return locked ? "locked" : "unlocked";
+        }
+
+        function setIdleInhibited(inhibited: bool): void {
+            Idle.toggleInhibit(inhibited);
         }
 
         function activate(): void {

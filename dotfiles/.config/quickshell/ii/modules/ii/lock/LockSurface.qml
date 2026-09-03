@@ -1267,22 +1267,67 @@ MouseArea {
                     spacing: 10
 
                     TimeoutStepper {
-                        iconName: "lock_clock"
-                        label: Translation.tr("Lock after inactivity")
-                        minutes: IdleLockConfig.lockTimeoutMinutes()
-                        minimumMinutes: 1
-                        maximumMinutes: 240
-                        stepMinutes: 1
-                        onValueRequested: value => IdleLockConfig.setLockTimeout(value)
-                    }
-                    TimeoutStepper {
                         iconName: "bedtime"
                         label: Translation.tr("Sleep after inactivity")
                         minutes: IdleLockConfig.suspendTimeoutMinutes()
                         minimumMinutes: IdleLockConfig.lockTimeoutMinutes() + 5
                         maximumMinutes: 480
                         stepMinutes: 5
+                        enabled: !Idle.inhibit
+                        opacity: enabled ? 1 : 0.55
                         onValueRequested: value => IdleLockConfig.setSuspendTimeout(value)
+
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: Appearance.animation.elementMoveFast.duration
+                                easing.type: Appearance.animation.elementMoveFast.type
+                                easing.bezierCurve: Appearance.animation.elementMoveFast.bezierCurve
+                            }
+                        }
+                    }
+
+                    RippleButton {
+                        id: keepAwakeButton
+                        Layout.fillWidth: true
+                        implicitHeight: 58
+                        buttonRadius: Appearance.rounding.normal
+                        toggled: Idle.inhibit
+                        colBackground: Appearance.colors.colLayer2
+                        colBackgroundHover: Appearance.colors.colLayer2Hover
+                        colBackgroundToggled: Appearance.colors.colPrimary
+                        colBackgroundToggledHover: Appearance.colors.colPrimaryHover
+                        onClicked: Idle.toggleInhibit()
+
+                        contentItem: RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 12
+                            anchors.rightMargin: 12
+                            spacing: 10
+
+                            MaterialSymbol {
+                                text: "coffee"
+                                iconSize: 20
+                                color: keepAwakeButton.toggled
+                                    ? keepAwakeButton.colForegroundToggled
+                                    : Appearance.colors.colPrimary
+                            }
+                            StyledText {
+                                Layout.fillWidth: true
+                                text: Translation.tr("Keep awake")
+                                font.pixelSize: Appearance.font.pixelSize.normal
+                                font.weight: Font.Medium
+                                color: keepAwakeButton.toggled
+                                    ? keepAwakeButton.colForegroundToggled
+                                    : Appearance.colors.colOnLayer2
+                            }
+                            MaterialSymbol {
+                                text: keepAwakeButton.toggled ? "toggle_on" : "toggle_off"
+                                iconSize: 30
+                                color: keepAwakeButton.toggled
+                                    ? keepAwakeButton.colForegroundToggled
+                                    : Appearance.colors.colSubtext
+                            }
+                        }
                     }
                 }
             }
