@@ -1,5 +1,3 @@
-pragma ComponentBehavior: Bound
-
 import qs.services
 import qs.modules.common
 import qs.modules.common.models.quickToggles
@@ -12,8 +10,5 @@ import Quickshell.Bluetooth
 AndroidQuickToggleButton {
     id: root
     
-    toggleModel: BluetoothToggle {
-        mainAction: () => root.openMenu()
-        tooltipText: Translation.tr("Open Bluetooth devices")
-    }
+    toggleModel: BluetoothToggle {}
 }

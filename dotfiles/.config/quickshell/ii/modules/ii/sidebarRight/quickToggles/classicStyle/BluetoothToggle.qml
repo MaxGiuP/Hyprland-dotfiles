@@ -15,15 +15,14 @@ QuickToggleButton {
     toggled: BluetoothStatus.enabled
     buttonIcon: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
     onClicked: {
-        if (root.altAction)
-            root.altAction()
+        Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter?.enabled
     }
     altAction: () => {
         GlobalStates.sidebarRightOpen = false
         GlobalStates.openSettingsPage("connectivity", 1, "devices")
     }
     StyledToolTip {
-        text: Translation.tr("%1 | Click to manage").arg(
+        text: Translation.tr("%1 | Right-click to configure").arg(
             (BluetoothStatus.firstActiveDevice?.name ?? Translation.tr("Bluetooth"))
             + (BluetoothStatus.activeDeviceCount > 1 ? ` +${BluetoothStatus.activeDeviceCount - 1}` : "")
             )
