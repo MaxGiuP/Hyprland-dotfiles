@@ -60,7 +60,11 @@ WindowDialog {
         DialogButton {
             buttonText: Translation.tr("Details")
             onClicked: {
-                GlobalStates.openSettingsPage("connectivity", 1, "devices");
+                const configDir = FileUtils.trimFileProtocol(Directories.config);
+                Quickshell.execDetached([
+                    `${configDir}/hypr/hyprland/scripts/launch_quickshell_settings.sh`,
+                    "connectivity", "1", "devices"
+                ]);
                 GlobalStates.closeSidebarRight();
             }
         }

@@ -11,6 +11,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -55,6 +56,10 @@ ApplicationWindow {
         })
     }
 
+    function applyNavigationById(pageId, subTab = -1, sectionId = "") {
+        root.applyNavigation(SettingsCatalog.indexOf(pageId), subTab, sectionId)
+    }
+
     onCurrentPageChanged: {
         if (root.currentPage !== 0 && root.searchQuery.length > 0)
             root.searchQuery = ""
@@ -81,6 +86,17 @@ ApplicationWindow {
     Component.onCompleted: {
         MaterialThemeLoader.reapplyTheme()
         Config.readWriteDelay = 0
+
+        const initialPageId = Quickshell.env("II_SETTINGS_PAGE")
+        if (initialPageId) {
+            const subTabText = Quickshell.env("II_SETTINGS_SUBTAB")
+            const subTab = subTabText ? Number(subTabText) : -1
+            root.applyNavigationById(
+                initialPageId,
+                Number.isFinite(subTab) ? Math.trunc(subTab) : -1,
+                Quickshell.env("II_SETTINGS_SECTION")
+            )
+        }
     }
 
     minimumWidth: 750
@@ -93,6 +109,16 @@ ApplicationWindow {
         id: configPathCopyResetTimer
         interval: 1500
         onTriggered: root.configPathCopied = false
+    }
+
+    IpcHandler {
+        target: "settingsApp"
+
+        function navigate(pageId: string, subTab: int, sectionId: string): void {
+            root.applyNavigationById(pageId, subTab, sectionId)
+            root.raise()
+            root.requestActivate()
+        }
     }
 
     ColumnLayout {
