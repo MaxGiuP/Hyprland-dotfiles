@@ -10,6 +10,7 @@ ContentPage {
     id: root
     forceWidth: true
     baseWidth: 840
+    property bool pageActive: true
 
     property string helperScript: Quickshell.shellPath("scripts/network/network_settings_helper.sh")
     property bool wifiEnabled: false
@@ -438,7 +439,7 @@ ContentPage {
     Timer {
         interval: root.autoScanIntervalMs
         repeat: true
-        running: root.wifiEnabled
+        running: root.pageActive && root.wifiEnabled
         triggeredOnStart: false
         onTriggered: root.requestAutoScan()
     }
@@ -1365,16 +1366,17 @@ ContentPage {
 
                     RippleButtonWithIcon {
                         Layout.fillWidth: true
-                        materialIcon: "settings"
-                        mainText: Translation.tr("Open network settings")
-                        onClicked: Quickshell.execDetached(["bash", "-lc", Config.options.apps.network])
+                        materialIcon: "wifi_find"
+                        mainText: Translation.tr("Rescan Wi-Fi")
+                        enabled: !Network.wifiScanning
+                        onClicked: Network.rescanWifi()
                     }
 
                     RippleButtonWithIcon {
                         Layout.fillWidth: true
-                        materialIcon: "settings_ethernet"
-                        mainText: Translation.tr("Open ethernet settings")
-                        onClicked: Quickshell.execDetached(["bash", "-lc", Config.options.apps.networkEthernet])
+                        materialIcon: "refresh"
+                        mainText: Translation.tr("Refresh Ethernet")
+                        onClicked: Network.refreshEthernetDevices()
                     }
 
                     RippleButtonWithIcon {

@@ -11,6 +11,20 @@ ContentPage {
     id: root
     forceWidth: true
     baseWidth: 860
+    property int currentSubTab: 0
+    readonly property string hyprConfigRoot: `${Quickshell.env("HOME")}/.config/hypr`
+    readonly property var tabs: [
+        { name: Translation.tr("General"), icon: "settings" },
+        { name: Translation.tr("Input & workspaces"), icon: "keyboard" },
+        { name: Translation.tr("Windows & displays"), icon: "select_window" },
+        { name: Translation.tr("Startup"), icon: "rocket_launch" }
+    ]
+
+    function applySubTab(subTab, sectionId = "") {
+        root.currentSubTab = Math.max(0, Math.min(subTab, root.tabs.length - 1))
+        root.contentY = 0
+    }
+
     component FileEditor: ColumnLayout {
         id: editorRoot
         required property string filePath
@@ -90,54 +104,80 @@ ContentPage {
         }
     }
 
+    SecondaryTabBar {
+        Layout.fillWidth: true
+        currentIndex: root.currentSubTab
+        onCurrentIndexChanged: {
+            root.currentSubTab = currentIndex
+            root.contentY = 0
+        }
+
+        Repeater {
+            model: root.tabs
+            delegate: SecondaryTabButton {
+                required property var modelData
+                buttonIcon: modelData.icon
+                buttonText: modelData.name
+            }
+        }
+    }
+
     ContentSection {
         icon: "settings"
         title: Translation.tr("Hypr Config Files")
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/general.lua"
+            visible: root.currentSubTab === 0
+            filePath: `${root.hyprConfigRoot}/hyprland/general.lua`
             title: Translation.tr("Core layout and input")
             placeholderText: Translation.tr("Hyprland general.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/env.lua"
+            visible: root.currentSubTab === 0
+            filePath: `${root.hyprConfigRoot}/hyprland/env.lua`
             title: Translation.tr("Environment and locale")
             placeholderText: Translation.tr("Hyprland env.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/execs.lua"
+            visible: root.currentSubTab === 3
+            filePath: `${root.hyprConfigRoot}/hyprland/execs.lua`
             title: Translation.tr("Startup commands")
             placeholderText: Translation.tr("Hyprland execs.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/keybinds.lua"
+            visible: root.currentSubTab === 1
+            filePath: `${root.hyprConfigRoot}/hyprland/keybinds.lua`
             title: Translation.tr("Main keybinds")
             placeholderText: Translation.tr("Hyprland keybinds.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/keybinds.user.lua"
+            visible: root.currentSubTab === 1
+            filePath: `${root.hyprConfigRoot}/hyprland/keybinds.user.lua`
             title: Translation.tr("Additional keybinds (inactive)")
             placeholderText: Translation.tr("Hyprland keybinds.user.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/hyprland/rules.lua"
+            visible: root.currentSubTab === 2
+            filePath: `${root.hyprConfigRoot}/hyprland/rules.lua`
             title: Translation.tr("Window rules")
             placeholderText: Translation.tr("Hyprland rules.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/workspaces.lua"
+            visible: root.currentSubTab === 1
+            filePath: `${root.hyprConfigRoot}/workspaces.lua`
             title: Translation.tr("Workspace bindings")
             placeholderText: Translation.tr("workspaces.lua")
         }
 
         FileEditor {
-            filePath: "/home/linmax/.config/hypr/monitors.lua"
+            visible: root.currentSubTab === 2
+            filePath: `${root.hyprConfigRoot}/monitors.lua`
             title: Translation.tr("Monitor overrides")
             placeholderText: Translation.tr("monitors.lua")
         }

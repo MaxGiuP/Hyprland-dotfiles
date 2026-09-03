@@ -56,8 +56,8 @@ uniform: true
 
 RippleButtonWithIcon {
     Layout.fillWidth: true
-    materialIcon: "settings_applications"
-    mainText: Translation.tr("Open KDE System Settings")
+    materialIcon: "palette"
+    mainText: Translation.tr("Open appearance settings")
     onClicked: DesktopThemeSettings.openSystemSettings()
 }
 

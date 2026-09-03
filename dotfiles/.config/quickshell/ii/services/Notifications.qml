@@ -181,7 +181,11 @@ Singleton {
         notifFileView.setText(stringifyList(root.list));
     }
 
-    property bool silent: false
+    property bool silent: Config.options?.notifications?.doNotDisturb ?? false
+    onSilentChanged: {
+        if (Config.ready && Config.options.notifications.doNotDisturb !== root.silent)
+            Config.options.notifications.doNotDisturb = root.silent
+    }
     property int unread: 0
     property double timeoutNow: Date.now()
     property var filePath: Directories.notificationsPath

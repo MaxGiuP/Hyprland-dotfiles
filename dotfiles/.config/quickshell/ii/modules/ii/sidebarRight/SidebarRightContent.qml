@@ -24,8 +24,6 @@ Item {
     activeFocusOnTab: true
     property int sidebarWidth: Appearance.sizes.sidebarWidth
     property int sidebarPadding: 10
-    property string settingsQmlPath: Quickshell.shellPath("settings.qml")
-    property string settingsLauncherPath: `${Quickshell.env("HOME") || "/home/linmax"}/.config/hypr/hyprland/scripts/launch_first_available.sh`
     property bool showAudioOutputDialog: false
     property bool showAudioInputDialog: false
     property bool showBluetoothDialog: false
@@ -382,15 +380,7 @@ Item {
                 buttonIcon: "settings"
                 onClicked: {
                     GlobalStates.sidebarRightOpen = false;
-                    Quickshell.execDetached([
-                        "env",
-                        "XDG_CURRENT_DESKTOP=gnome",
-                        root.settingsLauncherPath,
-                        `qs -p ${root.settingsQmlPath}`,
-                        "systemsettings",
-                        "gnome-control-center",
-                        "better-control"
-                    ]);
+                    GlobalStates.openSettings(0);
                 }
                 StyledToolTip {
                     text: Translation.tr("Settings")

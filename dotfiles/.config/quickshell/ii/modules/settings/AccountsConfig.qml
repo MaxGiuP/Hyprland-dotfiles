@@ -9,8 +9,38 @@ ContentPage {
     id: root
     forceWidth: true
     baseWidth: 760
+    property int currentSubTab: 0
+    readonly property var tabs: [
+        { name: Translation.tr("Profile"), icon: "account_circle" },
+        { name: Translation.tr("Internet accounts"), icon: "hub" },
+        { name: Translation.tr("Sign-in & users"), icon: "passkey" }
+    ]
+
+    function applySubTab(subTab, sectionId = "") {
+        root.currentSubTab = Math.max(0, Math.min(subTab, root.tabs.length - 1))
+        root.contentY = 0
+    }
+
+    SecondaryTabBar {
+        Layout.fillWidth: true
+        currentIndex: root.currentSubTab
+        onCurrentIndexChanged: {
+            root.currentSubTab = currentIndex
+            root.contentY = 0
+        }
+
+        Repeater {
+            model: root.tabs
+            delegate: SecondaryTabButton {
+                required property var modelData
+                buttonIcon: modelData.icon
+                buttonText: modelData.name
+            }
+        }
+    }
 
     ContentSection {
+        visible: root.currentSubTab === 0
         icon: "account_circle"
         title: Translation.tr("Account")
 
@@ -62,6 +92,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "hub"
         title: Translation.tr("Connected accounts")
         description: Translation.tr("QuickMail owns synchronization and credentials; Quickshell reads only its account, inbox and agenda snapshot.")
@@ -154,6 +185,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 2
         icon: "manage_accounts"
         title: Translation.tr("Account tools")
 
@@ -163,8 +195,8 @@ ContentPage {
             RippleButtonWithIcon {
                 Layout.fillWidth: true
                 materialIcon: "manage_accounts"
-                mainText: Translation.tr("Manage users")
-                onClicked: Quickshell.execDetached(["bash", "-lc", Config.options.apps.manageUser])
+                mainText: Translation.tr("Copy account name")
+                onClicked: Quickshell.clipboardText = SystemInfo.username
             }
 
             RippleButtonWithIcon {

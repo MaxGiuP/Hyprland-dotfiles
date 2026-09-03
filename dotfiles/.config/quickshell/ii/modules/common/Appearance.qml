@@ -7,6 +7,10 @@ pragma ComponentBehavior: Bound
 Singleton {
     id: root
     readonly property bool disableVariableFonts: Quickshell.env("II_STANDALONE_APP") === "1"
+    readonly property real accessibilityTextScale: Math.max(0.75, Math.min(2.0, Config.options?.accessibility?.textScale ?? 1.0))
+    readonly property bool reduceMotion: Config.options?.accessibility?.reduceMotion ?? false
+    readonly property bool reduceTransparency: Config.options?.accessibility?.reduceTransparency ?? false
+    readonly property bool highContrast: Config.options?.accessibility?.highContrast ?? false
     property QtObject m3colors
     property QtObject animation
     property QtObject animationCurves
@@ -15,6 +19,21 @@ Singleton {
     property QtObject font
     property QtObject sizes
     property string syntaxHighlightingTheme
+
+    function applyCursorPreference() {
+        const theme = Config.options?.accessibility?.cursorTheme ?? ""
+        const size = Math.max(16, Math.min(96, Config.options?.accessibility?.cursorSize ?? 24))
+        if (theme.length > 0)
+            Quickshell.execDetached(["hyprctl", "setcursor", theme, `${size}`])
+    }
+
+    Component.onCompleted: Qt.callLater(root.applyCursorPreference)
+
+    Connections {
+        target: Config.options?.accessibility ?? null
+        function onCursorSizeChanged() { root.applyCursorPreference() }
+        function onCursorThemeChanged() { root.applyCursorPreference() }
+    }
 
     function configuredFontFamily(configuredFamily, fallbackFamily) {
         const trimmed = typeof configuredFamily === "string" ? configuredFamily.trim() : ""
@@ -54,8 +73,8 @@ Singleton {
         return Math.max(0, Math.min(0.22, y)) - 0.12 * (m3colors.darkmode ? 0 : 1)
     }
     property real autoContentTransparency: 0.9
-    property real backgroundTransparency: Config?.options.appearance.transparency.enable ? Config?.options.appearance.transparency.automatic ? autoBackgroundTransparency : Config?.options.appearance.transparency.backgroundTransparency : 0
-    property real contentTransparency: Config?.options.appearance.transparency.automatic ? autoContentTransparency : Config?.options.appearance.transparency.contentTransparency
+    property real backgroundTransparency: root.reduceTransparency ? 0 : (Config?.options.appearance.transparency.enable ? Config?.options.appearance.transparency.automatic ? autoBackgroundTransparency : Config?.options.appearance.transparency.backgroundTransparency : 0)
+    property real contentTransparency: root.reduceTransparency ? 0 : (Config?.options.appearance.transparency.automatic ? autoContentTransparency : Config?.options.appearance.transparency.contentTransparency)
 
     m3colors: QtObject {
         property bool darkmode: true
@@ -132,7 +151,7 @@ Singleton {
     }
 
     colors: QtObject {
-        property color colSubtext: m3colors.m3outline
+        property color colSubtext: root.highContrast ? m3colors.m3onSurfaceVariant : m3colors.m3outline
         // Layer 0
         property color colLayer0Base: ColorUtils.mix(m3colors.m3background, m3colors.m3primary, Config.options.appearance.extraBackgroundTint ? 0.99 : 1)
         property color colLayer0: ColorUtils.transparentize(colLayer0Base, root.backgroundTransparency)
@@ -258,16 +277,16 @@ Singleton {
             })
         }
         property QtObject pixelSize: QtObject {
-            property int smallest: 10
-            property int smaller: 12
-            property int smallie: 13
-            property int small: 15
-            property int normal: 16
-            property int large: 17
-            property int larger: 19
-            property int huge: 22
-            property int hugeass: 23
-            property int massive: 36
+            property int smallest: Math.round(10 * root.accessibilityTextScale)
+            property int smaller: Math.round(12 * root.accessibilityTextScale)
+            property int smallie: Math.round(13 * root.accessibilityTextScale)
+            property int small: Math.round(15 * root.accessibilityTextScale)
+            property int normal: Math.round(16 * root.accessibilityTextScale)
+            property int large: Math.round(17 * root.accessibilityTextScale)
+            property int larger: Math.round(19 * root.accessibilityTextScale)
+            property int huge: Math.round(22 * root.accessibilityTextScale)
+            property int hugeass: Math.round(23 * root.accessibilityTextScale)
+            property int massive: Math.round(36 * root.accessibilityTextScale)
             property int title: huge
         }
     }
@@ -285,10 +304,10 @@ Singleton {
         readonly property list<real> standard: [0.2, 0, 0, 1, 1, 1]
         readonly property list<real> standardAccel: [0.3, 0, 1, 1, 1, 1]
         readonly property list<real> standardDecel: [0, 0, 0, 1, 1, 1]
-        readonly property real expressiveFastSpatialDuration: 350
-        readonly property real expressiveDefaultSpatialDuration: 500
-        readonly property real expressiveSlowSpatialDuration: 650
-        readonly property real expressiveEffectsDuration: 200
+        readonly property real expressiveFastSpatialDuration: root.reduceMotion ? 0 : 350
+        readonly property real expressiveDefaultSpatialDuration: root.reduceMotion ? 0 : 500
+        readonly property real expressiveSlowSpatialDuration: root.reduceMotion ? 0 : 650
+        readonly property real expressiveEffectsDuration: root.reduceMotion ? 0 : 200
     }
 
     animation: QtObject {
@@ -307,7 +326,7 @@ Singleton {
         }
 
         property QtObject elementMoveEnter: QtObject {
-            property int duration: 400
+            property int duration: root.reduceMotion ? 0 : 400
             property int type: Easing.BezierSpline
             property list<real> bezierCurve: animationCurves.emphasizedDecel
             property int velocity: 650
@@ -322,7 +341,7 @@ Singleton {
         }
 
         property QtObject elementMoveExit: QtObject {
-            property int duration: 200
+            property int duration: root.reduceMotion ? 0 : 200
             property int type: Easing.BezierSpline
             property list<real> bezierCurve: animationCurves.emphasizedAccel
             property int velocity: 650
@@ -355,7 +374,7 @@ Singleton {
         }
 
         property QtObject elementResize: QtObject {
-            property int duration: 300
+            property int duration: root.reduceMotion ? 0 : 300
             property int type: Easing.BezierSpline
             property list<real> bezierCurve: animationCurves.emphasized
             property int velocity: 650
@@ -370,7 +389,7 @@ Singleton {
         }
 
         property QtObject clickBounce: QtObject {
-            property int duration: 400
+            property int duration: root.reduceMotion ? 0 : 400
             property int type: Easing.BezierSpline
             property list<real> bezierCurve: animationCurves.expressiveDefaultSpatial
             property int velocity: 850
@@ -383,13 +402,13 @@ Singleton {
         }
         
         property QtObject scroll: QtObject {
-            property int duration: 200
+            property int duration: root.reduceMotion ? 0 : 200
             property int type: Easing.BezierSpline
             property list<real> bezierCurve: animationCurves.standardDecel
         }
 
         property QtObject menuDecel: QtObject {
-            property int duration: 350
+            property int duration: root.reduceMotion ? 0 : 350
             property int type: Easing.OutExpo
         }
     }

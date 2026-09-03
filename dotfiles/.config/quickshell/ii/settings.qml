@@ -27,21 +27,7 @@ ApplicationWindow {
     property string requestedSectionId: ""
     property string searchQuery: ""
 
-    property var pages: [
-        { displayName: Translation.tr("Home"), description: Translation.tr("Overview and shortcuts"), icon: "home", component: "modules/settings/HomeConfig.qml" },
-        { displayName: Translation.tr("Connectivity"), description: Translation.tr("Wi-Fi, Ethernet and Bluetooth"), icon: "language", component: "modules/settings/ConnectivityConfig.qml" },
-        { displayName: Translation.tr("Peripherals"), description: Translation.tr("Mouse, touchpad and keyboard"), icon: "mouse", component: "modules/settings/PeripheralsConfig.qml" },
-        { displayName: Translation.tr("Display"), description: Translation.tr("Monitors, brightness and power"), icon: "desktop_windows", component: "modules/settings/DisplayPowerConfig.qml" },
-        { displayName: Translation.tr("Audio"), description: Translation.tr("Devices, streams and volume"), icon: "volume_up", component: "modules/settings/AudioControlConfig.qml" },
-        { displayName: Translation.tr("Personalisation"), description: Translation.tr("Theme, wallpaper and interface"), icon: "palette", component: "modules/settings/PersonalisationConfig.qml" },
-        { displayName: Translation.tr("Account"), description: Translation.tr("Users and authentication"), icon: "person", component: "modules/settings/AccountsConfig.qml" },
-        { displayName: Translation.tr("Date, time & language"), description: Translation.tr("Locale, clock and translation"), icon: "schedule", component: "modules/settings/DateTimeLanguageConfig.qml" },
-        { displayName: Translation.tr("Accessibility"), description: Translation.tr("Sizing, readability and motion"), icon: "accessibility_new", component: "modules/settings/AccessibilityConfig.qml" },
-        { displayName: Translation.tr("Security & privacy"), description: Translation.tr("Local data and permissions"), icon: "shield_lock", component: "modules/settings/PrivacySecurityConfig.qml" },
-        { displayName: Translation.tr("System info & update"), description: Translation.tr("Hardware, software and updates"), icon: "system_update", component: "modules/settings/SystemInfoUpdateConfig.qml" },
-        { displayName: Translation.tr("Services"), description: Translation.tr("Integrations and default tools"), icon: "widgets", component: "modules/settings/ServicesConfig.qml" },
-        { displayName: Translation.tr("Hyprland"), description: Translation.tr("Keybinds, rules and configuration"), icon: "deployed_code", component: "modules/settings/HyprConfig.qml" }
-    ]
+    readonly property var pages: SettingsCatalog.pages
 
     function copyConfigPath() {
         root.configPathCopied = true
@@ -360,12 +346,19 @@ ApplicationWindow {
                                 onLoaded: {
                                     loadedOnce = true
                                     root.prepareLoadedPage(item)
+                                    syncPageActivity()
                                     applyRequestedNavigation()
                                 }
 
                                 onCurrentChanged: {
+                                    syncPageActivity()
                                     if (current)
                                         applyRequestedNavigation()
+                                }
+
+                                function syncPageActivity() {
+                                    if (item && "pageActive" in item)
+                                        item.pageActive = current
                                 }
 
                                 function applyRequestedNavigation() {

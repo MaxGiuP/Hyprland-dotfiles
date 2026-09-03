@@ -1,7 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
-import Quickshell.Io
+import Quickshell.Services.UPower
 import qs.services
 import qs.modules.common
 import qs.modules.common.widgets
@@ -10,6 +10,18 @@ ContentPage {
     id: root
     forceWidth: true
     baseWidth: 760
+    property int currentSubTab: 0
+    readonly property var tabs: [
+        { name: Translation.tr("Displays"), icon: "desktop_windows" },
+        { name: Translation.tr("Colour & night light"), icon: "routine" },
+        { name: Translation.tr("Power"), icon: "battery_android_full" }
+    ]
+
+    function applySubTab(subTab, sectionId = "") {
+        root.currentSubTab = Math.max(0, Math.min(subTab, root.tabs.length - 1))
+        root.contentY = 0
+    }
+
     property var monitorDrafts: ({})
     property bool draftsInitialized: false
     property real layoutPadding: 20
@@ -49,14 +61,6 @@ ContentPage {
     }
     readonly property real layoutSpanWidth: Math.max(1, layoutMaxX - layoutMinX)
     readonly property real layoutSpanHeight: Math.max(1, layoutMaxY - layoutMinY)
-
-    function openSafeExternalMixer() {
-        Quickshell.execDetached([
-            "bash",
-            "-lc",
-            "command -v pavucontrol-qt >/dev/null 2>&1 && exec pavucontrol-qt; command -v pwvucontrol >/dev/null 2>&1 && exec pwvucontrol; command -v helvum >/dev/null 2>&1 && exec helvum; exit 0"
-        ]);
-    }
 
     function syncMonitorDrafts(force = false) {
         if (draftsInitialized && !force)
@@ -133,7 +137,26 @@ ContentPage {
         }
     }
 
+    SecondaryTabBar {
+        Layout.fillWidth: true
+        currentIndex: root.currentSubTab
+        onCurrentIndexChanged: {
+            root.currentSubTab = currentIndex
+            root.contentY = 0
+        }
+
+        Repeater {
+            model: root.tabs
+            delegate: SecondaryTabButton {
+                required property var modelData
+                buttonIcon: modelData.icon
+                buttonText: modelData.name
+            }
+        }
+    }
+
     ContentSection {
+        visible: root.currentSubTab === 0
         icon: "brightness_6"
         title: Translation.tr("Display")
 
@@ -340,6 +363,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "routine"
         title: Translation.tr("Color & Night Light")
 
@@ -394,8 +418,31 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 2
         icon: "battery_android_full"
         title: Translation.tr("Power")
+
+        ContentSubsection {
+            title: Translation.tr("Power mode")
+
+            ConfigSelectionArray {
+                currentValue: PowerProfiles.profile
+                onSelected: newValue => PowerProfiles.profile = newValue
+                options: [
+                    { displayName: Translation.tr("Power saver"), icon: "energy_savings_leaf", value: PowerProfile.PowerSaver },
+                    { displayName: Translation.tr("Balanced"), icon: "balance", value: PowerProfile.Balanced },
+                    { displayName: Translation.tr("Performance"), icon: "speed", value: PowerProfile.Performance }
+                ].filter(option => option.value !== PowerProfile.Performance || PowerProfiles.hasPerformanceProfile)
+            }
+
+            StyledText {
+                visible: PowerProfiles.degradationReason !== PerformanceDegradationReason.None
+                Layout.fillWidth: true
+                color: Appearance.colors.colError
+                text: Translation.tr("Performance is currently limited by the system.")
+                wrapMode: Text.Wrap
+            }
+        }
 
         StyledText {
             Layout.leftMargin: 8
@@ -466,64 +513,4 @@ ContentPage {
         }
     }
 
-    ContentSection {
-        icon: "open_in_new"
-        title: Translation.tr("System tools")
-
-        GridLayout {
-            Layout.fillWidth: true
-            columns: 2
-            columnSpacing: 8
-            rowSpacing: 8
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "palette"
-                mainText: Translation.tr("Wallpaper and colors")
-                onClicked: Wallpapers.openFallbackPicker(Appearance.m3colors.darkmode)
-            }
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "wifi"
-                mainText: Translation.tr("Network settings")
-                onClicked: Quickshell.execDetached(["bash", "-c", `${Config.options.apps.network}`])
-            }
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "bluetooth"
-                mainText: Translation.tr("Bluetooth settings")
-                onClicked: Quickshell.execDetached(["bash", "-c", `${Config.options.apps.bluetooth}`])
-            }
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "person"
-                mainText: Translation.tr("Manage users")
-                onClicked: Quickshell.execDetached(["bash", "-c", `${Config.options.apps.manageUser}`])
-            }
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "password"
-                mainText: Translation.tr("Change password")
-                onClicked: Quickshell.execDetached(["bash", "-c", `${Config.options.apps.changePassword}`])
-            }
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "memory"
-                mainText: Translation.tr("Task manager")
-                onClicked: Quickshell.execDetached(["bash", "-c", `${Config.options.apps.taskManager}`])
-            }
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "system_update"
-                mainText: Translation.tr("System update")
-                onClicked: Updates.launchUpdateScript()
-            }
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "volume_up"
-                mainText: Translation.tr("Safe audio mixer")
-                onClicked: root.openSafeExternalMixer()
-            }
-        }
-    }
 }

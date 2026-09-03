@@ -197,12 +197,26 @@ Singleton {
                 }
             }
 
+            // Shell-native accessibility preferences. These stay in the same
+            // JSON document as the rest of the UI and are consumed directly
+            // by Quickshell instead of a desktop-environment control centre.
+            property JsonObject accessibility: JsonObject {
+                property real textScale: 1.0
+                property bool reduceMotion: false
+                property bool reduceTransparency: false
+                property bool highContrast: false
+                property int cursorSize: 24
+                property string cursorTheme: "Adwaita"
+            }
+
             property JsonObject apps: JsonObject {
-                property string bluetooth: "kcmshell6 kcm_bluetooth"
+                // Kept for backwards-compatible JSON deserialisation. Core
+                // settings now route internally instead of spawning a DE UI.
+                property string bluetooth: ""
                 property string changePassword: "kitty -1 --hold=yes fish -i -c 'passwd'"
-                property string network: "kcmshell6 kcm_networkmanagement"
-                property string manageUser: "kcmshell6 kcm_users"
-                property string networkEthernet: "kcmshell6 kcm_networkmanagement"
+                property string network: ""
+                property string manageUser: ""
+                property string networkEthernet: ""
                 property string taskManager: "kitty --class btop --title btop btop"
                 property string terminal: "kitty -1" // This is only for shell actions
                 property string update: "kitty -1 --hold=yes fish -i -c 'pkexec pacman -Syu'"
@@ -499,6 +513,7 @@ Singleton {
             }
 
             property JsonObject notifications: JsonObject {
+                property bool doNotDisturb: false
                 property int timeout: 7000
                 property int maxHistory: 40
                 property int progressUpdateInterval: 125

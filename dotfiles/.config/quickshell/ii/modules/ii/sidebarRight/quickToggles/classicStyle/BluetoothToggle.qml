@@ -18,8 +18,8 @@ QuickToggleButton {
         Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter?.enabled
     }
     altAction: () => {
-        Quickshell.execDetached(["bash", "-c", `${Config.options.apps.bluetooth}`])
         GlobalStates.sidebarRightOpen = false
+        GlobalStates.openSettingsPage("connectivity", 1, "devices")
     }
     StyledToolTip {
         text: Translation.tr("%1 | Right-click to configure").arg(

@@ -53,7 +53,7 @@ ContentPage {
             return
         host.requestedSubTab = subTab
         host.requestedSectionId = sectionId
-        host.currentPage = page
+        host.currentPage = typeof page === "string" ? SettingsCatalog.indexOf(page) : page
     }
 
     PwObjectTracker {
@@ -269,7 +269,7 @@ ContentPage {
             RippleButtonWithIcon { visible: root.dashboardTab === 0 || root.dashboardTab === 2; Layout.fillWidth: true; materialIcon: "mail"; mainText: Translation.tr("Open mail"); onClicked: UnifiedAgenda.openMail() }
             RippleButtonWithIcon { visible: root.dashboardTab === 0 || root.dashboardTab === 2; Layout.fillWidth: true; materialIcon: "edit"; mainText: Translation.tr("Compose"); onClicked: UnifiedAgenda.openCompose() }
             RippleButtonWithIcon { visible: root.dashboardTab === 0 || root.dashboardTab === 1; Layout.fillWidth: true; materialIcon: "calendar_month"; mainText: Translation.tr("Open calendar"); onClicked: UnifiedAgenda.openCalendar() }
-            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "manage_accounts"; mainText: Translation.tr("Connected accounts"); onClicked: root.navigate(6) }
+            RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "manage_accounts"; mainText: Translation.tr("Connected accounts"); onClicked: root.navigate("accounts") }
             RippleButtonWithIcon { Layout.fillWidth: true; materialIcon: "refresh"; mainText: Translation.tr("Refresh all"); onClicked: UnifiedAgenda.refresh() }
         }
 
@@ -336,7 +336,7 @@ ContentPage {
                     : Network.ethernet
                         ? Translation.tr("Ethernet connected")
                         : Network.wifiEnabled ? Translation.tr("Not connected") : Translation.tr("Off")
-                onClicked: root.navigate(1, 0, "networks")
+                onClicked: root.navigate("connectivity", 0, "networks")
             }
 
             HomeStatusButton {
@@ -346,14 +346,14 @@ ContentPage {
                 value: BluetoothStatus.connected
                     ? (BluetoothStatus.firstActiveDevice?.name ?? Translation.tr("Connected"))
                     : BluetoothStatus.enabled ? Translation.tr("Ready") : Translation.tr("Off")
-                onClicked: root.navigate(1, 1, "devices")
+                onClicked: root.navigate("connectivity", 1, "devices")
             }
 
             HomeStatusButton {
                 iconName: Audio.muted ? "volume_off" : "volume_up"
                 label: Translation.tr("Audio")
                 value: Audio.currentSinkDisplayName
-                onClicked: root.navigate(4)
+                onClicked: root.navigate("audio")
             }
         }
     }
@@ -373,42 +373,77 @@ ContentPage {
                 iconName: "mouse"
                 label: Translation.tr("Peripherals")
                 detail: Translation.tr("Mouse, touchpad and keyboard")
-                onClicked: root.navigate(2)
+                onClicked: root.navigate("peripherals")
             }
 
             HomeCategoryButton {
                 iconName: "desktop_windows"
                 label: Translation.tr("Display")
                 detail: Translation.tr("Monitors, brightness and power")
-                onClicked: root.navigate(3)
+                onClicked: root.navigate("display")
             }
 
             HomeCategoryButton {
                 iconName: "palette"
                 label: Translation.tr("Personalisation")
                 detail: Translation.tr("Theme, wallpaper and interface")
-                onClicked: root.navigate(5)
+                onClicked: root.navigate("personalisation")
+            }
+
+            HomeCategoryButton {
+                iconName: "notifications"
+                label: Translation.tr("Notifications & focus")
+                detail: Translation.tr("Alerts, history and desktop modes")
+                onClicked: root.navigate("notifications")
+            }
+
+            HomeCategoryButton {
+                iconName: "apps"
+                label: Translation.tr("Apps & defaults")
+                detail: Translation.tr("Handlers and startup services")
+                onClicked: root.navigate("apps")
+            }
+
+            HomeCategoryButton {
+                iconName: "person"
+                label: Translation.tr("Accounts")
+                detail: Translation.tr("Profile, mail and sign-in")
+                onClicked: root.navigate("accounts")
             }
 
             HomeCategoryButton {
                 iconName: "accessibility_new"
                 label: Translation.tr("Accessibility")
                 detail: Translation.tr("Sizing, readability and motion")
-                onClicked: root.navigate(8)
+                onClicked: root.navigate("accessibility")
+            }
+
+            HomeCategoryButton {
+                iconName: "shield_lock"
+                label: Translation.tr("Privacy & security")
+                detail: Translation.tr("Policies, permissions and protection")
+                onClicked: root.navigate("privacy")
+            }
+
+            HomeCategoryButton {
+                iconName: "sports_esports"
+                label: Translation.tr("Gaming")
+                detail: Translation.tr("Modes, performance and tools")
+                onClicked: root.navigate("gaming")
             }
 
             HomeCategoryButton {
                 iconName: "system_update"
                 label: Translation.tr("System update")
                 detail: Translation.tr("Updates and system information")
-                onClicked: root.navigate(10)
+                onClicked: root.navigate("system")
             }
 
             HomeCategoryButton {
                 iconName: "deployed_code"
                 label: Translation.tr("Hyprland")
                 detail: Translation.tr("Keybinds, rules and configuration")
-                onClicked: root.navigate(12)
+                onClicked: root.navigate("hyprland")
             }
         }
     }
@@ -745,7 +780,7 @@ ContentPage {
             Layout.fillWidth: true
             materialIcon: "settings_bluetooth"
             mainText: Translation.tr("Open full Bluetooth settings")
-            onClicked: Quickshell.execDetached(["bash", "-c", Config.options.apps.bluetooth])
+            onClicked: root.navigate("connectivity", 1, "devices")
         }
     }
 
@@ -762,7 +797,7 @@ ContentPage {
                 Layout.fillWidth: true
                 materialIcon: "settings_ethernet"
                 mainText: Translation.tr("Ethernet settings")
-                onClicked: Quickshell.execDetached(["bash", "-c", Config.options.apps.networkEthernet])
+                onClicked: root.navigate("connectivity", 0, "overview")
             }
 
             RippleButtonWithIcon {

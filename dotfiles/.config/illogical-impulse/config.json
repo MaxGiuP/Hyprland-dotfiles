@@ -1,4 +1,12 @@
 {
+  "accessibility": {
+    "cursorSize": 24,
+    "cursorTheme": "Adwaita",
+    "highContrast": false,
+    "reduceMotion": false,
+    "reduceTransparency": false,
+    "textScale": 1
+  },
   "ai": {
     "extraModels": [
       {
@@ -53,11 +61,11 @@
     }
   },
   "apps": {
-    "bluetooth": "kcmshell6 kcm_bluetooth",
+    "bluetooth": "",
     "changePassword": "kitty -1 --hold=yes fish -i -c 'passwd'",
-    "manageUser": "kcmshell6 kcm_users",
-    "network": "plasmawindowed org.kde.plasma.networkmanagement",
-    "networkEthernet": "kcmshell6 kcm_networkmanagement",
+    "manageUser": "",
+    "network": "",
+    "networkEthernet": "",
     "taskManager": "kitty --class btop --title btop btop",
     "terminal": "kitty -1",
     "update": "kitty -1 --hold=yes fish -i -c 'pkexec pacman -Syu'",
@@ -333,6 +341,7 @@
     "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
   },
   "notifications": {
+    "doNotDisturb": false,
     "maxHistory": 40,
     "progressUpdateInterval": 125,
     "timeout": 10000

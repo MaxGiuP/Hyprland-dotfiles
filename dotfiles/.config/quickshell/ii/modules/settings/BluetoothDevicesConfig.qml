@@ -11,15 +11,40 @@ ContentPage {
     id: root
     forceWidth: true
     baseWidth: 760
+    property var settingsHost: null
 
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
-    readonly property bool isDiscovering: Bluetooth.defaultAdapter?.discovering ?? false
+    readonly property var adapters: Bluetooth.adapters?.values ?? []
+    property string selectedAdapterId: Bluetooth.defaultAdapter?.adapterId ?? ""
+    readonly property var selectedAdapter: root.adapters.find(adapter => adapter.adapterId === root.selectedAdapterId)
+        ?? Bluetooth.defaultAdapter
+        ?? null
+    readonly property var selectedDevices: {
+        const devices = root.selectedAdapter?.devices?.values ?? []
+        return devices.slice().sort((left, right) => {
+            if (left.connected !== right.connected) return left.connected ? -1 : 1
+            if (left.paired !== right.paired) return left.paired ? -1 : 1
+            return (left.name || left.address).localeCompare(right.name || right.address)
+        })
+    }
+    readonly property bool isDiscovering: root.selectedAdapter?.discovering ?? false
+    readonly property bool selectedConnected: root.selectedDevices.some(device => device.connected)
 
     function scrollToSection(sectionId) {
-        const map = { "overview": btOverviewSection, "devices": btDevicesSection, "other": btOtherSection }
+        const map = {
+            "overview": btOverviewSection,
+            "adapter": btAdapterSection,
+            "devices": btDevicesSection,
+            "audio": btIntegratedSection
+        }
         const target = map[sectionId]
         if (target) root.contentY = Math.max(0, target.y - 10)
+    }
+
+    function navigate(page, subTab = -1, sectionId = "") {
+        if (root.settingsHost && typeof root.settingsHost.applyNavigation === "function")
+            root.settingsHost.applyNavigation(typeof page === "string" ? SettingsCatalog.indexOf(page) : page, subTab, sectionId)
     }
 
     PwObjectTracker {
@@ -30,8 +55,8 @@ ContentPage {
         id: scanTimer
         interval: 30000
         onTriggered: {
-            if (Bluetooth.defaultAdapter?.discovering)
-                Bluetooth.defaultAdapter.discovering = false
+            if (root.selectedAdapter?.discovering)
+                root.selectedAdapter.discovering = false
         }
     }
 
@@ -51,15 +76,15 @@ ContentPage {
             uniform: true
 
             ConfigSwitch {
-                buttonIcon: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
-                text: BluetoothStatus.connected
-                    ? (BluetoothStatus.firstActiveDevice?.name ?? Translation.tr("Bluetooth connected"))
-                    : BluetoothStatus.enabled
+                buttonIcon: root.selectedConnected ? "bluetooth_connected" : root.selectedAdapter?.enabled ? "bluetooth" : "bluetooth_disabled"
+                text: root.selectedConnected
+                    ? (root.selectedDevices.find(device => device.connected)?.name ?? Translation.tr("Bluetooth connected"))
+                    : root.selectedAdapter?.enabled
                         ? Translation.tr("Bluetooth on")
                         : Translation.tr("Bluetooth off")
-                checked: BluetoothStatus.enabled
-                enabled: BluetoothStatus.available
-                onClicked: if (Bluetooth.defaultAdapter) Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter.enabled
+                checked: root.selectedAdapter?.enabled ?? false
+                enabled: root.selectedAdapter !== null
+                onClicked: if (root.selectedAdapter) root.selectedAdapter.enabled = checked
             }
 
             StyledComboBox {
@@ -70,6 +95,85 @@ ContentPage {
                 currentIndex: Math.max(0, root.realOutputDevices.findIndex(d => Audio.isCurrentDefaultSink(d)))
                 onActivated: index => Audio.setDefaultSink(root.realOutputDevices[index])
             }
+        }
+    }
+
+    ContentSection {
+        id: btAdapterSection
+        icon: "settings_bluetooth"
+        title: Translation.tr("Adapter")
+        description: root.selectedAdapter
+            ? Translation.tr("%1 · %2 · %3")
+                .arg(root.selectedAdapter.name)
+                .arg(root.selectedAdapter.adapterId)
+                .arg(BluetoothAdapterState.toString(root.selectedAdapter.state))
+            : Translation.tr("No BlueZ adapter detected")
+
+        StyledComboBox {
+            visible: root.adapters.length > 1
+            Layout.fillWidth: true
+            buttonIcon: "settings_bluetooth"
+            textRole: "displayName"
+            model: root.adapters.map(adapter => ({
+                displayName: `${adapter.name} · ${adapter.adapterId}`,
+                adapterId: adapter.adapterId
+            }))
+            currentIndex: Math.max(0, root.adapters.findIndex(adapter => adapter.adapterId === root.selectedAdapterId))
+            onActivated: index => root.selectedAdapterId = root.adapters[index].adapterId
+        }
+
+        ConfigRow {
+            uniform: true
+
+            ConfigSwitch {
+                buttonIcon: "visibility"
+                text: checked ? Translation.tr("Visible to nearby devices") : Translation.tr("Not discoverable")
+                enabled: root.selectedAdapter?.enabled ?? false
+                checked: root.selectedAdapter?.discoverable ?? false
+                onClicked: if (root.selectedAdapter) root.selectedAdapter.discoverable = checked
+            }
+
+            ConfigSwitch {
+                buttonIcon: "add_link"
+                text: checked ? Translation.tr("Ready to pair") : Translation.tr("Pairing disabled")
+                enabled: root.selectedAdapter?.enabled ?? false
+                checked: root.selectedAdapter?.pairable ?? false
+                onClicked: if (root.selectedAdapter) root.selectedAdapter.pairable = checked
+            }
+        }
+
+        ConfigRow {
+            uniform: true
+
+            ConfigSpinBox {
+                icon: "timer"
+                text: Translation.tr("Visibility timeout (s)")
+                enabled: root.selectedAdapter !== null
+                from: 0
+                to: 3600
+                stepSize: 30
+                value: root.selectedAdapter?.discoverableTimeout ?? 0
+                onValueChanged: if (root.selectedAdapter && root.selectedAdapter.discoverableTimeout !== value) root.selectedAdapter.discoverableTimeout = value
+            }
+
+            ConfigSpinBox {
+                icon: "timer"
+                text: Translation.tr("Pairing timeout (s)")
+                enabled: root.selectedAdapter !== null
+                from: 0
+                to: 3600
+                stepSize: 30
+                value: root.selectedAdapter?.pairableTimeout ?? 0
+                onValueChanged: if (root.selectedAdapter && root.selectedAdapter.pairableTimeout !== value) root.selectedAdapter.pairableTimeout = value
+            }
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            color: Appearance.colors.colSubtext
+            wrapMode: Text.Wrap
+            font.pixelSize: Appearance.font.pixelSize.small
+            text: Translation.tr("A timeout of 0 leaves the adapter visible or pairable until you turn it off. These controls talk directly to BlueZ.")
         }
     }
 
@@ -86,15 +190,15 @@ ContentPage {
                 Layout.fillWidth: true
                 materialIcon: root.isDiscovering ? "stop_circle" : "bluetooth_searching"
                 mainText: root.isDiscovering ? Translation.tr("Stop scanning") : Translation.tr("Scan for devices")
-                enabled: BluetoothStatus.enabled && BluetoothStatus.available
+                enabled: root.selectedAdapter?.enabled ?? false
                 toggled: root.isDiscovering
                 onClicked: {
-                    if (!Bluetooth.defaultAdapter) return
+                    if (!root.selectedAdapter) return
                     if (root.isDiscovering) {
-                        Bluetooth.defaultAdapter.discovering = false
+                        root.selectedAdapter.discovering = false
                         scanTimer.stop()
                     } else {
-                        Bluetooth.defaultAdapter.discovering = true
+                        root.selectedAdapter.discovering = true
                         scanTimer.restart()
                     }
                 }
@@ -107,12 +211,14 @@ ContentPage {
         }
 
         Repeater {
-            model: BluetoothStatus.friendlyDeviceList
+            model: root.selectedDevices
 
             delegate: Rectangle {
+                id: deviceCard
                 required property var modelData
+                property bool expanded: false
                 Layout.fillWidth: true
-                implicitHeight: deviceRow.implicitHeight + 20
+                implicitHeight: deviceCardContent.implicitHeight + 20
                 radius: Appearance.rounding.normal
                 color: Appearance.colors.colLayer1
                 border.width: 1
@@ -120,11 +226,16 @@ ContentPage {
                     ? Appearance.colors.colPrimary
                     : Appearance.colors.colOutlineVariant
 
-                RowLayout {
-                    id: deviceRow
+                ColumnLayout {
+                    id: deviceCardContent
                     anchors.fill: parent
                     anchors.margins: 10
-                    spacing: 12
+                    spacing: 8
+
+                    RowLayout {
+                        id: deviceRow
+                        Layout.fillWidth: true
+                        spacing: 12
 
                     Item {
                         implicitWidth: 32
@@ -218,8 +329,8 @@ ContentPage {
                         }
                     }
 
-                    RowLayout {
-                        spacing: 4
+                        RowLayout {
+                            spacing: 4
 
                         RippleButtonWithIcon {
                             visible: modelData.connected || (modelData.paired && !modelData.pairing)
@@ -248,24 +359,134 @@ ContentPage {
                                 else modelData.pair()
                             }
                         }
+
+                            RippleButton {
+                                implicitWidth: 38
+                                implicitHeight: 38
+                                buttonRadius: Appearance.rounding.full
+                                onClicked: deviceCard.expanded = !deviceCard.expanded
+
+                                contentItem: MaterialSymbol {
+                                    anchors.centerIn: parent
+                                    text: "expand_more"
+                                    iconSize: 20
+                                    rotation: deviceCard.expanded ? 180 : 0
+                                    color: Appearance.colors.colOnLayer1
+                                    Behavior on rotation {
+                                        animation: Appearance.animation.elementMoveFast.numberAnimation.createObject(this)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        visible: deviceCard.expanded
+                        Layout.fillWidth: true
+                        implicitHeight: 1
+                        color: Appearance.colors.colOutlineVariant
+                        opacity: 0.6
+                    }
+
+                    ColumnLayout {
+                        visible: deviceCard.expanded
+                        Layout.fillWidth: true
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+
+                                StyledText {
+                                    text: Translation.tr("Device address")
+                                    color: Appearance.colors.colSubtext
+                                    font.pixelSize: Appearance.font.pixelSize.small
+                                }
+
+                                StyledText {
+                                    Layout.fillWidth: true
+                                    text: modelData.address || Translation.tr("Unavailable")
+                                    color: Appearance.colors.colOnLayer1
+                                    font.family: Appearance.font.family.monospace
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            StyledText {
+                                text: modelData.bonded ? Translation.tr("Bonded") : modelData.paired ? Translation.tr("Paired") : Translation.tr("Not paired")
+                                color: Appearance.colors.colSubtext
+                                font.pixelSize: Appearance.font.pixelSize.small
+                            }
+                        }
+
+                        MaterialTextField {
+                            id: deviceAliasField
+                            Layout.fillWidth: true
+                            placeholderText: Translation.tr("Device name")
+                            text: modelData.name || ""
+                            onEditingFinished: {
+                                const alias = text.trim()
+                                if (alias.length > 0 && alias !== modelData.name)
+                                    modelData.name = alias
+                            }
+                        }
+
+                        ConfigRow {
+                            uniform: true
+
+                            ConfigSwitch {
+                                buttonIcon: "verified_user"
+                                text: Translation.tr("Trusted")
+                                enabled: modelData.paired
+                                checked: modelData.trusted
+                                onClicked: if (modelData.trusted !== checked) modelData.trusted = checked
+                            }
+
+                            ConfigSwitch {
+                                buttonIcon: "block"
+                                text: Translation.tr("Blocked")
+                                checked: modelData.blocked
+                                onClicked: if (modelData.blocked !== checked) modelData.blocked = checked
+                            }
+
+                            ConfigSwitch {
+                                buttonIcon: "power_settings_new"
+                                text: Translation.tr("Wake allowed")
+                                enabled: modelData.paired
+                                checked: modelData.wakeAllowed
+                                onClicked: if (modelData.wakeAllowed !== checked) modelData.wakeAllowed = checked
+                            }
+                        }
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            color: Appearance.colors.colSubtext
+                            wrapMode: Text.Wrap
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            text: Translation.tr("Trust permits automatic services from this paired device. Blocking prevents future connections until it is turned off.")
+                        }
                     }
                 }
             }
         }
 
         StyledText {
-            visible: BluetoothStatus.friendlyDeviceList.length === 0 && !root.isDiscovering
+            visible: root.selectedDevices.length === 0 && !root.isDiscovering
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.Wrap
-            text: BluetoothStatus.enabled
+            text: root.selectedAdapter?.enabled
                 ? Translation.tr("No Bluetooth devices found. Tap \"Scan for devices\" to search.")
                 : Translation.tr("Enable Bluetooth to see devices.")
             color: Appearance.colors.colSubtext
         }
 
         StyledText {
-            visible: BluetoothStatus.friendlyDeviceList.length === 0 && root.isDiscovering
+            visible: root.selectedDevices.length === 0 && root.isDiscovering
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
             text: Translation.tr("Scanning for nearby devices…")
@@ -274,32 +495,33 @@ ContentPage {
     }
 
     ContentSection {
-        id: btOtherSection
-        icon: "desktop_windows"
-        title: Translation.tr("Other devices")
+        id: btIntegratedSection
+        icon: "hub"
+        title: Translation.tr("Related settings")
+        description: Translation.tr("Stay inside the custom control centre")
 
         ConfigRow {
             uniform: true
 
             RippleButtonWithIcon {
                 Layout.fillWidth: true
+                materialIcon: "volume_up"
+                mainText: Translation.tr("Sound & audio routing")
+                onClicked: root.navigate("audio", 0, "output")
+            }
+
+            RippleButtonWithIcon {
+                Layout.fillWidth: true
+                materialIcon: "mouse"
+                mainText: Translation.tr("Input devices")
+                onClicked: root.navigate("peripherals", 0, "devices")
+            }
+
+            RippleButtonWithIcon {
+                Layout.fillWidth: true
                 materialIcon: "display_settings"
-                mainText: Translation.tr("Open system settings")
-                onClicked: Quickshell.execDetached(["systemsettings"])
-            }
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "tune"
-                mainText: Translation.tr("Audio mixer")
-                onClicked: Quickshell.execDetached(["bash", "-lc", Config.options.apps.volumeMixer])
-            }
-
-            RippleButtonWithIcon {
-                Layout.fillWidth: true
-                materialIcon: "settings_bluetooth"
-                mainText: Translation.tr("Open Bluetooth app")
-                onClicked: Quickshell.execDetached(["bash", "-lc", Config.options.apps.bluetooth])
+                mainText: Translation.tr("Displays")
+                onClicked: root.navigate("display", 0, "display")
             }
         }
     }

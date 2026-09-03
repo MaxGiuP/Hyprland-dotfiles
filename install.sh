@@ -11,6 +11,7 @@
 #   bash install.sh          # interactive (confirm before each config)
 #   bash install.sh -y       # skip confirmations, install everything
 #   bash install.sh -n       # dry-run: show what would change, touch nothing
+#   bash install.sh --with-settingsd  # also build/install the native settings service
 # =============================================================================
 
 set -euo pipefail
@@ -19,6 +20,10 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$REPO_DIR/dotfiles/.config"
 WALLPAPER_SRC="$REPO_DIR/wallpapers/dynamic-system"
 WALLPAPER_DST="$HOME/Pictures/Wallpapers/dynamic-system"
+SETTINGSD_SRC="$REPO_DIR/tools/ii-settingsd"
+SETTINGSD_BIN_DST="$HOME/.local/bin/ii-settingsd"
+SETTINGSD_UNIT_DST="$HOME/.config/systemd/user/ii-settingsd.service"
+SETTINGSD_DOC_DST="$HOME/.local/share/doc/ii-settingsd/README.md"
 
 # ── Configs managed by this repo ─────────────────────────────────────────────
 MANAGED=(
@@ -72,16 +77,28 @@ backup_dir() {
     fi
 }
 
+backup_file() {
+    local target="$1"
+    if [[ -e "$target" || -L "$target" ]]; then
+        local stamp
+        stamp=$(date +%Y%m%d_%H%M%S)
+        mv -- "$target" "${target}.bak.${stamp}"
+        warn "Backed up existing $(basename "$target") → $(basename "${target}.bak.${stamp}")"
+    fi
+}
+
 # ── Parse arguments ───────────────────────────────────────────────────────────
-YES=0; DRY=0
+YES=0; DRY=0; WITH_SETTINGSD=0
 for arg in "$@"; do
     case "$arg" in
-        -y|--yes)      YES=1 ;;
-        -n|--dry-run)  DRY=1 ;;
+        -y|--yes)            YES=1 ;;
+        -n|--dry-run)        DRY=1 ;;
+        --with-settingsd)    WITH_SETTINGSD=1 ;;
         -h|--help)
-            echo "Usage: bash install.sh [-y] [-n]"
-            echo "  -y   skip all confirmations"
-            echo "  -n   dry-run, show changes without touching anything"
+            echo "Usage: bash install.sh [-y] [-n] [--with-settingsd]"
+            echo "  -y                 skip all confirmations"
+            echo "  -n                 dry-run, show changes without touching anything"
+            echo "  --with-settingsd   build and deploy the native settings service"
             exit 0 ;;
         *) err "Unknown argument: $arg"; exit 1 ;;
     esac
@@ -89,6 +106,16 @@ done
 
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 [[ -d "$SRC_DIR" ]] || { err "dotfiles/.config not found — is this the right repo?"; exit 1; }
+if [[ $WITH_SETTINGSD -eq 1 ]]; then
+    [[ -f "$SETTINGSD_SRC/Cargo.toml" ]] || { err "tools/ii-settingsd/Cargo.toml not found"; exit 1; }
+    [[ -f "$SETTINGSD_SRC/Cargo.lock" ]] || { err "tools/ii-settingsd/Cargo.lock not found"; exit 1; }
+    [[ -f "$SETTINGSD_SRC/README.md" ]] || { err "ii-settingsd README not found"; exit 1; }
+    [[ -f "$SETTINGSD_SRC/systemd/ii-settingsd.service" ]] || { err "ii-settingsd user unit not found"; exit 1; }
+    if [[ $DRY -eq 0 ]]; then
+        command -v cargo >/dev/null || { err "Cargo is required for --with-settingsd"; exit 1; }
+        command -v systemctl >/dev/null || { err "systemctl is required for --with-settingsd"; exit 1; }
+    fi
+fi
 
 echo ""
 echo -e "${BLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -109,6 +136,9 @@ warn "Configs that will be installed:"
 for cfg in "${MANAGED[@]}"; do
     [[ -d "$SRC_DIR/$cfg" ]] && echo -e "      ${CYN}•  $cfg${NC}"
 done
+if [[ $WITH_SETTINGSD -eq 1 ]]; then
+    echo -e "      ${CYN}•  ii-settingsd (optional native service)${NC}"
+fi
 echo ""
 
 [[ $YES -eq 0 ]] && ! confirm "Install all of the above?" && { echo "Aborted."; exit 0; }
@@ -200,6 +230,45 @@ if [[ -d "$WALLPAPER_SRC" ]]; then
             warn "dynamic wallpapers — skipped by user"
             skipped+=("dynamic-wallpapers")
         fi
+    fi
+fi
+
+# ── Optional native settings service ─────────────────────────────────────────
+if [[ $WITH_SETTINGSD -eq 1 ]]; then
+    hdr "  ii-settingsd"
+    echo -e "    ${SETTINGSD_SRC}  →  ${SETTINGSD_BIN_DST}"
+    echo -e "    ${SETTINGSD_SRC}/systemd/ii-settingsd.service  →  ${SETTINGSD_UNIT_DST}"
+    echo -e "    ${SETTINGSD_SRC}/README.md  →  ${SETTINGSD_DOC_DST}"
+
+    if [[ $DRY -eq 1 ]]; then
+        info "ii-settingsd — would build --release --locked, install, enable, and start"
+    elif [[ $YES -eq 1 ]] || confirm "Build and install ii-settingsd?"; then
+        cargo build \
+            --release \
+            --locked \
+            --manifest-path "$SETTINGSD_SRC/Cargo.toml" \
+            --target-dir "$SETTINGSD_SRC/target"
+
+        [[ -x "$SETTINGSD_SRC/target/release/ii-settingsd" ]] || {
+            err "Cargo completed without producing the ii-settingsd binary"
+            exit 1
+        }
+
+        backup_file "$SETTINGSD_BIN_DST"
+        backup_file "$SETTINGSD_UNIT_DST"
+        backup_file "$SETTINGSD_DOC_DST"
+        install -Dm755 "$SETTINGSD_SRC/target/release/ii-settingsd" "$SETTINGSD_BIN_DST"
+        install -Dm644 "$SETTINGSD_SRC/systemd/ii-settingsd.service" "$SETTINGSD_UNIT_DST"
+        install -Dm644 "$SETTINGSD_SRC/README.md" "$SETTINGSD_DOC_DST"
+
+        systemctl --user daemon-reload
+        systemctl --user enable ii-settingsd.service
+        systemctl --user restart ii-settingsd.service
+        ok "ii-settingsd installed, enabled, and started"
+        installed+=("ii-settingsd")
+    else
+        warn "ii-settingsd — skipped by user"
+        skipped+=("ii-settingsd")
     fi
 fi
 

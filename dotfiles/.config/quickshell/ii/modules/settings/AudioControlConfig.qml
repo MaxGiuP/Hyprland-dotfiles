@@ -12,20 +12,40 @@ ContentPage {
     forceWidth: true
     baseWidth: 760
     readonly property bool settingsApp: Quickshell.env("II_SETTINGS_APP") === "1"
+    property bool pageActive: true
+    property int currentSubTab: 0
+    readonly property var tabs: [
+        { name: Translation.tr("Output"), icon: "volume_up" },
+        { name: Translation.tr("Input"), icon: "mic" },
+        { name: Translation.tr("Sound & safety"), icon: "hearing" }
+    ]
+
+    function applySubTab(subTab, sectionId = "") {
+        root.currentSubTab = Math.max(0, Math.min(subTab, root.tabs.length - 1))
+        root.contentY = 0
+    }
 
     property bool _monoGuard: false
     property string monoMasterSink: ""
     property real _capturedVolume: 0
+    readonly property string monoStatePath: `${Quickshell.env("XDG_RUNTIME_DIR")}/ii-audio-mono-master`
     property list<real> outputVisualizerPoints: []
     property list<real> inputVisualizerPoints: []
     readonly property string outputVisualizerSource: Audio.sink?.name ? `${Audio.sink.name}.monitor` : ""
     readonly property string inputVisualizerSource: Audio.source?.name ?? ""
+    readonly property string safeOutputVisualizerSource: root.safeNodeName(root.outputVisualizerSource)
+    readonly property string safeInputVisualizerSource: root.safeNodeName(root.inputVisualizerSource)
 
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
 
     function shellQuote(value) {
         return `'${String(value ?? "").replace(/'/g, `'\"'\"'`)}'`;
+    }
+
+    function safeNodeName(value) {
+        const name = String(value ?? "")
+        return /^[A-Za-z0-9_.:@+\/-]+$/.test(name) ? name : ""
     }
 
     function cavaConfigCommand(sourceName, useDefaultSource) {
@@ -63,8 +83,8 @@ ContentPage {
 
     Process {
         id: outputVisualizerProc
-        running: true
-        command: ["bash", "-lc", root.cavaConfigCommand("", true)]
+        running: root.pageActive && root.currentSubTab === 0 && root.safeOutputVisualizerSource.length > 0
+        command: ["bash", "-lc", root.cavaConfigCommand(root.safeOutputVisualizerSource, false)]
         stdout: SplitParser {
             onRead: data => {
                 root.outputVisualizerPoints = data.split(";").map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
@@ -78,8 +98,8 @@ ContentPage {
 
     Process {
         id: inputVisualizerProc
-        running: root.inputVisualizerSource.length > 0
-        command: ["bash", "-lc", root.cavaConfigCommand(root.inputVisualizerSource, false)]
+        running: root.pageActive && root.currentSubTab === 1 && root.safeInputVisualizerSource.length > 0
+        command: ["bash", "-lc", root.cavaConfigCommand(root.safeInputVisualizerSource, false)]
         stdout: SplitParser {
             onRead: data => {
                 root.inputVisualizerPoints = data.split(";").map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
@@ -93,7 +113,14 @@ ContentPage {
 
     onInputVisualizerSourceChanged: {
         inputVisualizerProc.running = false
-        inputVisualizerProc.running = root.inputVisualizerSource.length > 0
+        inputVisualizerProc.running = Qt.binding(() => root.pageActive
+            && root.currentSubTab === 1 && root.safeInputVisualizerSource.length > 0)
+    }
+
+    onOutputVisualizerSourceChanged: {
+        outputVisualizerProc.running = false
+        outputVisualizerProc.running = Qt.binding(() => root.pageActive
+            && root.currentSubTab === 0 && root.safeOutputVisualizerSource.length > 0)
     }
 
     // Shared awk snippet: find stream nodes connected via output_FL to SINK:playback_FL
@@ -102,23 +129,29 @@ ContentPage {
     readonly property string _awkFindXlink: "'/^[^[:space:]]/{src=$1}/[|]->/ && $2==t && src~/:output_FR$/{sub(/:output_FR$/,\"\",src); print src}'"
 
     function addLinksCmd(sink) {
-        return "for node in $(pw-link -lo 2>/dev/null | awk -v t=\"" + sink + ":playback_FL\" " + _awkFindFL + "); do " +
-               "  pw-link \"${node}:output_FL\" \"" + sink + ":playback_FR\" 2>/dev/null || true; " +
-               "  pw-link \"${node}:output_FR\" \"" + sink + ":playback_FL\" 2>/dev/null || true; " +
+        const target = sink === "${OLD}" || sink === "${SINK}" ? sink : root.safeNodeName(sink)
+        if (!target.length)
+            return "false"
+        return "for node in $(pw-link -lo 2>/dev/null | awk -v t=\"" + target + ":playback_FL\" " + _awkFindFL + "); do " +
+               "  pw-link \"${node}:output_FL\" \"" + target + ":playback_FR\" 2>/dev/null || true; " +
+               "  pw-link \"${node}:output_FR\" \"" + target + ":playback_FL\" 2>/dev/null || true; " +
                "done"
     }
 
     function removeLinksCmd(sink) {
-        return "for node in $(pw-link -lo 2>/dev/null | awk -v t=\"" + sink + ":playback_FL\" " + _awkFindXlink + "); do " +
-               "  pw-link -d \"${node}:output_FR\" \"" + sink + ":playback_FL\" 2>/dev/null || true; " +
-               "  pw-link -d \"${node}:output_FL\" \"" + sink + ":playback_FR\" 2>/dev/null || true; " +
+        const target = sink === "${OLD}" || sink === "${SINK}" ? sink : root.safeNodeName(sink)
+        if (!target.length)
+            return "false"
+        return "for node in $(pw-link -lo 2>/dev/null | awk -v t=\"" + target + ":playback_FL\" " + _awkFindXlink + "); do " +
+               "  pw-link -d \"${node}:output_FR\" \"" + target + ":playback_FL\" 2>/dev/null || true; " +
+               "  pw-link -d \"${node}:output_FL\" \"" + target + ":playback_FR\" 2>/dev/null || true; " +
                "done"
     }
 
     Process {
         id: monoCheckProc
         command: ["bash", "-c",
-            "MASTER=$(cat /tmp/qs_mono_master 2>/dev/null); " +
+            "MASTER=$(cat " + root.shellQuote(root.monoStatePath) + " 2>/dev/null); " +
             "if [ -n \"$MASTER\" ] && " +
             "pw-link -lo 2>/dev/null | awk -v t=\"${MASTER}:playback_FL\" " +
             "'/^[^[:space:]]/{src=$1}/[|]->/ && $2==t && src~/:output_FR$/{found=1} END{exit !found}'; then " +
@@ -146,9 +179,9 @@ ContentPage {
             // Clean up any old virtual sink modules from previous implementation
             "for mod in $(cat /tmp/qs_mono_module 2>/dev/null); do pactl unload-module \"$mod\" 2>/dev/null; done; rm -f /tmp/qs_mono_module; " +
             // Remove cross-links from previous master (if any)
-            "OLD=$(cat /tmp/qs_mono_master 2>/dev/null); " +
+            "OLD=$(cat " + root.shellQuote(root.monoStatePath) + " 2>/dev/null); " +
             "if [ -n \"$OLD\" ]; then " + root.removeLinksCmd("${OLD}") + "; fi; " +
-            "echo \"" + master + "\" > /tmp/qs_mono_master; " +
+            "printf '%s\\n' " + root.shellQuote(root.safeNodeName(master)) + " > " + root.shellQuote(root.monoStatePath) + "; " +
             root.addLinksCmd(master)
         ]
         onRunningChanged: if (!running) {
@@ -175,7 +208,7 @@ ContentPage {
         property string oldMaster: ""
         command: ["bash", "-c",
             root.removeLinksCmd(oldMaster) + "; " +
-            "echo \"" + newMaster + "\" > /tmp/qs_mono_master; " +
+            "printf '%s\\n' " + root.shellQuote(root.safeNodeName(newMaster)) + " > " + root.shellQuote(root.monoStatePath) + "; " +
             "sleep 0.5; " +
             root.addLinksCmd(newMaster)
         ]
@@ -188,10 +221,10 @@ ContentPage {
     Process {
         id: monoTeardownProc
         command: ["bash", "-c",
-            "SINK=$(cat /tmp/qs_mono_master 2>/dev/null); " +
+            "SINK=$(cat " + root.shellQuote(root.monoStatePath) + " 2>/dev/null); " +
             "[ -z \"$SINK\" ] && exit 0; " +
             root.removeLinksCmd("${SINK}") + "; " +
-            "rm -f /tmp/qs_mono_master"
+            "rm -f -- " + root.shellQuote(root.monoStatePath)
         ]
         onRunningChanged: if (!running) monoCheckProc.running = true
     }
@@ -224,8 +257,27 @@ ContentPage {
         onTriggered: Audio.setVolume(root._capturedVolume)
     }
 
+    SecondaryTabBar {
+        Layout.fillWidth: true
+        currentIndex: root.currentSubTab
+        onCurrentIndexChanged: {
+            root.currentSubTab = currentIndex
+            root.contentY = 0
+        }
+
+        Repeater {
+            model: root.tabs
+            delegate: SecondaryTabButton {
+                required property var modelData
+                buttonIcon: modelData.icon
+                buttonText: modelData.name
+            }
+        }
+    }
+
     // ── Output ──────────────────────────────────────────────────────────────
     ContentSection {
+        visible: root.currentSubTab === 0
         icon: "volume_up"
         title: Translation.tr("Output")
 
@@ -413,6 +465,7 @@ ContentPage {
 
     // ── Input ────────────────────────────────────────────────────────────────
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "mic"
         title: Translation.tr("Input")
 
@@ -552,6 +605,7 @@ ContentPage {
 
     // ── Protection ───────────────────────────────────────────────────────────
     ContentSection {
+        visible: root.currentSubTab === 2
         icon: "hearing"
         title: Translation.tr("Earbang Protection")
 
@@ -592,6 +646,7 @@ ContentPage {
 
     // ── Sounds ───────────────────────────────────────────────────────────────
     ContentSection {
+        visible: root.currentSubTab === 2
         icon: "notification_sound"
         title: Translation.tr("System sounds")
 
@@ -616,6 +671,7 @@ ContentPage {
 
     // ── Open mixer ───────────────────────────────────────────────────────────
     ContentSection {
+        visible: root.currentSubTab === 2
         icon: "open_in_new"
         title: Translation.tr("External mixer")
 

@@ -22,14 +22,18 @@ ContentSection {
             id: extractProc
             running: false
             command: ["bash", "-c",
-                `theme="${cursorPreviewItem.themeName}"
+                `theme="$1"
                  for dir in "$HOME/.icons" "/usr/share/icons"; do
                    f="$dir/$theme/hyprcursors/left_ptr.hlc"
                    [ -f "$f" ] || continue
-                   out="/tmp/qs-cursor-preview-$theme.svg"
-                   unzip -p "$f" "*.svg" 2>/dev/null | head -c 65536 > "$out" && echo "$out"
+                   preview_dir="\${XDG_RUNTIME_DIR:-/tmp}"
+                   out=$(mktemp "$preview_dir/qs-cursor-preview.XXXXXX.svg") || exit 1
+                   unzip -p "$f" "*.svg" 2>/dev/null | head -c 65536 > "$out"
+                   if [ -s "$out" ]; then echo "$out"; else rm -f "$out"; fi
                    exit 0
-                 done`
+                 done`,
+                "ii-cursor-preview",
+                cursorPreviewItem.themeName
             ]
             stdout: SplitParser {
                 onRead: data => cursorPreviewItem.svgPath = data.trim()
@@ -74,7 +78,7 @@ ContentSection {
             id: findIconsProc
             running: false
             command: ["bash", "-c",
-                `theme="${iconPreviewItem.themeName}"
+                `theme="$1"
                  icons="folder text-x-generic image-x-generic audio-x-generic application-x-executable"
                  for icon in $icons; do
                    result=""
@@ -85,7 +89,9 @@ ContentSection {
                      [ -n "$f" ] && result="$f" && break
                    done
                    if [ -n "$result" ]; then echo "$result"; else echo "none"; fi
-                 done`
+                 done`,
+                "ii-icon-preview",
+                iconPreviewItem.themeName
             ]
             stdout: SplitParser {
                 onRead: data => {
@@ -547,7 +553,8 @@ RowLayout {
 
             Rectangle {
                 Layout.alignment: Qt.AlignHCenter
-                width: 36; height: 36
+                Layout.preferredWidth: 36
+                Layout.preferredHeight: 36
                 radius: Appearance.rounding.full
                 color: modelData.color
                 border.width: 1

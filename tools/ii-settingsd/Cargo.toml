@@ -1,0 +1,19 @@
+[package]
+name = "ii-settingsd"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Small native Linux settings service for the Illogical Impulse Quickshell"
+license = "MIT"
+
+[dependencies]
+libc = "0.2.175"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.143"
+zbus = "5.11.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+panic = "abort"
+strip = true

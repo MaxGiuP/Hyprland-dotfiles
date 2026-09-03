@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs
 
 Singleton {
     id: root
@@ -409,7 +410,7 @@ Singleton {
     }
 
     function openSystemSettings() {
-        Quickshell.execDetached(["systemsettings"]);
+        GlobalStates.openSettingsPage("personalisation", 1);
     }
 
     FileView {

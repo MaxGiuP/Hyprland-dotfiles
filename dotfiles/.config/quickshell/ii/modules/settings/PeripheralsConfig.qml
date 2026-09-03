@@ -8,6 +8,18 @@ ContentPage {
     id: root
     forceWidth: true
     baseWidth: 760
+    property int currentSubTab: 0
+    readonly property var tabs: [
+        { name: Translation.tr("Devices"), icon: "devices" },
+        { name: Translation.tr("Mouse & touchpad"), icon: "mouse" },
+        { name: Translation.tr("Keyboard"), icon: "keyboard" },
+        { name: Translation.tr("Hardware"), icon: "tune" }
+    ]
+
+    function applySubTab(subTab, sectionId = "") {
+        root.currentSubTab = Math.max(0, Math.min(subTab, root.tabs.length - 1))
+        root.contentY = 0
+    }
 
     readonly property var accelProfileOptions: [
         { displayName: Translation.tr("Default"), icon: "radio_button_checked", value: "default" },
@@ -361,7 +373,26 @@ ContentPage {
         }
     }
 
+    SecondaryTabBar {
+        Layout.fillWidth: true
+        currentIndex: root.currentSubTab
+        onCurrentIndexChanged: {
+            root.currentSubTab = currentIndex
+            root.contentY = 0
+        }
+
+        Repeater {
+            model: root.tabs
+            delegate: SecondaryTabButton {
+                required property var modelData
+                buttonIcon: modelData.icon
+                buttonText: modelData.name
+            }
+        }
+    }
+
     ContentSection {
+        visible: root.currentSubTab === 0
         icon: "devices"
         title: Translation.tr("Connected devices")
         description: root.deviceRows.length === 0
@@ -413,6 +444,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "mouse"
         title: Translation.tr("Mouse")
         description: Translation.tr("Pointer speed, scrolling and focus behavior")
@@ -488,6 +520,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "touchpad_mouse"
         title: Translation.tr("Touchpad")
         description: Translation.tr("Gestures, scrolling and typing protection")
@@ -556,6 +589,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 2
         icon: "keyboard"
         title: Translation.tr("Keyboard")
         description: Translation.tr("Default behavior for standard keyboards")
@@ -576,6 +610,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 3
         icon: "keyboard"
         title: Translation.tr("MechLands M75")
         description: Translation.tr("Hardware profile, lighting and magnetic switches")
@@ -856,6 +891,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 3
         icon: "mouse"
         title: Translation.tr("Logitech G502 X Plus")
         description: Translation.tr("Onboard profile, DPI and scroll wheel")
@@ -1030,6 +1066,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "tune"
         title: Translation.tr("Quickshell scrolling")
         description: Translation.tr("Scroll handling inside the shell interface")

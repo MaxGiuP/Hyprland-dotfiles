@@ -51,6 +51,13 @@ Singleton {
     property var desktopTrashRects: ({})
     property bool wallpaperSelectorOpen: false
     property bool workspaceShowNumbers: false
+    // One-shot destination consumed by the in-shell Settings widget. Keeping
+    // this in the shell singleton lets every surface route to our own settings
+    // UI without spawning a desktop-environment control centre.
+    property int settingsPageRequest: 0
+    property int settingsSubTabRequest: -1
+    property string settingsSectionRequest: ""
+    property int settingsNavigationSerial: 0
     property var barTopClearanceByScreen: ({})
     property var sidebarLeftPinnedReservationByScreen: ({})
 
@@ -102,6 +109,18 @@ Singleton {
             Persistent.states.overlay[identifier].pinned = true
 
         root.openOverlay()
+    }
+
+    function openSettings(page = 0, subTab = -1, sectionId = "", pin = false) {
+        root.settingsPageRequest = page
+        root.settingsSubTabRequest = subTab
+        root.settingsSectionRequest = sectionId
+        root.settingsNavigationSerial += 1
+        root.openOverlayWidget("settingsMenu", pin)
+    }
+
+    function openSettingsPage(pageId, subTab = -1, sectionId = "", pin = false) {
+        root.openSettings(SettingsCatalog.indexOf(pageId), subTab, sectionId, pin)
     }
 
     function closeOverlayWidget(identifier) {

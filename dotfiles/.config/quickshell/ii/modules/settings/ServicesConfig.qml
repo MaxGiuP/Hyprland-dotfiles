@@ -5,9 +5,41 @@ import qs.modules.common
 import qs.modules.common.widgets
 
 ContentPage {
+    id: root
     forceWidth: true
+    baseWidth: 760
+    property int currentSubTab: 0
+    readonly property var tabs: [
+        { name: Translation.tr("AI & search"), icon: "neurology" },
+        { name: Translation.tr("Integrations"), icon: "hub" },
+        { name: Translation.tr("Data & performance"), icon: "memory" }
+    ]
+
+    function applySubTab(subTab, sectionId = "") {
+        root.currentSubTab = Math.max(0, Math.min(subTab, root.tabs.length - 1))
+        root.contentY = 0
+    }
+
+    SecondaryTabBar {
+        Layout.fillWidth: true
+        currentIndex: root.currentSubTab
+        onCurrentIndexChanged: {
+            root.currentSubTab = currentIndex
+            root.contentY = 0
+        }
+
+        Repeater {
+            model: root.tabs
+            delegate: SecondaryTabButton {
+                required property var modelData
+                buttonIcon: modelData.icon
+                buttonText: modelData.name
+            }
+        }
+    }
 
     ContentSection {
+        visible: root.currentSubTab === 0
         icon: "neurology"
         title: Translation.tr("AI")
 
@@ -25,6 +57,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "music_cast"
         title: Translation.tr("Music Recognition")
 
@@ -53,6 +86,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "cell_tower"
         title: Translation.tr("Networking")
 
@@ -68,6 +102,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 2
         icon: "memory"
         title: Translation.tr("Resources")
 
@@ -86,6 +121,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 2
         icon: "file_open"
         title: Translation.tr("Save paths")
 
@@ -111,6 +147,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 0
         icon: "search"
         title: Translation.tr("Search")
 
@@ -204,6 +241,7 @@ ContentPage {
     }
 
     ContentSection {
+        visible: root.currentSubTab === 1
         icon: "weather_mix"
         title: Translation.tr("Weather")
         ConfigSwitch {
