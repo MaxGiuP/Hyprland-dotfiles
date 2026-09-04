@@ -869,7 +869,8 @@ MouseArea {
                                 Layout.fillWidth: true
                                 text: (Weather.data?.city ?? "")
                                     + ((Weather.data?.tempFeelsLike ?? "") !== ""
-                                        ? " • Feels like " + Weather.data.tempFeelsLike : "")
+                                        ? " • " + Translation.tr("Feels like %1").arg(Weather.data.tempFeelsLike)
+                                        : "")
                                 font.pixelSize: Appearance.font.pixelSize.normal
                                 color: Appearance.colors.colSubtext
                                 visible: (Weather.data?.city ?? "") !== ""
