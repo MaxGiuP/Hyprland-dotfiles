@@ -22,10 +22,14 @@ Singleton {
         id: wrapper
         required property int notificationId // Could just be `id` but it conflicts with the default prop in QtObject
         property Notification notification
-        property list<var> actions: notification?.actions.map((action) => ({
-            "identifier": action.identifier,
-            "text": action.text,
-        })) ?? []
+        // The freedesktop "default" action belongs to the notification card
+        // itself. It must not be rendered as a separate (often blank) button.
+        property list<var> actions: notification?.actions
+            .filter((action) => action.identifier !== "default")
+            .map((action) => ({
+                "identifier": action.identifier,
+                "text": action.text,
+            })) ?? []
         property bool popup: false
         property bool isTransient: notification?.hints.transient ?? false
         property string desktopEntry: notification?.desktopEntry
@@ -479,20 +483,33 @@ Singleton {
         });
     }
 
+    function trackedNotificationById(id) {
+        // The wrapper is the authoritative association. Reconstructing the ID
+        // with the current persistence offset can race the asynchronous history
+        // load or a shell generation change.
+        const wrapper = root.getNotificationById(id);
+        const notification = wrapper?.notification ?? null;
+        return (notification?.tracked ?? false) ? notification : null;
+    }
+
+    function liveActionForNotification(id, identifier) {
+        const notification = root.trackedNotificationById(id);
+        if (!notification)
+            return null;
+
+        return notification.actions.find((action) => action.identifier === identifier) ?? null;
+    }
+
     function attemptInvokeAction(id, notifIdentifier) {
-        console.log("[Notifications] Attempting to invoke action with identifier: " + notifIdentifier + " for notification ID: " + id);
-        const notifServerIndex = notifServer.trackedNotifications.values.findIndex((notif) => notif.id + root.idOffset === id);
-        console.log("Notification server index: " + notifServerIndex);
-        if (notifServerIndex !== -1) {
-            const notifServerNotif = notifServer.trackedNotifications.values[notifServerIndex];
-            const action = notifServerNotif.actions.find((action) => action.identifier === notifIdentifier);
-            // console.log("Action found: " + JSON.stringify(action));
-            action.invoke()
-        } 
-        else {
-            console.log("Notification not found in server: " + id)
+        const action = root.liveActionForNotification(id, notifIdentifier);
+        if (!action) {
+            console.log("[Notifications] Action " + notifIdentifier + " is no longer available for notification " + id);
+            return false;
         }
-        root.discardNotification(id);
+
+        console.log("[Notifications] Invoking action " + notifIdentifier + " for notification " + id);
+        action.invoke();
+        return true;
     }
 
     function getNotificationById(id) {
@@ -539,6 +556,35 @@ Singleton {
         const entry = resolveDesktopEntryForNotif(notif);
         if (!entry) return false;
         return AppLaunch.launchDesktopEntry(entry);
+    }
+
+    function canActivateNotification(id) {
+        return root.liveActionForNotification(id, "default") !== null
+            || root.canOpenNotificationSourceApp(id);
+    }
+
+    function activateNotification(id) {
+        // The sender owns the routing information for a notification. Invoking
+        // its default action lets it restore the exact conversation, document,
+        // browser tab, or terminal window that produced it. Kitty, for example,
+        // maps this notification ID back to its originating tab and split.
+        const defaultAction = root.liveActionForNotification(id, "default");
+        if (defaultAction) {
+            // Release the layer-shell focus grab before asking the application
+            // to activate its window.
+            GlobalStates.closeSidebarRight();
+            console.log("[Notifications] Invoking default action for notification " + id);
+            defaultAction.invoke();
+            return true;
+        }
+
+        // Persisted notifications no longer have a live sender/action. Opening
+        // the desktop entry is intentionally only the last-resort fallback.
+        if (!root.canOpenNotificationSourceApp(id))
+            return false;
+
+        GlobalStates.closeSidebarRight();
+        return root.openNotificationSourceApp(id);
     }
 
     function triggerListChange() {

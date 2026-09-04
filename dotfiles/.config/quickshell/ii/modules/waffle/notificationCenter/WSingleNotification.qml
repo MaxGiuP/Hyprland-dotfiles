@@ -33,10 +33,11 @@ MouseArea {
     }
 
     function handleLeftClick() {
-        if (!Notifications.openNotificationSourceApp(root.notification?.notificationId)) return;
-        GlobalStates.sidebarRightOpen = false;
-        if (root.notification?.popup)
-            Notifications.timeoutNotification(root.notification.notificationId);
+        const notificationId = root.notification?.notificationId;
+        const wasPopup = root.notification?.popup ?? false;
+        if (!Notifications.activateNotification(notificationId)) return;
+        if (wasPopup)
+            Notifications.timeoutNotification(notificationId);
     }
 
     function dismiss() {
@@ -224,6 +225,7 @@ MouseArea {
                 verticalPadding: 16
                 horizontalPadding: 12
                 text: modelData.text
+                onClicked: Notifications.attemptInvokeAction(root.notification.notificationId, modelData.identifier)
                 implicitHeight: actionButtonText.implicitHeight + verticalPadding * 2
                 contentItem: WText {
                     id: actionButtonText

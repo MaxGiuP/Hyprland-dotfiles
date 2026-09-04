@@ -49,11 +49,12 @@ Item { // Notification item area
     implicitHeight: background.implicitHeight
 
     function handleLeftClick() {
-        if (!Notifications.openNotificationSourceApp(notificationObject.notificationId)) return;
+        const notificationId = notificationObject.notificationId;
+        const wasPopup = notificationObject.popup;
+        if (!Notifications.activateNotification(notificationId)) return;
 
-        GlobalStates.sidebarRightOpen = false;
-        if (notificationObject.popup)
-            Notifications.timeoutNotification(notificationObject.notificationId);
+        if (wasPopup)
+            Notifications.timeoutNotification(notificationId);
     }
 
     function destroyWithAnimation(left = false) {
@@ -277,7 +278,7 @@ Item { // Notification item area
 
                             NotificationActionButton {
                                 id: openAppButton
-                                visible: Notifications.canOpenNotificationSourceApp(notificationObject.notificationId)
+                                visible: Notifications.canActivateNotification(notificationObject.notificationId)
                                 Layout.fillWidth: true
                                 buttonText: Translation.tr("Open App")
                                 urgency: notificationObject.urgency
@@ -286,8 +287,7 @@ Item { // Notification item area
                                     : (contentItem.implicitWidth + leftPadding + rightPadding)
 
                                 onClicked: {
-                                    if (Notifications.openNotificationSourceApp(notificationObject.notificationId)) {
-                                        GlobalStates.sidebarRightOpen = false
+                                    if (Notifications.activateNotification(notificationObject.notificationId)) {
                                         root.destroyWithAnimation()
                                     }
                                 }

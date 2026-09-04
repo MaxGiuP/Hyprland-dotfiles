@@ -58,12 +58,14 @@ MouseArea { // Notification group area
 
         const latestNotif = root.notifications[root.notificationCount - 1];
         if (!latestNotif) return;
-        if (!Notifications.openNotificationSourceApp(latestNotif.notificationId)) return;
+        const popupNotificationIds = root.popup
+            ? root.notifications.map((notif) => notif.notificationId)
+            : [];
+        if (!Notifications.activateNotification(latestNotif.notificationId)) return;
 
-        GlobalStates.sidebarRightOpen = false;
-        if (root.popup) {
-            root.notifications.forEach((notif) => {
-                Notifications.timeoutNotification(notif.notificationId);
+        if (popupNotificationIds.length > 0) {
+            popupNotificationIds.forEach((notificationId) => {
+                Notifications.timeoutNotification(notificationId);
             });
         }
     }
