@@ -9,7 +9,6 @@ import qs.modules.common.functions
 import qs.modules.common.panels.lock
 import Qt5Compat.GraphicalEffects
 import Quickshell
-import Quickshell.Io
 import Quickshell.Wayland
 import Quickshell.Services.Mpris
 
@@ -73,6 +72,7 @@ MouseArea {
     readonly property bool showWallpaperFallback: root.useWallpaperFallback
     property bool blurCapturePending: false
     property bool blurWasActive: false
+    property int screenshotTextureRefreshAttempts: 0
 
     function showCaptureTransitionVeil() {
         captureTransitionVeilHideTimer.stop();
@@ -96,7 +96,9 @@ MouseArea {
         }
 
         root.blurCapturePending = false;
+        root.screenshotTextureRefreshAttempts = 0;
         screenshotView.captureFrame();
+        screenshotTextureRefreshTimer.restart();
     }
 
     function detachScreenCaptureNow() {
@@ -108,6 +110,8 @@ MouseArea {
     function suspendScreenCapture() {
         releaseCaptureDetachTimer.stop();
         resumeCaptureTimer.stop();
+        screenshotTextureRefreshTimer.stop();
+        root.screenshotTextureRefreshAttempts = 0;
         root.screenCaptureSuspended = true;
         root.blurCapturePending = false;
     }
@@ -138,40 +142,16 @@ MouseArea {
     }
 
     // ─── GPU (nvidia-smi) ────────────────────────────────────────────────────
-    property bool gpuAvailable: true
-    property int  gpuUtil: 0
-    property int  vramUsedMB: 0
-    property int  vramTotalMB: 0
-
-    Timer {
-        interval: 2000; running: true; repeat: true
-        onTriggered: { gpuQuery.buf = ""; gpuQuery.running = false; gpuQuery.running = true; }
-    }
-    Process {
-        id: gpuQuery
-        environment: ({ LANG: "C", LC_ALL: "C" })
-        command: ["nvidia-smi", "-i", "0", "-q", "-d", "UTILIZATION,MEMORY"]
-        property string buf: ""
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: data => gpuQuery.buf += data + "\n"
-        }
-        onExited: code => {
-            const t = gpuQuery.buf; gpuQuery.buf = ""
-            if (code !== 0) { root.gpuAvailable = false; return }
-            const um = t.match(/Gpu\s*:\s*(\d+)\s*%/i)
-            if (um) root.gpuUtil = parseInt(um[1]) || 0
-            const mm = t.match(/FB Memory Usage[\s\S]*?Total\s*:\s*(\d+)\s*MiB[\s\S]*?Used\s*:\s*(\d+)\s*MiB/i)
-            if (mm) { root.vramTotalMB = parseInt(mm[1]) || 0; root.vramUsedMB = parseInt(mm[2]) || 0 }
-        }
-    }
+    // LockSurface is instantiated once per output. Reuse the shell-wide
+    // collector so locking does not multiply GPU subprocesses.
+    readonly property bool gpuAvailable: SystemMetrics.gpuAvailable
+    readonly property int gpuUtil: SystemMetrics.gpuUtil
+    readonly property int vramUsedMB: SystemMetrics.vramUsedMB
+    readonly property int vramTotalMB: SystemMetrics.vramTotalMB
 
     // ─── Network (/proc/net/dev) ──────────────────────────────────────────────
-    property string netIface: ""
-    property real   downMbps: 0
-    property real   upMbps: 0
-    property var    _netLastMap: ({})
-    property double _netLastT: 0
+    readonly property real downMbps: SystemMetrics.downMbps
+    readonly property real upMbps: SystemMetrics.upMbps
 
     function formatNetSpeed(mbps) {
         if (mbps >= 1000) return (mbps / 1000).toFixed(1) + " Gbps"
@@ -261,40 +241,6 @@ MouseArea {
         }
     }
 
-    Timer { interval: 1000; running: true; repeat: true; onTriggered: netView.reload() }
-    FileView {
-        id: netView
-        path: "/proc/net/dev"
-        onLoaded: {
-            const now = Date.now()
-            const lines = (netView.text() || "").trim().split("\n").slice(2)
-            let map = {}
-            for (let i = 0; i < lines.length; i++) {
-                const p = lines[i].split(":")
-                if (p.length < 2) continue
-                const iface = p[0].trim()
-                const f = p[1].trim().split(/\s+/)
-                if (f.length < 10) continue
-                map[iface] = { rx: Number(f[0]), tx: Number(f[8]) }
-            }
-            if (!root.netIface || !(root.netIface in map)) {
-                let best = "", bestSum = -1
-                for (const k in map) {
-                    if (k === "lo") continue
-                    const s = (map[k].rx || 0) + (map[k].tx || 0)
-                    if (s > bestSum) { best = k; bestSum = s }
-                }
-                if (best) root.netIface = best
-            }
-            if (root.netIface && (root.netIface in map) && root._netLastT > 0 && root._netLastMap[root.netIface]) {
-                const dt = Math.max(1e-3, (now - root._netLastT) / 1000)
-                root.downMbps = Math.max(0, (map[root.netIface].rx - root._netLastMap[root.netIface].rx) * 8) / 1e6 / dt
-                root.upMbps   = Math.max(0, (map[root.netIface].tx - root._netLastMap[root.netIface].tx) * 8) / 1e6 / dt
-            }
-            root._netLastMap = map; root._netLastT = now
-        }
-    }
-
     Component.onCompleted: {
         forceFieldFocus();
         startIntroAnimation();
@@ -339,6 +285,23 @@ MouseArea {
         onTriggered: {
             if (root.screenCaptureEnabled)
                 root.refreshBlurCapture();
+        }
+    }
+
+    Timer {
+        id: screenshotTextureRefreshTimer
+        // ScreencopyView exposes readiness for the first frame but not a signal
+        // for later one-shot frames. Refresh this frozen texture a few times
+        // after an explicit capture instead of rendering it continuously.
+        interval: 100
+        repeat: false
+        onTriggered: {
+            if (!root.screenCaptureEnabled)
+                return;
+            screenshotTexture.scheduleUpdate();
+            root.screenshotTextureRefreshAttempts++;
+            if (root.screenshotTextureRefreshAttempts < 8)
+                screenshotTextureRefreshTimer.restart();
         }
     }
 
@@ -462,7 +425,7 @@ MouseArea {
         Image {
             id: wallpaperImage
             anchors.fill: parent
-            source: root.wallpaperPath
+            source: root.showWallpaperFallback ? root.wallpaperPath : ""
             fillMode: Image.PreserveAspectCrop
             cache: false
             asynchronous: true
@@ -470,8 +433,11 @@ MouseArea {
             sourceSize.height: root.safeSurfaceSize.height
             visible: root.showWallpaperFallback
             onStatusChanged: {
-                if (status === Image.Ready && !root.screenCaptureEnabled && !root.releasePrepared)
-                    root.hideCaptureTransitionVeil(80);
+                if (status === Image.Ready) {
+                    Qt.callLater(() => wallpaperTexture.scheduleUpdate());
+                    if (!root.screenCaptureEnabled && !root.releasePrepared)
+                        root.hideCaptureTransitionVeil(80);
+                }
             }
         }
 
@@ -488,6 +454,9 @@ MouseArea {
             paintCursor: false
             visible: root.screenCaptureEnabled
             onHasContentChanged: {
+                if (hasContent) {
+                    screenshotTexture.scheduleUpdate();
+                }
                 if (hasContent && root.screenCaptureEnabled && !root.releasePrepared)
                     root.hideCaptureTransitionVeil(80);
             }
@@ -500,7 +469,9 @@ MouseArea {
             width: screenshotView.width
             height: screenshotView.height
             sourceItem: root.screenCaptureEnabled ? screenshotView : null
-            live: root.screenCaptureEnabled
+            // Capture updates are scheduled explicitly above; do not render a
+            // monitor-sized texture continuously for a static lock background.
+            live: false
             hideSource: true
             visible: false
         }
@@ -520,16 +491,19 @@ MouseArea {
         ShaderEffectSource {
             id: wallpaperTexture
             anchors.fill: wallpaperImage
-            sourceItem: wallpaperImage
-            live: true
+            sourceItem: root.showWallpaperFallback ? wallpaperImage : null
+            live: false
             hideSource: true
             visible: false
+            onSourceItemChanged: scheduleUpdate()
+            onWidthChanged: scheduleUpdate()
+            onHeightChanged: scheduleUpdate()
         }
 
         GaussianBlur {
             anchors.fill: parent
             visible: root.showWallpaperFallback && wallpaperImage.status === Image.Ready
-            source: wallpaperTexture
+            source: root.showWallpaperFallback ? wallpaperTexture : null
             radius: screenshotLayer.blurRadius
             samples: Math.max(1, Math.ceil(radius) * 2 + 1)
             transparentBorder: true
@@ -1124,6 +1098,7 @@ MouseArea {
                         MaterialSymbol { text: "network_check"; iconSize: 14; fill: 1; color: Appearance.colors.colSubtext }
                         StyledText { text: "Net"; font.pixelSize: Appearance.font.pixelSize.small; color: Appearance.colors.colSubtext }
                         Item {
+                            id: networkGraph
                             Layout.alignment: Qt.AlignVCenter
                             implicitWidth: 192
                             implicitHeight: 16
@@ -1159,11 +1134,13 @@ MouseArea {
                                 netCanvas.requestPaint()
                             }
 
-                            Timer {
-                                interval: 1000
-                                running: true
-                                repeat: true
-                                onTriggered: parent.pushSample()
+                            Component.onCompleted: pushSample()
+
+                            Connections {
+                                target: SystemMetrics
+                                function onNetworkSample() {
+                                    networkGraph.pushSample();
+                                }
                             }
 
                             Canvas {

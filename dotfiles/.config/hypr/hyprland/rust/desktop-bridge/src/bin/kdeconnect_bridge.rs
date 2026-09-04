@@ -18,8 +18,14 @@ const NOTIFICATIONS_IFACE: &str = "org.kde.kdeconnect.device.notifications";
 const NOTIFICATION_IFACE: &str = "org.kde.kdeconnect.device.notifications.notification";
 const CONVERSATIONS_IFACE: &str = "org.kde.kdeconnect.device.conversations";
 const BATTERY_IFACE: &str = "org.kde.kdeconnect.device.battery";
+const PROPERTIES_IFACE: &str = "org.freedesktop.DBus.Properties";
+const PUBLISH_INTERVAL: Duration = Duration::from_secs(15);
+const CAPABILITIES_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60);
+const COMMANDS_REFRESH_INTERVAL: Duration = Duration::from_secs(5 * 60);
+const MOUNT_REFRESH_INTERVAL: Duration = Duration::from_secs(60);
+const SMS_REMOTE_REFRESH_INTERVAL: Duration = Duration::from_secs(2 * 60);
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Capabilities {
     ping: bool,
@@ -43,7 +49,7 @@ struct Notification {
     icon_path: String,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SmsConversation {
     contact: String,
@@ -54,7 +60,7 @@ struct SmsConversation {
     sent: bool,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Clone, Debug, Default, Serialize)]
 struct RemoteCommand {
     id: String,
     name: String,
@@ -82,6 +88,25 @@ struct Payload {
     error: String,
 }
 
+#[derive(Debug, Default)]
+struct DeviceCache {
+    capabilities: Capabilities,
+    capabilities_updated: Option<Instant>,
+    remote_commands: Vec<RemoteCommand>,
+    commands_updated: Option<Instant>,
+    mount_point: String,
+    mount_updated: Option<Instant>,
+    sms_conversations: Vec<SmsConversation>,
+    sms_refresh_requested: Option<Instant>,
+    was_available: bool,
+}
+
+#[derive(Debug, Default)]
+struct Bridge {
+    connection: Option<Connection>,
+    devices: HashMap<String, DeviceCache>,
+}
+
 fn runtime_state_path() -> PathBuf {
     let runtime = env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
@@ -97,18 +122,14 @@ fn proxy<'a>(connection: &'a Connection, path: &'a str, interface: &'a str) -> R
     Proxy::new(connection, SERVICE, path, interface).context("create KDE Connect D-Bus proxy")
 }
 
-fn capabilities(connection: &Connection, id: &str) -> Capabilities {
-    let loaded = proxy(connection, &device_path(id), DEVICE_IFACE)
-        .and_then(|p| {
-            p.call::<_, _, Vec<String>>("loadedPlugins", &())
-                .map_err(Into::into)
-        })
-        .unwrap_or_default()
+fn capabilities(connection: &Connection, id: &str) -> Result<Capabilities> {
+    let loaded = proxy(connection, &device_path(id), DEVICE_IFACE)?
+        .call::<_, _, Vec<String>>("loadedPlugins", &())?
         .into_iter()
         .collect::<HashSet<_>>();
 
     let has = |plugin: &str| loaded.contains(plugin);
-    Capabilities {
+    Ok(Capabilities {
         ping: has("kdeconnect_ping"),
         ring: has("kdeconnect_findmyphone"),
         clipboard: has("kdeconnect_clipboard"),
@@ -118,13 +139,26 @@ fn capabilities(connection: &Connection, id: &str) -> Capabilities {
         sms: has("kdeconnect_sms"),
         mpris: has("kdeconnect_mprisremote"),
         remote_commands: has("kdeconnect_runcommand"),
-    }
+    })
 }
 
-fn string_property(connection: &Connection, path: &str, interface: &str, name: &str) -> String {
-    proxy(connection, path, interface)
-        .and_then(|p| p.get_property::<String>(name).map_err(Into::into))
-        .unwrap_or_default()
+fn all_properties(
+    connection: &Connection,
+    path: &str,
+    interface: &str,
+) -> Result<HashMap<String, OwnedValue>> {
+    proxy(connection, path, PROPERTIES_IFACE)?
+        .call("GetAll", &(interface,))
+        .context("read D-Bus properties")
+}
+
+fn take_property<T>(properties: &mut HashMap<String, OwnedValue>, name: &str) -> Option<T>
+where
+    T: TryFrom<OwnedValue>,
+{
+    properties
+        .remove(name)
+        .and_then(|value| T::try_from(value).ok())
 }
 
 fn notifications(connection: &Connection, id: &str) -> Vec<Notification> {
@@ -140,12 +174,13 @@ fn notifications(connection: &Connection, id: &str) -> Vec<Notification> {
         .take(8)
         .filter_map(|notification_id| {
             let path = format!("{root}/{notification_id}");
+            let mut properties = all_properties(connection, &path, NOTIFICATION_IFACE).ok()?;
             let item = Notification {
-                app_name: string_property(connection, &path, NOTIFICATION_IFACE, "appName"),
-                title: string_property(connection, &path, NOTIFICATION_IFACE, "title"),
-                text: string_property(connection, &path, NOTIFICATION_IFACE, "text"),
-                ticker: string_property(connection, &path, NOTIFICATION_IFACE, "ticker"),
-                icon_path: string_property(connection, &path, NOTIFICATION_IFACE, "iconPath"),
+                app_name: take_property(&mut properties, "appName").unwrap_or_default(),
+                title: take_property(&mut properties, "title").unwrap_or_default(),
+                text: take_property(&mut properties, "text").unwrap_or_default(),
+                ticker: take_property(&mut properties, "ticker").unwrap_or_default(),
+                icon_path: take_property(&mut properties, "iconPath").unwrap_or_default(),
             };
             (!item.app_name.is_empty() || !item.ticker.is_empty()).then_some(item)
         })
@@ -158,16 +193,18 @@ fn value_at(fields: &[zbus::zvariant::Value<'_>], index: usize) -> Option<OwnedV
         .and_then(|value| OwnedValue::try_from(value).ok())
 }
 
-fn sms_conversations(connection: &Connection, id: &str) -> Vec<SmsConversation> {
+fn request_sms_refresh(connection: &Connection, id: &str) {
     let path = device_path(id);
     let Ok(proxy) = proxy(connection, &path, CONVERSATIONS_IFACE) else {
-        return Vec::new();
+        return;
     };
-
     let _ = proxy.call_noreply("requestAllConversationThreads", &());
-    let values = proxy
-        .call::<_, _, Vec<OwnedValue>>("activeConversations", &())
-        .unwrap_or_default();
+}
+
+fn sms_conversations(connection: &Connection, id: &str) -> Result<Vec<SmsConversation>> {
+    let path = device_path(id);
+    let values = proxy(connection, &path, CONVERSATIONS_IFACE)?
+        .call::<_, _, Vec<OwnedValue>>("activeConversations", &())?;
 
     let mut output = values
         .into_iter()
@@ -195,10 +232,10 @@ fn sms_conversations(connection: &Connection, id: &str) -> Vec<SmsConversation> 
         .collect::<Vec<_>>();
     output.sort_by_key(|item| std::cmp::Reverse(item.timestamp));
     output.truncate(20);
-    output
+    Ok(output)
 }
 
-fn command_output(program: &str, args: &[&str]) -> String {
+fn command_output(program: &str, args: &[&str]) -> Option<String> {
     let Ok(mut child) = Command::new(program)
         .args(args)
         .stdin(Stdio::null())
@@ -206,7 +243,7 @@ fn command_output(program: &str, args: &[&str]) -> String {
         .stderr(Stdio::null())
         .spawn()
     else {
-        return String::new();
+        return None;
     };
 
     // These optional CLI lookups may wait on the phone. Keep them tightly
@@ -218,53 +255,58 @@ fn command_output(program: &str, args: &[&str]) -> String {
                 return child
                     .wait_with_output()
                     .ok()
-                    .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-                    .unwrap_or_default();
+                    .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string());
             }
-            Ok(Some(_)) | Err(_) => return String::new(),
+            Ok(Some(_)) | Err(_) => return None,
             Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(20)),
             Ok(None) => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return String::new();
+                return None;
             }
         }
     }
 }
 
-fn remote_commands(id: &str, enabled: bool, available: bool) -> Vec<RemoteCommand> {
-    if !enabled || !available {
-        return Vec::new();
-    }
-    command_output("kdeconnect-cli", &["--device", id, "--list-commands"])
-        .lines()
-        .filter_map(|line| {
-            let text = line.trim();
-            if text.is_empty() {
-                return None;
-            }
-            let (id, name) = text.split_once(':').unwrap_or((text, text));
-            Some(RemoteCommand {
-                id: id.trim().to_string(),
-                name: name.trim().to_string(),
+fn remote_commands(id: &str) -> Option<Vec<RemoteCommand>> {
+    Some(
+        command_output("kdeconnect-cli", &["--device", id, "--list-commands"])?
+            .lines()
+            .filter_map(|line| {
+                let text = line.trim();
+                if text.is_empty() {
+                    return None;
+                }
+                let (id, name) = text.split_once(':').unwrap_or((text, text));
+                Some(RemoteCommand {
+                    id: id.trim().to_string(),
+                    name: name.trim().to_string(),
+                })
             })
-        })
-        .take(12)
-        .collect()
+            .take(12)
+            .collect(),
+    )
 }
 
 fn battery(connection: &Connection, id: &str) -> (i32, bool) {
     let path = format!("{}/battery", device_path(id));
-    let Ok(proxy) = proxy(connection, &path, BATTERY_IFACE) else {
+    let Ok(mut properties) = all_properties(connection, &path, BATTERY_IFACE) else {
         return (-1, false);
     };
     (
-        proxy.get_property::<i32>("charge").unwrap_or(-1),
-        proxy.get_property::<bool>("isCharging").unwrap_or(false),
+        take_property(&mut properties, "charge").unwrap_or(-1),
+        take_property(&mut properties, "isCharging").unwrap_or(false),
     )
 }
 
-fn collect_payload(connection: &Connection) -> Result<Payload> {
+fn refresh_due(last: Option<Instant>, interval: Duration, force: bool) -> bool {
+    force || last.is_none_or(|last| last.elapsed() >= interval)
+}
+
+fn collect_payload(
+    connection: &Connection,
+    device_cache: &mut HashMap<String, DeviceCache>,
+) -> Result<Payload> {
     let daemon = proxy(connection, ROOT_PATH, DAEMON_IFACE)?;
     let paired: HashMap<String, String> = daemon.call("deviceNames", &(false, true))?;
     let reachable = daemon
@@ -275,23 +317,78 @@ fn collect_payload(connection: &Connection) -> Result<Payload> {
     let mut paired = paired.into_iter().collect::<Vec<_>>();
     paired.sort_by(|a, b| a.1.to_lowercase().cmp(&b.1.to_lowercase()));
     let mut devices = Vec::with_capacity(paired.len());
+    let paired_ids = paired
+        .iter()
+        .map(|(id, _)| id.clone())
+        .collect::<HashSet<_>>();
+    device_cache.retain(|id, _| paired_ids.contains(id));
 
     for (id, name) in paired {
         let available = reachable.contains(&id);
-        let capabilities = capabilities(connection, &id);
+        let cached = device_cache.entry(id.clone()).or_default();
+        let became_available = available && !cached.was_available;
+
+        if refresh_due(
+            cached.capabilities_updated,
+            CAPABILITIES_REFRESH_INTERVAL,
+            became_available,
+        ) {
+            if let Ok(next) = capabilities(connection, &id) {
+                cached.capabilities = next;
+                cached.capabilities_updated = Some(Instant::now());
+            }
+        }
+        let capabilities = cached.capabilities.clone();
         let notifications = if available {
             notifications(connection, &id)
         } else {
             Vec::new()
         };
         let conversations = if available && capabilities.sms {
-            sms_conversations(connection, &id)
+            if refresh_due(
+                cached.sms_refresh_requested,
+                SMS_REMOTE_REFRESH_INTERVAL,
+                became_available,
+            ) {
+                request_sms_refresh(connection, &id);
+                cached.sms_refresh_requested = Some(Instant::now());
+            }
+            if let Ok(next) = sms_conversations(connection, &id) {
+                cached.sms_conversations = next;
+            }
+            cached.sms_conversations.clone()
         } else {
             Vec::new()
         };
-        let commands = remote_commands(&id, capabilities.remote_commands, available);
+        let commands = if available && capabilities.remote_commands {
+            if refresh_due(
+                cached.commands_updated,
+                COMMANDS_REFRESH_INTERVAL,
+                became_available,
+            ) {
+                cached.commands_updated = Some(Instant::now());
+                if let Some(next) = remote_commands(&id) {
+                    cached.remote_commands = next;
+                }
+            }
+            cached.remote_commands.clone()
+        } else {
+            Vec::new()
+        };
         let mount_point = if available && capabilities.storage {
-            command_output("kdeconnect-cli", &["--device", &id, "--get-mount-point"])
+            if refresh_due(
+                cached.mount_updated,
+                MOUNT_REFRESH_INTERVAL,
+                became_available,
+            ) {
+                cached.mount_updated = Some(Instant::now());
+                if let Some(next) =
+                    command_output("kdeconnect-cli", &["--device", &id, "--get-mount-point"])
+                {
+                    cached.mount_point = next;
+                }
+            }
+            cached.mount_point.clone()
         } else {
             String::new()
         };
@@ -313,6 +410,7 @@ fn collect_payload(connection: &Connection) -> Result<Payload> {
             sms_conversations: conversations,
             capabilities,
         });
+        cached.was_available = available;
     }
 
     Ok(Payload {
@@ -321,19 +419,42 @@ fn collect_payload(connection: &Connection) -> Result<Payload> {
     })
 }
 
-fn payload_json() -> String {
-    let payload = ConnectionBuilder::session()
-        .map(|builder| builder.method_timeout(Duration::from_secs(2)))
-        .and_then(ConnectionBuilder::build)
-        .context("connect to session D-Bus")
-        .and_then(|connection| collect_payload(&connection))
-        .unwrap_or_else(|error| Payload {
-            devices: Vec::new(),
-            error: format!("{error:#}"),
+impl Bridge {
+    fn connect(&mut self) -> Result<()> {
+        if self.connection.is_none() {
+            self.connection = Some(
+                ConnectionBuilder::session()
+                    .map(|builder| builder.method_timeout(Duration::from_secs(2)))
+                    .and_then(ConnectionBuilder::build)
+                    .context("connect to session D-Bus")?,
+            );
+        }
+        Ok(())
+    }
+
+    fn payload_json(&mut self) -> String {
+        let payload = self.connect().and_then(|()| {
+            let connection = self
+                .connection
+                .as_ref()
+                .context("session D-Bus unavailable")?;
+            collect_payload(connection, &mut self.devices)
         });
-    serde_json::to_string(&payload).unwrap_or_else(|error| {
-        format!(r#"{{"devices":[],"error":"serialize KDE Connect state: {error}"}}"#)
-    })
+        let payload = payload.unwrap_or_else(|error| {
+            // A disconnected session bus connection cannot recover. Rebuild it
+            // on the next publish cycle instead of reconnecting every 15 seconds
+            // during healthy operation.
+            self.connection = None;
+            self.devices.clear();
+            Payload {
+                devices: Vec::new(),
+                error: format!("{error:#}"),
+            }
+        });
+        serde_json::to_string(&payload).unwrap_or_else(|error| {
+            format!(r#"{{"devices":[],"error":"serialize KDE Connect state: {error}"}}"#)
+        })
+    }
 }
 
 fn write_if_changed(path: &Path, previous: &mut String, next: String) -> Result<()> {
@@ -346,18 +467,43 @@ fn write_if_changed(path: &Path, previous: &mut String, next: String) -> Result<
 }
 
 fn main() -> Result<()> {
+    let mut bridge = Bridge::default();
     let once = env::args().any(|arg| arg == "--once");
     if once {
-        println!("{}", payload_json());
+        println!("{}", bridge.payload_json());
         return Ok(());
     }
 
     let path = runtime_state_path();
     let mut previous = String::new();
     loop {
-        if let Err(error) = write_if_changed(&path, &mut previous, payload_json()) {
+        if let Err(error) = write_if_changed(&path, &mut previous, bridge.payload_json()) {
             eprintln!("[kdeconnect-bridge] {error:#}");
         }
-        thread::sleep(Duration::from_secs(15));
+        thread::sleep(PUBLISH_INTERVAL);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refreshes_empty_and_forced_cache_entries() {
+        assert!(refresh_due(None, Duration::from_secs(60), false));
+        assert!(refresh_due(
+            Some(Instant::now()),
+            Duration::from_secs(60),
+            true
+        ));
+    }
+
+    #[test]
+    fn keeps_recent_cache_entries() {
+        assert!(!refresh_due(
+            Some(Instant::now()),
+            Duration::from_secs(60),
+            false
+        ));
     }
 }

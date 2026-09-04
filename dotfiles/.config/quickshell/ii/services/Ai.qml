@@ -3,6 +3,7 @@ pragma ComponentBehavior: Bound
 
 import qs.modules.common.functions as CF
 import qs.modules.common
+import qs
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
@@ -338,12 +339,21 @@ Singleton {
     property list<string> dynamicOllamaModelIds: []
     property bool ollamaInstalled: false
     property bool ollamaRunning: false
+    property bool ollamaStateRefreshPending: false
+    property bool ollamaModelsRefreshPending: false
+    property bool onlineModelsRefreshPending: false
     property list<string> localOllamaModels: []
     property list<string> discoveredGeminiModelIds: []
     property var discoveredOllamaRecommendations: []
     property list<string> recentGeminiArrivals: []
     property list<string> recentOllamaArrivals: []
     property string preferredFreeGeminiModelId: ""
+    readonly property bool aiPolicyEnabled: (Config.options?.policies?.ai ?? 1) !== 0
+    readonly property bool aiUiActive: root.aiPolicyEnabled
+        && (Config.options?.panelFamily ?? "ii") === "ii"
+        && GlobalStates.sidebarLeftOpen
+        && (Persistent.states?.sidebar?.leftTab ?? "ai") === "ai"
+    readonly property bool currentModelUsesOllama: `${root.models[root.currentModelId]?.endpoint ?? ""}`.includes("localhost")
     property string ollamaPullRuntimeDir: "/tmp/quickshell/ai"
     property string ollamaPullPidFilePath: `${root.ollamaPullRuntimeDir}/ollama-pull.pid`
     property list<string> ollamaInstallQueue: []
@@ -358,6 +368,9 @@ Singleton {
     readonly property bool ollamaInstallBusy: ollamaPullProc.running || root.ollamaInstallQueue.length > 0
     readonly property bool ollamaRemoveBusy: ollamaRemoveProc.running || root.ollamaRemoveQueue.length > 0
     readonly property bool ollamaMutationBusy: root.ollamaInstallBusy || root.ollamaRemoveBusy
+    readonly property bool ollamaPollingNeeded: root.aiUiActive
+        || root.ollamaMutationBusy
+        || (root.currentModelUsesOllama && requester.running)
     readonly property bool ollamaInstallActive: root.ollamaInstallingModelId.length > 0 && ollamaPullProc.running
     readonly property var storeOllamaRecommendations: root.discoveredOllamaRecommendations.filter(entry => String(entry?.install_id ?? "").trim().length > 0)
     readonly property var availableOllamaRecommendations: root.discoveredOllamaRecommendations.filter(entry => root.shouldSuggestOllamaRecommendation(entry))
@@ -393,8 +406,6 @@ Singleton {
 
     Component.onCompleted: {
         setModel(currentModelId, false, false); // Do necessary setup for model
-        refreshOllamaStatus();
-        refreshOnlineModels();
     }
 
     function guessModelLogo(model) {
@@ -761,13 +772,34 @@ Singleton {
 
     function refreshOnlineModels() {
         if ((Config.options?.policies?.ai ?? 1) === 2) return;
-        discoverOnlineModels.running = false;
+        if (discoverOnlineModels.running) {
+            root.onlineModelsRefreshPending = true;
+            return;
+        }
+        root.onlineModelsRefreshPending = false;
         discoverOnlineModels.running = true;
+    }
+
+    function refreshOllamaRuntime() {
+        if (checkOllamaRunningProc.running) {
+            root.ollamaStateRefreshPending = true;
+            return;
+        }
+        root.ollamaStateRefreshPending = false;
+        checkOllamaRunningProc.running = true;
+    }
+
+    function refreshOllamaModels() {
+        if (getOllamaModels.running) {
+            root.ollamaModelsRefreshPending = true;
+            return;
+        }
+        root.ollamaModelsRefreshPending = false;
+        getOllamaModels.running = true;
     }
 
     Process {
         id: getOllamaModels
-        running: true
         command: ["bash", "-c", `${Directories.scriptPath}/ai/show-installed-ollama-models.sh`.replace(/file:\/\//, "")]
         stdout: SplitParser {
             onRead: data => {
@@ -806,6 +838,8 @@ Singleton {
                 root.removeModels(root.dynamicOllamaModelIds);
                 root.dynamicOllamaModelIds = [];
             }
+            if (root.ollamaModelsRefreshPending)
+                Qt.callLater(root.refreshOllamaModels);
         }
     }
 
@@ -814,6 +848,8 @@ Singleton {
         command: ["bash", "-c", "curl -sS --max-time 1 http://localhost:11434/api/tags >/dev/null"]
         onExited: (exitCode, exitStatus) => {
             root.ollamaRunning = (exitCode === 0);
+            if (root.ollamaStateRefreshPending)
+                Qt.callLater(root.refreshOllamaRuntime);
         }
     }
 
@@ -821,32 +857,26 @@ Singleton {
         id: ollamaStateWatchTimer
         interval: 5000
         repeat: true
-        running: true
+        running: root.ollamaPollingNeeded
         triggeredOnStart: true
-        onTriggered: {
-            checkOllamaRunningProc.running = false;
-            checkOllamaRunningProc.running = true;
-        }
+        onTriggered: root.refreshOllamaRuntime()
     }
 
     Timer {
         id: ollamaModelsWatchTimer
         interval: 45000
         repeat: true
-        running: true
-        triggeredOnStart: false
-        onTriggered: {
-            getOllamaModels.running = false;
-            getOllamaModels.running = true;
-        }
+        running: root.ollamaPollingNeeded
+        triggeredOnStart: true
+        onTriggered: root.refreshOllamaModels()
     }
 
     Timer {
         id: onlineModelsWatchTimer
         interval: 900000
         repeat: true
-        running: true
-        triggeredOnStart: false
+        running: root.aiUiActive && (Config.options?.policies?.ai ?? 1) !== 2
+        triggeredOnStart: true
         onTriggered: root.refreshOnlineModels()
     }
 
@@ -854,7 +884,8 @@ Singleton {
         target: KeyringStorage
         function onLoadedChanged() {
             if (!KeyringStorage.loaded) return;
-            root.refreshOnlineModels();
+            if (root.aiUiActive)
+                root.refreshOnlineModels();
         }
     }
 
@@ -1017,6 +1048,10 @@ Singleton {
                 }
             }
         }
+        onExited: {
+            if (root.onlineModelsRefreshPending)
+                Qt.callLater(root.refreshOnlineModels);
+        }
     }
 
     Process {
@@ -1146,10 +1181,8 @@ Singleton {
     }
 
     function refreshOllamaStatus() {
-        checkOllamaRunningProc.running = false;
-        checkOllamaRunningProc.running = true;
-        getOllamaModels.running = false;
-        getOllamaModels.running = true;
+        root.refreshOllamaRuntime();
+        root.refreshOllamaModels();
     }
 
     function setTool(tool) {

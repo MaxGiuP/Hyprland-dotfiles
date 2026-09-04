@@ -21,9 +21,13 @@ struct XMonitor {
     y: i32,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 struct HyprMonitor {
     name: String,
+    width: i32,
+    height: i32,
+    scale: f64,
+    transform: i32,
     x: i32,
     y: i32,
 }
@@ -168,10 +172,20 @@ fn x_monitors() -> Vec<XMonitor> {
 }
 
 fn hypr_monitors(ipc: &HyprlandIpc) -> Vec<HyprMonitor> {
-    ipc.json("monitors")
+    let mut monitors: Vec<HyprMonitor> = ipc
+        .json("monitors")
         .ok()
         .and_then(|value| serde_json::from_value(value).ok())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    monitors.sort_by(|a, b| a.name.cmp(&b.name));
+    monitors
+}
+
+fn update_x_layout(x_layout: &mut Vec<XMonitor>) {
+    let updated = x_monitors();
+    if !updated.is_empty() {
+        *x_layout = updated;
+    }
 }
 
 fn map_pointer(
@@ -209,7 +223,9 @@ fn main() -> Result<()> {
     let ipc = HyprlandIpc::new();
     let mut x_layout = x_monitors();
     let mut hypr_layout = hypr_monitors(&ipc);
-    let mut layouts_updated = Instant::now();
+    let mut hypr_layout_checked = Instant::now();
+    let mut x_layout_updated = Instant::now();
+    let mut x_layout_retry_at: Option<Instant> = None;
     let mut last_pointer: Option<(i32, i32)> = None;
     let mut last_scroll_mode: Option<bool> = None;
 
@@ -230,10 +246,25 @@ fn main() -> Result<()> {
 
     loop {
         let started = Instant::now();
-        if layouts_updated.elapsed() >= Duration::from_secs(5) {
-            x_layout = x_monitors();
-            hypr_layout = hypr_monitors(&ipc);
-            layouts_updated = Instant::now();
+        if hypr_layout_checked.elapsed() >= Duration::from_secs(5) {
+            let updated = hypr_monitors(&ipc);
+            if !updated.is_empty() && updated != hypr_layout {
+                hypr_layout = updated;
+                update_x_layout(&mut x_layout);
+                x_layout_updated = Instant::now();
+                // Xwayland can publish its RandR update just after Hyprland.
+                // Check once more shortly after a layout change, then return to
+                // the low-frequency safety refresh below.
+                x_layout_retry_at = Some(Instant::now() + Duration::from_secs(2));
+            }
+            hypr_layout_checked = Instant::now();
+        }
+
+        let retry_x_layout = x_layout_retry_at.is_some_and(|at| Instant::now() >= at);
+        if retry_x_layout || x_layout_updated.elapsed() >= Duration::from_secs(60) {
+            update_x_layout(&mut x_layout);
+            x_layout_updated = Instant::now();
+            x_layout_retry_at = None;
         }
 
         let scroll_mode = scroll_mode_file.exists();
@@ -290,6 +321,10 @@ mod tests {
         }];
         let hypr = vec![HyprMonitor {
             name: "HDMI-A-1".into(),
+            width: 1920,
+            height: 1080,
+            scale: 1.0,
+            transform: 0,
             x: 0,
             y: 550,
         }];

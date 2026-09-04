@@ -19,11 +19,22 @@ Scope {
             required property ShellScreen modelData
             property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
             property bool sidebarOpen: GlobalStates.sidebarRightOpen && monitor?.name === GlobalStates.sidebarRightScreen
+            property bool panelVisible: sidebarOpen
+
+            Timer {
+                id: panelUnmapTimer
+                interval: 160
+                repeat: false
+                onTriggered: {
+                    if (!screenScope.sidebarOpen)
+                        screenScope.panelVisible = false;
+                }
+            }
 
             PanelWindow {
                 id: panelWindow
                 screen: screenScope.modelData
-                visible: true
+                visible: screenScope.panelVisible
 
                 function hide() {
                     GlobalStates.closeSidebarRight();
@@ -47,13 +58,21 @@ Scope {
                     target: screenScope
                     function onSidebarOpenChanged() {
                         if (screenScope.sidebarOpen) {
-                            GlobalFocusGrab.addDismissable(panelWindow);
+                            panelUnmapTimer.stop();
+                            screenScope.panelVisible = true;
                             Qt.callLater(() => {
+                                if (!screenScope.sidebarOpen)
+                                    return;
+                                GlobalFocusGrab.addDismissable(panelWindow);
                                 sidebarContentLoader.forceActiveFocus();
                                 sidebarContentLoader.item?.forceActiveFocus();
                             });
                         } else {
                             GlobalFocusGrab.removeDismissable(panelWindow);
+                            // Keep the surface mapped until the 140 ms slide-out
+                            // finishes, then release its compositor buffers.
+                            screenScope.panelVisible = true;
+                            panelUnmapTimer.restart();
                         }
                     }
                 }
@@ -69,7 +88,7 @@ Scope {
                     // Keep it warm only when requested. Instantiating the full
                     // sidebar tree for every monitor was one of the shell's
                     // largest idle memory costs.
-                    active: screenScope.sidebarOpen || Config.options.sidebar.keepRightSidebarLoaded
+                    active: screenScope.panelVisible || Config.options.sidebar.keepRightSidebarLoaded
                     x: root.sidebarWidth
                     y: Appearance.sizes.hyprlandGapsOut
                     width: root.sidebarWidth - Appearance.sizes.hyprlandGapsOut - Appearance.sizes.elevationMargin

@@ -28,10 +28,17 @@ Singleton {
     readonly property bool fullscreenStateReady: clientsReady && monitorsReady
     property bool windowRefreshPending: false
     property bool monitorRefreshPending: false
+    property string lastActiveWindowAddress: ""
     property var activeWorkspaceIdsByMonitor: ({})
     property var workspaceEventTimesByMonitor: ({})
     property string eventFocusedMonitorName: ""
     property double lastNativeHyprlandActivityAt: Date.now()
+    property int workspaceEventSocketFailureCount: 0
+    property double workspaceEventSocketStartedAt: 0
+    readonly property int workspaceEventSocketRetryInterval: Math.min(
+        60000,
+        5000 * Math.pow(2, Math.max(0, Math.min(root.workspaceEventSocketFailureCount - 1, 4)))
+    )
     readonly property string workspaceEventSocketPath: `${Quickshell.env("XDG_RUNTIME_DIR")}/hypr/${Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")}/.socket2.sock`
     readonly property string workspaceEventBridgePath: `${Directories.scriptPath}/hyprland/workspace-event-stream.py`.replace(/file:\/\//, "")
 
@@ -233,6 +240,43 @@ Singleton {
         getClients.running = true;
     }
 
+    function normalizeActiveWindowAddress(value) {
+        return `${value ?? ""}`.trim().toLowerCase().replace(/^0x/, "");
+    }
+
+    function scheduleWindowMetadataRefresh() {
+        // Title updates arrive as windowtitle, activewindow and their v2 forms.
+        // Use a trailing debounce for ordinary changes, but cap the delay so a
+        // continuously animated title still reaches consumers occasionally.
+        windowMetadataRefresh.restart();
+        if (!windowMetadataMaxLatency.running)
+            windowMetadataMaxLatency.start();
+    }
+
+    function scheduleWindowStateRefresh() {
+        // Structural/focus events often arrive in v1/v2 pairs. A short queued
+        // refresh folds the pair into one hyprctl snapshot without a visible lag.
+        windowMetadataRefresh.stop();
+        windowMetadataMaxLatency.stop();
+        windowStateRefresh.restart();
+    }
+
+    function flushWindowMetadataRefresh() {
+        windowMetadataRefresh.stop();
+        windowMetadataMaxLatency.stop();
+        root.updateWindowList();
+    }
+
+    function scheduleWorkspaceEventSocketRetry(stableRun = false) {
+        workspaceEventSocketStability.stop();
+        root.workspaceEventSocketStartedAt = 0;
+        root.workspaceEventSocketFailureCount = stableRun
+            ? 0
+            : Math.min(root.workspaceEventSocketFailureCount + 1, 10);
+        if (root.workspaceEventSocketPath.length > 0)
+            workspaceEventSocketRestart.restart();
+    }
+
     function updateLayers() {
         if (!getLayers.running)
             getLayers.running = true;
@@ -351,8 +395,20 @@ Singleton {
             // Window titles can change many times per second (for example a
             // terminal spinner). They must never congest workspace/monitor
             // refreshes; only the client metadata depends on these events.
-            if (["windowtitle", "windowtitlev2"].includes(name)) {
-                windowTitleRefresh.restart();
+            if (["windowtitle", "windowtitlev2", "activewindow"].includes(name)) {
+                root.scheduleWindowMetadataRefresh();
+                return;
+            }
+
+            if (name === "activewindowv2") {
+                const address = root.normalizeActiveWindowAddress(event.data);
+                if (address !== root.lastActiveWindowAddress) {
+                    root.lastActiveWindowAddress = address;
+                    root.scheduleWindowStateRefresh();
+                } else {
+                    // Hyprland also emits activewindowv2 for title-only changes.
+                    root.scheduleWindowMetadataRefresh();
+                }
                 return;
             }
 
@@ -367,7 +423,7 @@ Singleton {
                 Hyprland.refreshMonitors();
                 root.updateMonitors();
                 root.updateWorkspaces();
-                root.updateWindowList();
+                root.scheduleWindowStateRefresh();
                 return;
             }
 
@@ -379,10 +435,10 @@ Singleton {
             }
 
             if (["openwindow", "closewindow", "movewindow", "movewindowv2",
-                    "activewindow", "activewindowv2", "fullscreen", "pin",
+                    "fullscreen", "pin",
                     "changefloatingmode", "minimize", "togglegroup", "moveintogroup",
                     "moveoutofgroup", "changegroupactive", "lockgroups"].includes(name)) {
-                root.updateWindowList();
+                root.scheduleWindowStateRefresh();
                 return;
             }
 
@@ -399,8 +455,22 @@ Singleton {
     }
 
     Timer {
-        id: windowTitleRefresh
+        id: windowMetadataRefresh
         interval: 200
+        repeat: false
+        onTriggered: root.flushWindowMetadataRefresh()
+    }
+
+    Timer {
+        id: windowMetadataMaxLatency
+        interval: 1000
+        repeat: false
+        onTriggered: root.flushWindowMetadataRefresh()
+    }
+
+    Timer {
+        id: windowStateRefresh
+        interval: 32
         repeat: false
         onTriggered: root.updateWindowList()
     }
@@ -413,21 +483,52 @@ Singleton {
         id: workspaceEventSocket
         running: root.workspaceEventSocketPath.length > 0
         command: ["python3", "-u", root.workspaceEventBridgePath, root.workspaceEventSocketPath]
+        property bool startConfirmed: false
         stdout: SplitParser {
             onRead: line => root.handleWorkspaceSocketLine(line)
         }
-        onExited: workspaceEventSocketRestart.restart()
+        onStarted: {
+            workspaceEventSocket.startConfirmed = true;
+            root.workspaceEventSocketStartedAt = Date.now();
+            workspaceEventSocketStability.restart();
+        }
+        onExited: {
+            const stableRun = root.workspaceEventSocketStartedAt > 0
+                && Date.now() - root.workspaceEventSocketStartedAt >= workspaceEventSocketStability.interval;
+            root.scheduleWorkspaceEventSocketRetry(stableRun);
+        }
+        onRunningChanged: {
+            // Process.exited is not emitted when the executable cannot start.
+            if (!running && !workspaceEventSocket.startConfirmed
+                    && root.workspaceEventSocketPath.length > 0)
+                root.scheduleWorkspaceEventSocketRetry(false);
+            if (!running)
+                workspaceEventSocket.startConfirmed = false;
+        }
     }
 
     Timer {
         id: workspaceEventSocketRestart
         // The helper reconnects internally; this is only for an unexpected
-        // interpreter/helper exit, so avoid a tight process-spawn loop.
-        interval: 5000
+        // interpreter/helper exit. Back off repeated failures to one attempt
+        // per minute instead of creating a fixed-rate spawn loop.
+        interval: root.workspaceEventSocketRetryInterval
         repeat: false
         onTriggered: {
-            if (!workspaceEventSocket.running && root.workspaceEventSocketPath.length > 0)
+            if (!workspaceEventSocket.running && root.workspaceEventSocketPath.length > 0) {
+                workspaceEventSocket.startConfirmed = false;
                 workspaceEventSocket.running = true;
+            }
+        }
+    }
+
+    Timer {
+        id: workspaceEventSocketStability
+        interval: 60000
+        repeat: false
+        onTriggered: {
+            if (workspaceEventSocket.running)
+                root.workspaceEventSocketFailureCount = 0;
         }
     }
 

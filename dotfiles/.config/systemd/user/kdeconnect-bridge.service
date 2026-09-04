@@ -8,6 +8,8 @@ Type=simple
 ExecStart=%h/.local/bin/kdeconnect-bridge
 Restart=on-failure
 RestartSec=2
+RestartSteps=5
+RestartMaxDelaySec=30s
 
 [Install]
 WantedBy=graphical-session.target

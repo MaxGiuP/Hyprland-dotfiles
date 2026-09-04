@@ -14,6 +14,8 @@ Singleton {
     property bool sloppySearch: Config.options?.search.sloppy ?? false
     property real scoreThreshold: 0.2
     property var appListCache: []
+    property string appListSignature: ""
+    property bool desktopEntriesObserved: false
     // Keep this cache in a stable Map. Updating a plain QML object can invalidate
     // bindings which read it, causing the full application index to be rebuilt.
     readonly property var resolvedIconPaths: new Map()
@@ -175,6 +177,33 @@ Singleton {
         return candidateId.localeCompare(currentId) < 0 ? candidate : current;
     }
 
+    function appSnapshotData(app) {
+        return [
+            String(app?.id ?? ""),
+            String(app?.name ?? ""),
+            String(app?.genericName ?? ""),
+            String(app?.comment ?? ""),
+            String(app?.desktopFilePath ?? ""),
+            String(app?.startupClass ?? ""),
+            String(app?.icon ?? ""),
+            normalizedCommand(app),
+            Array.from(app?.keywords ?? []).map(value => String(value ?? "")),
+            Array.from(app?.categories ?? []).map(value => String(value ?? "")),
+        ];
+    }
+
+    function sameAppObjects(left, right) {
+        if (left === right)
+            return true;
+        if (!left || !right || left.length !== right.length)
+            return false;
+        for (let i = 0; i < left.length; ++i) {
+            if (left[i] !== right[i])
+                return false;
+        }
+        return true;
+    }
+
     // Filter hidden/non-GUI entries and collapse duplicate desktop files for the same app.
     // DesktopEntries can emit frequent internal updates, so keep consumers on a
     // stable snapshot instead of rebuilding this index for every notification.
@@ -195,13 +224,31 @@ Singleton {
             }
         }
 
-        root.appListCache = orderedKeys.map(key => deduped[key]).filter(Boolean);
+        const nextList = orderedKeys.map(key => deduped[key]).filter(Boolean);
+        const nextSignature = JSON.stringify(nextList.map(app => root.appSnapshotData(app)));
+        if (root.sameAppObjects(root.appListCache, nextList)
+                && nextSignature === root.appListSignature)
+            return;
+
+        root.appListSignature = nextSignature;
+        root.appListCache = nextList;
+    }
+
+    Connections {
+        target: DesktopEntries
+        function onApplicationsChanged() {
+            root.desktopEntriesObserved = true;
+            // Emitted once after a complete backend scan. Refresh immediately
+            // so the cache cannot retain entries scheduled for deletion.
+            root.refreshAppList();
+        }
     }
 
     Timer {
-        // This still picks up desktop-file changes promptly, while avoiding a
-        // full index rebuild on every transient DesktopEntries notification.
-        interval: root.appListCache.length > 0 ? 30000 : 1000
+        // DesktopEntries normally supplies change notifications above. Keep a
+        // slow reconciliation pass for changes its backend cannot observe, and
+        // retry quickly only until the initial model has appeared.
+        interval: (root.appListCache.length > 0 || root.desktopEntriesObserved) ? 300000 : 2000
         repeat: true
         running: true
         triggeredOnStart: true

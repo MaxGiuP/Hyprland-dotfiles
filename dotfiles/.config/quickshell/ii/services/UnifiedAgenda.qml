@@ -22,6 +22,7 @@ Singleton {
     property bool syncRequested: false
     property bool refreshQueued: false
     property bool syncQueued: false
+    property int agendaWatchRetryAttempt: 0
     property string lastError: ""
     readonly property string mailError: lastError
     property date lastRefresh: new Date(0)
@@ -267,6 +268,15 @@ Singleton {
 
     signal taskMutationFinished(string action, string taskId, bool success, string errorMessage)
 
+    function scheduleAgendaWatchRestart() {
+        root.agendaWatchRetryAttempt += 1
+        agendaWatchRestart.interval = Math.min(
+            60000,
+            1000 * Math.pow(2, Math.min(root.agendaWatchRetryAttempt - 1, 6))
+        )
+        agendaWatchRestart.restart()
+    }
+
     Timer {
         interval: 5 * 60 * 1000
         repeat: true
@@ -284,12 +294,19 @@ Singleton {
 
     Timer {
         id: agendaWatchRestart
-        interval: 3000
+        interval: 1000
         repeat: false
         onTriggered: {
             if (!agendaWatchProcess.running)
                 agendaWatchProcess.running = true;
         }
+    }
+
+    Timer {
+        id: agendaWatchStable
+        interval: 30000
+        repeat: false
+        onTriggered: root.agendaWatchRetryAttempt = 0
     }
 
     Process {
@@ -303,6 +320,7 @@ Singleton {
         stdout: SplitParser {
             splitMarker: "\n"
             onRead: line => {
+                root.agendaWatchRetryAttempt = 0
                 try {
                     const message = JSON.parse(line);
                     if (`${message?.method ?? ""}` === "agenda.changed")
@@ -313,7 +331,13 @@ Singleton {
             }
         }
 
-        onExited: agendaWatchRestart.restart()
+        onRunningChanged: {
+            if (running)
+                agendaWatchStable.restart()
+            else
+                agendaWatchStable.stop()
+        }
+        onExited: root.scheduleAgendaWatchRestart()
     }
 
     Process {

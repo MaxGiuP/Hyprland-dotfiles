@@ -16,7 +16,7 @@ h.exec_on_start("systemctl --user start kdeconnect-bridge.service tv-mode-daemon
 -- Audio
 h.exec_on_start("easyeffects --hide-window --service-mode")
 h.exec_on_start("sh -c \"~/.config/hypr/hyprland/scripts/combine_audio.sh\"")
-h.exec_on_start("~/.config/hypr/hyprland/scripts/start_input_remapper_mechlands_m75.sh")
+h.exec_on_start("systemctl --user start input-remapper.service")
 
 -- Clipboard: history
 -- h.exec_on_start("wl-paste --watch cliphist store &")

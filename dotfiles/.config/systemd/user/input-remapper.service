@@ -1,0 +1,15 @@
+[Unit]
+Description=Autoload Input Remapper presets
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/input-remapper-control --command autoload
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=2s
+RestartSteps=5
+RestartMaxDelaySec=30s
+
+[Install]
+WantedBy=default.target

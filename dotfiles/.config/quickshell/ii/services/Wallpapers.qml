@@ -272,22 +272,17 @@ Singleton {
         Config.options.background.wallpaperMode = "dynamic"
         dynamicStatus = "starting"
         dynamicRunning = true
-        Quickshell.execDetached([
-            root.dynamicScriptPath,
-            "start",
-            "--directory", Config.options.background.dynamic.directory,
-            "--interval", String(Config.options.background.dynamic.intervalSeconds),
-            "--latitude", String(Config.options.background.dynamic.latitude),
-            "--longitude", String(Config.options.background.dynamic.longitude),
-            Config.options.background.dynamic.autoMode ? "--auto-mode" : "--no-auto-mode",
-            Config.options.background.dynamic.preferTime ? "--prefer-time" : "--no-prefer-time"
-        ].concat(root.dynamicScheduleArgs()))
-        dynamicRefreshDelay.restart()
+        // Let Config's short write debounce persist the latest arguments before
+        // the supervised service reads them from config.json.
+        dynamicServiceStartDelay.restart()
     }
 
     function stopDynamic() {
         Config.options.background.wallpaperMode = "static"
-        Quickshell.execDetached([root.dynamicScriptPath, "stop"])
+        dynamicServiceStartDelay.stop()
+        Quickshell.execDetached([
+            "systemctl", "--user", "stop", "quickshell-dynamic-wallpaper.service"
+        ])
         dynamicRefreshDelay.restart()
     }
 
@@ -365,16 +360,36 @@ Singleton {
         onTriggered: root.refreshDynamicStatus()
     }
 
+    Timer {
+        id: dynamicServiceStartDelay
+        interval: Math.max(150, Config.readWriteDelay + 100)
+        repeat: false
+        onTriggered: {
+            Quickshell.execDetached([
+                "systemctl", "--user", "restart", "quickshell-dynamic-wallpaper.service"
+            ])
+            dynamicRefreshDelay.restart()
+        }
+    }
+
     function restoreDynamicMode() {
         if (root.dynamicStartupHandled || !Config.ready)
             return
 
         root.dynamicStartupHandled = true
         dynamicStartupTimer.stop()
-        if (!root.settingsApp && (Config.options.background.wallpaperMode ?? "static") === "dynamic")
-            root.refreshDynamicStatus(true)
-        else
+        if (!root.settingsApp && (Config.options.background.wallpaperMode ?? "static") === "dynamic") {
+            // Starting an already-active unit is a no-op. On the first upgrade
+            // this also runs ExecStartPre, which retires any legacy detached
+            // daemon before the supervised process takes ownership.
+            root.dynamicStatus = "starting"
+            Quickshell.execDetached([
+                "systemctl", "--user", "start", "quickshell-dynamic-wallpaper.service"
+            ])
+            dynamicRefreshDelay.restart()
+        } else {
             root.refreshDynamicStatus()
+        }
     }
 
     Timer {

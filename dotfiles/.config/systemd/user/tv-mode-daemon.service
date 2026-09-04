@@ -6,8 +6,10 @@ PartOf=graphical-session.target
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/tv-mode-daemon
-Restart=always
-RestartSec=1
+Restart=on-failure
+RestartSec=2s
+RestartSteps=5
+RestartMaxDelaySec=30s
 
 [Install]
 WantedBy=graphical-session.target

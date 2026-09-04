@@ -245,6 +245,11 @@ Scope { // Scope
                         }
 
                         component DockWallpaperBackdrop: Item {
+                            id: dockWallpaperBackdrop
+                            // Keep enough neighboring pixels for the complete
+                            // blur kernel while avoiding a monitor-sized FBO.
+                            readonly property real blurOverscan: Math.ceil(root.dockBlurRadius) + 2
+
                             Image {
                                 id: dockWallpaper
                                 visible: source.length > 0
@@ -260,28 +265,47 @@ Scope { // Scope
                                 antialiasing: true
                                 sourceSize.width: Math.max(1, Math.round(width * (dockRoot.monitorData?.scale ?? 1)))
                                 sourceSize.height: Math.max(1, Math.round(height * (dockRoot.monitorData?.scale ?? 1)))
+                                onStatusChanged: {
+                                    if (status === Image.Ready)
+                                        Qt.callLater(() => dockWallpaperTexture.scheduleUpdate());
+                                }
                             }
 
                             ShaderEffectSource {
                                 id: dockWallpaperTexture
                                 visible: dockWallpaper.status === Image.Ready
-                                live: true
+                                // The source only changes with the wallpaper or
+                                // output geometry, so a permanently live monitor-
+                                // sized render target is unnecessary.
+                                live: false
                                 hideSource: true
                                 sourceItem: dockWallpaper
-                                x: dockWallpaper.x
-                                y: dockWallpaper.y
-                                width: dockWallpaper.width
-                                height: dockWallpaper.height
+                                x: -dockWallpaperBackdrop.blurOverscan
+                                y: -dockWallpaperBackdrop.blurOverscan
+                                width: dockWallpaperBackdrop.width + dockWallpaperBackdrop.blurOverscan * 2
+                                height: dockWallpaperBackdrop.height + dockWallpaperBackdrop.blurOverscan * 2
+                                // Map the cropped texture back to precisely the
+                                // same part of the full-screen wallpaper that
+                                // was previously exposed through this item.
+                                sourceRect: Qt.rect(
+                                    x - dockWallpaper.x,
+                                    y - dockWallpaper.y,
+                                    width,
+                                    height
+                                )
+                                onSourceRectChanged: scheduleUpdate()
+                                onWidthChanged: scheduleUpdate()
+                                onHeightChanged: scheduleUpdate()
                             }
 
                             GaussianBlur {
                                 id: dockWallpaperBlur
                                 visible: dockWallpaperTexture.visible
                                 source: dockWallpaperTexture
-                                x: dockWallpaper.x
-                                y: dockWallpaper.y
-                                width: dockWallpaper.width
-                                height: dockWallpaper.height
+                                x: dockWallpaperTexture.x
+                                y: dockWallpaperTexture.y
+                                width: dockWallpaperTexture.width
+                                height: dockWallpaperTexture.height
                                 radius: root.dockBlurRadius
                                 samples: Math.max(1, Math.ceil(radius) * 2 + 1)
                                 transparentBorder: true

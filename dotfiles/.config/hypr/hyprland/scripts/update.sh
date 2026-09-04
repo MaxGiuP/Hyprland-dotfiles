@@ -293,7 +293,14 @@ sync_quickshell_user_local() {
         return 1
     fi
 
-    install -Dm755 "$bin_src" "$dest_bin" || return 1
+    # Do not retain a 170+ MB byte-for-byte copy of the packaged binary. The
+    # wrappers already fall back to /usr/bin/quickshell, while a genuinely
+    # different compatibility build still remains user-local.
+    if [ -x /usr/bin/quickshell ] && cmp -s "$bin_src" /usr/bin/quickshell; then
+        rm -f -- "$dest_bin" || return 1
+    else
+        install -Dm755 "$bin_src" "$dest_bin" || return 1
+    fi
 
     qml_src=""
     if [ -n "$src_root" ] && [ -d "$src_root/usr/lib/qt6/qml/Quickshell" ]; then
@@ -302,10 +309,18 @@ sync_quickshell_user_local() {
         qml_src=/usr/lib/qt6/qml/Quickshell
     fi
 
-    if [ -n "$qml_src" ]; then
+    qml_matches_system=0
+    if [ -n "$qml_src" ] && [ -d /usr/lib/qt6/qml/Quickshell ] \
+        && diff -qr "$qml_src" /usr/lib/qt6/qml/Quickshell >/dev/null 2>&1; then
+        qml_matches_system=1
+    fi
+
+    if [ -n "$qml_src" ] && [ "$qml_matches_system" -eq 0 ]; then
         install -d "$dest_qml" || return 1
         rm -rf "$dest_qml/Quickshell" || return 1
         cp -a "$qml_src" "$dest_qml/" || return 1
+    elif [ "$qml_matches_system" -eq 1 ] && [ -d "$dest_qml/Quickshell" ]; then
+        rm -rf -- "$dest_qml/Quickshell" || return 1
     fi
 }
 

@@ -22,79 +22,31 @@ StyledOverlayWidget {
 
     // Sampling controls for overlay histories (does NOT change ResourceUsage)
     property int points: (ResourceUsage.historyLength && ResourceUsage.historyLength > 0) ? ResourceUsage.historyLength : 60
-    property int sampleIntervalMs: 1000
+    // ResourceUsage publishes at a three-second cadence; sampling faster only
+    // duplicates values and rebuilds the history arrays unnecessarily.
+    property int sampleIntervalMs: 3000
 
     // ----------------------------
-    // GPU (same approach as bar)
+    // GPU (shared shell-wide sampler)
     // ----------------------------
-    property string gpuId: "0"
-    property bool gpuAvailable: true
-    property int gpuUtil: 0
-    property int vramUsedMB: 0
-    property int vramTotalMB: 0
-    property int vramPercent: (vramTotalMB > 0) ? Math.round((vramUsedMB / vramTotalMB) * 100) : 0
+    readonly property bool gpuAvailable: SystemMetrics.gpuAvailable
+    readonly property int gpuUtil: SystemMetrics.gpuUtil
+    readonly property int vramUsedMB: SystemMetrics.vramUsedMB
+    readonly property int vramTotalMB: SystemMetrics.vramTotalMB
+    readonly property int vramPercent: SystemMetrics.vramPercent
 
     function gpuMaxString() {
         if (!gpuAvailable || vramTotalMB <= 0) return Translation.tr("N/A")
         return (vramTotalMB / 1024).toFixed(1) + " GB"
     }
 
-    Timer {
-        id: gpuTimer
-        interval: 2000
-        running: true
-        repeat: true
-        onTriggered: {
-            if (!gpuAvailable) return
-            gpuQuery.buf = ""
-            gpuQuery.running = false
-            gpuQuery.running = true
-        }
-    }
-
-    Process {
-        id: gpuQuery
-        environment: ({ LANG: "C", LC_ALL: "C" })
-        command: ["nvidia-smi", "-i", root.gpuId, "-q", "-d", "UTILIZATION,MEMORY"]
-        property string buf: ""
-        stdout: SplitParser {
-            splitMarker: "\n"
-            onRead: data => gpuQuery.buf += data + "\n"
-        }
-        onExited: code => {
-            const t = gpuQuery.buf
-            gpuQuery.buf = ""
-
-            if (code !== 0) {
-                root.gpuAvailable = false
-                root.gpuUtil = 0
-                root.vramUsedMB = 0
-                root.vramTotalMB = 0
-                return
-            }
-
-            root.gpuAvailable = true
-
-            const utilM = t.match(/Gpu\s*:\s*(\d+)\s*%/i)
-            if (utilM) root.gpuUtil = parseInt(utilM[1]) || 0
-
-            const fbM = t.match(/FB Memory Usage[\s\S]*?Total\s*:\s*(\d+)\s*MiB[\s\S]*?Used\s*:\s*(\d+)\s*MiB/i)
-            if (fbM) {
-                root.vramTotalMB = parseInt(fbM[1]) || 0
-                root.vramUsedMB  = parseInt(fbM[2]) || 0
-            }
-        }
-    }
-
     // ----------------------------
-    // Network (same approach as bar)
+    // Network (shared shell-wide sampler)
     // ----------------------------
-    property string netIface: ""
+    readonly property string netIface: SystemMetrics.netIface
     property real linkMaxMbps: 1000
-    property real downMbps: 0
-    property real upMbps: 0
-    property var _lastMap: ({})
-    property double _lastT: 0
+    readonly property real downMbps: SystemMetrics.downMbps
+    readonly property real upMbps: SystemMetrics.upMbps
 
     function netMaxString() {
         if (!Number.isFinite(linkMaxMbps) || linkMaxMbps <= 0) return Translation.tr("N/A")
@@ -104,71 +56,20 @@ StyledOverlayWidget {
     }
 
     // Optional: update link speed from sysfs if present
-    FileView { id: sysSpeed; path: "" }
-    function tryUpdateLinkSpeed() {
-        if (!netIface || netIface.length === 0) return
-        sysSpeed.path = "/sys/class/net/" + netIface + "/speed"
-        sysSpeed.reload()
-        const txt = (sysSpeed.text() || "").trim()
-        const sp = Number(txt)
-        if (Number.isFinite(sp) && sp > 0) linkMaxMbps = sp
-    }
-
-    Timer {
-        id: netTimer
-        interval: 1000
-        repeat: true
-        running: true
-        onTriggered: devView.reload()
-    }
-
     FileView {
-        id: devView
-        path: "/proc/net/dev"
+        id: sysSpeed
+        path: root.netIface.length > 0 ? "/sys/class/net/" + root.netIface + "/speed" : ""
         onLoaded: {
-            const now = Date.now()
-            const lines = (devView.text() || "").trim().split("\n").slice(2)
-
-            let map = {}
-            for (let i = 0; i < lines.length; i++) {
-                const parts = lines[i].split(":")
-                if (parts.length < 2) continue
-                const iface = parts[0].trim()
-                const fields = parts[1].trim().split(/\s+/)
-                if (fields.length < 10) continue
-                const rx = Number(fields[0])
-                const tx = Number(fields[8])
-                map[iface] = { rx, tx }
-            }
-
-            if (!netIface || !(netIface in map)) {
-                let best = ""
-                let bestSum = -1
-                for (const k in map) {
-                    if (k === "lo") continue
-                    const sum = (map[k].rx || 0) + (map[k].tx || 0)
-                    if (sum > bestSum) { best = k; bestSum = sum }
-                }
-                if (best) netIface = best
-            }
-
-            if (netIface && (netIface in map)) {
-                const curr = map[netIface]
-                if (_lastT > 0 && _lastMap[netIface]) {
-                    const dt = Math.max(1e-3, (now - _lastT) / 1000.0)
-                    const dRx = Math.max(0, curr.rx - _lastMap[netIface].rx)
-                    const dTx = Math.max(0, curr.tx - _lastMap[netIface].tx)
-                    downMbps = (dRx * 8) / 1e6 / dt
-                    upMbps   = (dTx * 8) / 1e6 / dt
-                }
-            }
-
-            _lastMap = map
-            _lastT = now
-
-            tryUpdateLinkSpeed()
+            const speed = Number(text().trim())
+            if (Number.isFinite(speed) && speed > 0)
+                root.linkMaxMbps = speed
         }
     }
+    function tryUpdateLinkSpeed() {
+        if (!netIface || netIface.length === 0) return
+        sysSpeed.reload()
+    }
+    onNetIfaceChanged: tryUpdateLinkSpeed()
 
     // ----------------------------
     // Overlay histories (local)
@@ -206,7 +107,7 @@ StyledOverlayWidget {
             ramHist = push(ramHist, ResourceUsage.memoryUsedPercentage)
             swapHist = push(swapHist, ResourceUsage.swapUsedPercentage)
 
-            // GPU and net in overlay are polled here too
+            // GPU and network samples come from the shared collector.
             gpuHist = push(gpuHist, root.gpuAvailable ? (root.gpuUtil / 100) : 0)
 
             const lm = (Number.isFinite(root.linkMaxMbps) && root.linkMaxMbps > 0) ? root.linkMaxMbps : 0
@@ -353,9 +254,9 @@ StyledOverlayWidget {
     }
 
     Component.onCompleted: {
-        // Kick initial polls so overlay has data immediately
-        gpuTimer.triggered()
-        netTimer.triggered()
+        // Refresh shared data once so the overlay opens with a current sample.
+        tryUpdateLinkSpeed()
+        SystemMetrics.requestGpuRefresh()
         sampleTimer.triggered()
     }
 }

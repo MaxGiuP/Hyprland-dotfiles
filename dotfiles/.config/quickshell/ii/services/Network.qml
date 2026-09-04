@@ -43,6 +43,7 @@ Singleton {
     })
     property string wifiStatus: "disconnected"
     property bool statusRefreshQueued: false
+    property int networkMonitorRetryAttempt: 0
 
     property string networkName: ""
     property int networkStrength
@@ -217,6 +218,15 @@ Singleton {
         statusRefreshDebounce.restart();
     }
 
+    function scheduleNetworkMonitorRestart() {
+        root.networkMonitorRetryAttempt += 1
+        networkMonitorRestart.interval = Math.min(
+            60000,
+            1000 * Math.pow(2, Math.min(root.networkMonitorRetryAttempt - 1, 6))
+        )
+        networkMonitorRestart.restart()
+    }
+
     function splitEscapedFields(line) {
         const fields = [];
         let field = "";
@@ -345,12 +355,18 @@ Singleton {
         stdout: SplitParser {
             onRead: root.update()
         }
-        onExited: networkMonitorRestart.restart()
+        onRunningChanged: {
+            if (running)
+                networkMonitorStable.restart()
+            else
+                networkMonitorStable.stop()
+        }
+        onExited: root.scheduleNetworkMonitorRestart()
     }
 
     Timer {
         id: networkMonitorRestart
-        interval: 5000
+        interval: 1000
         repeat: false
         onTriggered: {
             if (!subscriber.running) {
@@ -358,6 +374,13 @@ Singleton {
                 root.update();
             }
         }
+    }
+
+    Timer {
+        id: networkMonitorStable
+        interval: 30000
+        repeat: false
+        onTriggered: root.networkMonitorRetryAttempt = 0
     }
 
     // NetworkManager can emit several monitor lines for one state transition.

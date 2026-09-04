@@ -339,11 +339,34 @@ Scope {
                 && screenName === GlobalStates.sidebarLeftScreen
             property bool pinnedWindowOpen: pinnedOnThisScreen
                 && GlobalStates.sidebarLeftOpen
+            property bool panelVisible: flyoutOpen || pinnedWindowOpen
+
+            function syncPanelVisibility() {
+                if (screenScope.flyoutOpen || screenScope.pinnedWindowOpen) {
+                    panelUnmapTimer.stop();
+                    screenScope.panelVisible = true;
+                    return;
+                }
+
+                // Preserve the 200 ms slide-out before unmapping the layer.
+                screenScope.panelVisible = true;
+                panelUnmapTimer.restart();
+            }
+
+            Timer {
+                id: panelUnmapTimer
+                interval: 220
+                repeat: false
+                onTriggered: {
+                    if (!screenScope.flyoutOpen && !screenScope.pinnedWindowOpen)
+                        screenScope.panelVisible = false;
+                }
+            }
 
             PanelWindow {
                 id: panelWindow
                 screen: screenScope.modelData
-                visible: true
+                visible: screenScope.panelVisible
 
                 property var contentParent: sidebarLeftBackground
 
@@ -403,27 +426,39 @@ Scope {
                 Connections {
                     target: screenScope
                     function onFlyoutOpenChanged() {
-                        panelWindow.syncFocusGrab();
+                        screenScope.syncPanelVisibility();
                         if (screenScope.flyoutOpen) {
                             root.relocateSidebarContent();
-                            Qt.callLater(root.focusSidebarContent);
-                        }
+                            Qt.callLater(() => {
+                                if (!screenScope.flyoutOpen)
+                                    return;
+                                panelWindow.syncFocusGrab();
+                                root.focusSidebarContent();
+                            });
+                        } else
+                            panelWindow.syncFocusGrab();
                     }
                     function onPinnedWindowOpenChanged() {
-                        panelWindow.syncFocusGrab();
+                        screenScope.syncPanelVisibility();
                         if (screenScope.pinnedWindowOpen) {
                             root.relocateSidebarContent();
-                            Qt.callLater(root.focusSidebarContent);
-                        }
+                            Qt.callLater(() => {
+                                if (!screenScope.pinnedWindowOpen)
+                                    return;
+                                panelWindow.syncFocusGrab();
+                                root.focusSidebarContent();
+                            });
+                        } else
+                            panelWindow.syncFocusGrab();
                     }
                 }
                 Connections {
                     target: root
                     function onPinChanged() {
-                        panelWindow.syncFocusGrab();
+                        Qt.callLater(() => panelWindow.syncFocusGrab());
                     }
                     function onDetachChanged() {
-                        panelWindow.syncFocusGrab();
+                        Qt.callLater(() => panelWindow.syncFocusGrab());
                     }
                 }
                 Connections {

@@ -1,0 +1,20 @@
+[Unit]
+Description=Quickshell dynamic wallpaper rotation
+Documentation=https://github.com/MaxGiuP/Hyprland-dotfiles
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStartPre=-%h/.config/quickshell/ii/scripts/colors/dynamic_wallpaper.py stop
+ExecStart=%h/.config/quickshell/ii/scripts/colors/dynamic_wallpaper.py run
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=5s
+Nice=10
+IOSchedulingClass=idle
+CPUWeight=20
+NoNewPrivileges=true
+PrivateTmp=true
+RestrictRealtime=true
+LockPersonality=true

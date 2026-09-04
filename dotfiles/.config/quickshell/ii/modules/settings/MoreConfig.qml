@@ -1004,7 +1004,7 @@ ContentPage {
                 }
                 ConfigSwitch {
                     buttonIcon: "crop_square"
-                    text: Translation.tr("Auto-kill tray conflicts")
+                    text: Translation.tr("Disable KDE tray watcher")
                     checked: Config.options.conflictKiller.autoKillTrays
                     onCheckedChanged: Config.options.conflictKiller.autoKillTrays = checked
                 }

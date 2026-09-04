@@ -15,10 +15,26 @@ Singleton {
     readonly property bool useUSCS: Config.options.bar.weather.useUSCS
     property bool gpsActive: Config.options.bar.weather.enableGPS
 
-    onUseUSCSChanged: { root.getData(); }
-    onCityChanged:    { root.getData(); }
+    onUseUSCSChanged: {
+        root.requestRevision++
+        root.getData()
+    }
+    onCityChanged: {
+        root.requestRevision++
+        root.geocodeValid = false
+        root.geocodedCityKey = ""
+        root.getData()
+    }
 
     property var location: ({ valid: false, lat: 0, long: 0 })
+    property bool geocodeValid: false
+    property string geocodedCityKey: ""
+    property real geocodedLatitude: 0
+    property real geocodedLongitude: 0
+    property string geocodedDisplayName: ""
+    property string forecastCityLabel: ""
+    property bool refreshQueued: false
+    property int requestRevision: 0
 
     property var data: ({
         uv: "--",
@@ -177,58 +193,103 @@ Singleton {
         root.data = d;
     }
 
-    function tryFallback() {
+    function tryFallback(requestRevision = root.requestRevision) {
+        if (requestRevision !== root.requestRevision) {
+            root.refreshQueued = true
+            return
+        }
         console.info("[WeatherService] open-meteo unavailable — falling back to wttr.in");
         const loc = (root.gpsActive && root.location.valid)
             ? (root.location.lat + "," + root.location.long)
             : formatCityName(root.city);
+        if (fallbackFetcher.running)
+            return
+        fallbackFetcher.requestRevision = requestRevision
         fallbackFetcher.command = ["curl", "-s", "--max-time", "15", `https://wttr.in/${loc}?format=j1`];
         fallbackFetcher.running = true;
     }
 
-    function getData() {
+    function weatherParameters() {
         const units = root.useUSCS
             ? "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch"
-            : "";
-        const params = "current=temperature_2m,apparent_temperature,weather_code,"
+            : ""
+        return "current=temperature_2m,apparent_temperature,weather_code,"
             + "wind_speed_10m,wind_direction_10m,precipitation,relative_humidity_2m,"
             + "surface_pressure,uv_index,visibility"
             + "&daily=sunrise,sunset"
             + "&hourly=temperature_2m,weather_code"
             + "&timezone=auto&forecast_days=2"
-            + units;
+            + units
+    }
 
-        let command;
-        if (root.gpsActive && root.location.valid) {
-            const url = "https://api.open-meteo.com/v1/forecast?latitude="
-                + root.location.lat + "&longitude=" + root.location.long + "&" + params;
-            command = "curl -s --max-time 15 '" + url + "'"
-                + " | jq '. + {city:\"GPS Location\"}' || echo '{}'";
-        } else {
-            const citySpec = root.citySearchSpec(root.city);
-            const city = root.urlEncodeQuery(citySpec.query);
-            const hints = citySpec.hints.join("|");
-            const geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name="
-                + city + "&count=10&language=en&format=json";
-            const weatherBase = "https://api.open-meteo.com/v1/forecast?" + params;
-            const jqSelect = "def haystack: [.name, .country, .country_code, .admin1, .admin2, .admin3, .admin4] | map(. // \"\" | tostring | ascii_downcase) | join(\" \"); "
-                + "(.results // []) as $results | "
-                + "($hints | ascii_downcase | split(\"|\") | map(select(length > 0))) as $hintList | "
-                + "if ($hintList | length) > 0 then "
-                + "(($results | map(select(. as $item | ($item | haystack) as $hay | all($hintList[]; . as $hint | $hay | contains($hint)))) | .[0]) // $results[0] // {}) "
-                + "else ($results[0] // {}) end";
-            command = "GEO=$(curl -s --max-time 10 " + root.shellSingleQuote(geoUrl) + "); "
-                + "MATCH=$(printf '%s' \"$GEO\" | jq -c --arg hints " + root.shellSingleQuote(hints) + " " + root.shellSingleQuote(jqSelect) + "); "
-                + "LAT=$(printf '%s' \"$MATCH\" | jq -r '.latitude // empty'); "
-                + "LON=$(printf '%s' \"$MATCH\" | jq -r '.longitude // empty'); "
-                + "CITY=$(printf '%s' \"$MATCH\" | jq -r '.name // \"Unknown\"'); "
-                + "[ -z \"$LAT\" ] && echo '{}' && exit 0; "
-                + "curl -s --max-time 15 '" + weatherBase + "&latitude='\"$LAT\"'&longitude='\"$LON\"''"
-                + " | jq --arg c \"$CITY\" '. + {city: $c}' || echo '{}'";
+    function cityCacheKey(cityName) {
+        return String(cityName ?? "").trim().toLowerCase()
+    }
+
+    function matchingGeocodeResult(raw, citySpec) {
+        const results = Array.isArray(raw?.results) ? raw.results : []
+        if (results.length === 0)
+            return null
+        const hints = citySpec.hints
+            .map(hint => hint.toLowerCase())
+            .filter(hint => hint.length > 0)
+        if (hints.length === 0)
+            return results[0]
+        return results.find(result => {
+            const haystack = [
+                result.name, result.country, result.country_code, result.admin1,
+                result.admin2, result.admin3, result.admin4
+            ].map(value => String(value ?? "").toLowerCase()).join(" ")
+            return hints.every(hint => haystack.includes(hint))
+        }) ?? results[0]
+    }
+
+    function fetchForecast(latitude, longitude, cityLabel) {
+        if (fetcher.running) {
+            root.refreshQueued = true
+            return
+        }
+        root.forecastCityLabel = cityLabel
+        fetcher.requestRevision = root.requestRevision
+        const url = "https://api.open-meteo.com/v1/forecast?latitude="
+            + encodeURIComponent(latitude) + "&longitude=" + encodeURIComponent(longitude)
+            + "&" + root.weatherParameters()
+        fetcher.command = ["curl", "-fsS", "--max-time", "15", url]
+        fetcher.running = true
+    }
+
+    function getData() {
+        if (fetcher.running || geocodeFetcher.running || fallbackFetcher.running) {
+            root.refreshQueued = true
+            return
         }
 
-        fetcher.command = ["bash", "-c", command];
-        fetcher.running = true;
+        if (root.gpsActive && root.location.valid) {
+            root.fetchForecast(root.location.lat, root.location.long, "GPS Location")
+            return
+        }
+
+        const key = root.cityCacheKey(root.city)
+        if (root.geocodeValid && root.geocodedCityKey === key) {
+            root.fetchForecast(
+                root.geocodedLatitude,
+                root.geocodedLongitude,
+                root.geocodedDisplayName
+            )
+            return
+        }
+
+        const citySpec = root.citySearchSpec(root.city)
+        geocodeFetcher.requestedCityKey = key
+        geocodeFetcher.requestedCitySpec = citySpec
+        geocodeFetcher.requestRevision = root.requestRevision
+        geocodeFetcher.command = [
+            "curl", "-fsS", "--max-time", "10",
+            "https://geocoding-api.open-meteo.com/v1/search?name="
+                + root.urlEncodeQuery(citySpec.query)
+                + "&count=10&language=en&format=json"
+        ]
+        geocodeFetcher.running = true
     }
 
     function formatCityName(cityName) {
@@ -241,10 +302,6 @@ Singleton {
             query: parts.length > 0 ? parts[0] : cityName.trim(),
             hints: parts.slice(1)
         };
-    }
-
-    function shellSingleQuote(value) {
-        return "'" + String(value ?? "").replace(/'/g, "'\"'\"'") + "'";
     }
 
     function urlEncodeQuery(value) {
@@ -270,6 +327,8 @@ Singleton {
             positionSource.stop();
             root.location.valid = false;
             root.gpsActive = false;
+            root.requestRevision++;
+            root.getData();
             Quickshell.execDetached(["notify-send", Translation.tr("Weather Service"),
                 Translation.tr("GPS timed out. Using city fallback instead."), "-a", "Shell"]);
         }
@@ -278,35 +337,95 @@ Singleton {
     // Primary: open-meteo. On any failure (bad JSON, empty response, no .current)
     // automatically retries via wttr.in.
     Process {
-        id: fetcher
-        command: ["bash", "-c", ""]
+        id: geocodeFetcher
+        property string requestedCityKey: ""
+        property var requestedCitySpec: ({ query: "", hints: [] })
+        property int requestRevision: 0
+        property bool responseHandled: false
+        onRunningChanged: {
+            if (running)
+                responseHandled = false
+        }
         stdout: StdioCollector {
             onStreamFinished: {
+                geocodeFetcher.responseHandled = true
+                if (geocodeFetcher.requestRevision !== root.requestRevision
+                        || geocodeFetcher.requestedCityKey !== root.cityCacheKey(root.city)) {
+                    root.refreshQueued = true
+                    return
+                }
+                try {
+                    const match = root.matchingGeocodeResult(
+                        JSON.parse(text),
+                        geocodeFetcher.requestedCitySpec
+                    )
+                    const latitude = Number(match?.latitude)
+                    const longitude = Number(match?.longitude)
+                    if (!match || !isFinite(latitude) || !isFinite(longitude)) {
+                        root.tryFallback(geocodeFetcher.requestRevision)
+                        return
+                    }
+                    root.geocodedCityKey = geocodeFetcher.requestedCityKey
+                    root.geocodedLatitude = latitude
+                    root.geocodedLongitude = longitude
+                    root.geocodedDisplayName = String(match.name ?? root.city)
+                    root.geocodeValid = true
+                    root.fetchForecast(latitude, longitude, root.geocodedDisplayName)
+                } catch (error) {
+                    console.error("[WeatherService] geocoding parse error: " + error.message)
+                    root.tryFallback(geocodeFetcher.requestRevision)
+                }
+            }
+        }
+        onExited: exitCode => {
+            if (exitCode !== 0 && !responseHandled)
+                root.tryFallback(geocodeFetcher.requestRevision)
+            requestDrain.restart()
+        }
+    }
+
+    Process {
+        id: fetcher
+        property int requestRevision: 0
+        command: ["curl", "-fsS", "--max-time", "15", ""]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (fetcher.requestRevision !== root.requestRevision) {
+                    root.refreshQueued = true
+                    return
+                }
                 if (text.trim().length === 0) {
-                    root.tryFallback();
+                    root.tryFallback(fetcher.requestRevision);
                     return;
                 }
                 try {
                     const parsed = JSON.parse(text);
                     if (parsed?.current) {
+                        parsed.city = root.forecastCityLabel
                         root.refineData(parsed);
                     } else {
-                        root.tryFallback();
+                        root.tryFallback(fetcher.requestRevision);
                     }
                 } catch(e) {
                     console.error("[WeatherService] open-meteo parse error: " + e.message);
-                    root.tryFallback();
+                    root.tryFallback(fetcher.requestRevision);
                 }
             }
         }
+        onExited: requestDrain.restart()
     }
 
     // Fallback: wttr.in
     Process {
         id: fallbackFetcher
+        property int requestRevision: 0
         command: ["curl", "-s", "--max-time", "15", ""]
         stdout: StdioCollector {
             onStreamFinished: {
+                if (fallbackFetcher.requestRevision !== root.requestRevision) {
+                    root.refreshQueued = true
+                    return
+                }
                 if (text.trim().length === 0) {
                     console.error("[WeatherService] wttr.in returned empty response");
                     return;
@@ -319,6 +438,23 @@ Singleton {
                 }
             }
         }
+        onExited: requestDrain.restart()
+    }
+
+    Timer {
+        id: requestDrain
+        interval: 100
+        repeat: false
+        onTriggered: {
+            // Every process exit schedules another drain, so there is no need
+            // to poll while a chained geocode/forecast/fallback request runs.
+            if (fetcher.running || geocodeFetcher.running || fallbackFetcher.running)
+                return
+            if (!root.refreshQueued)
+                return
+            root.refreshQueued = false
+            root.getData()
+        }
     }
 
     PositionSource {
@@ -327,6 +463,7 @@ Singleton {
 
         onPositionChanged: {
             if (position.latitudeValid && position.longitudeValid) {
+                root.requestRevision++
                 root.location.lat   = position.coordinate.latitude;
                 root.location.long  = position.coordinate.longitude;
                 root.location.valid = true;
@@ -342,6 +479,8 @@ Singleton {
                 positionSource.stop();
                 root.location.valid = false;
                 root.gpsActive = false;
+                root.requestRevision++;
+                root.getData();
                 Quickshell.execDetached(["notify-send", Translation.tr("Weather Service"),
                     Translation.tr("Cannot find a GPS service. Using the fallback method instead."), "-a", "Shell"]);
                 console.error("[WeatherService] Could not acquire a valid backend plugin.");

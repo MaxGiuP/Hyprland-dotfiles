@@ -12,6 +12,11 @@ Image {
     required property var fileModelData
     asynchronous: true
     fillMode: Image.PreserveAspectFit
+    // Desktop thumbnails are displayed at icon size; avoid decoding an entire
+    // multi-megapixel image for each delegate. Callers can still override this
+    // when they intentionally render a larger preview.
+    sourceSize.width: Math.max(128, Math.ceil(width * 2))
+    sourceSize.height: Math.max(128, Math.ceil(height * 2))
 
     readonly property bool isDesktopFile: !fileModelData.fileIsDir && fileModelData.filePath.endsWith(".desktop")
     readonly property string fileExtension: {

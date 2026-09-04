@@ -20,6 +20,9 @@ Scope {
     // Keep the launcher surface warm. Recreating the PanelWindow, app model and
     // icon delegates on every open made the drawer feel unresponsive.
     property bool panelLoaded: true
+    // Keep the QML tree warm, but only map the layer surface while it is open
+    // or completing its exit animation.
+    property bool panelVisible: false
     property string targetScreenName: ""
     property bool targetScreenPrepared: false
     // Keep the prewarmed, hidden surface on a stable output. Following the
@@ -63,7 +66,7 @@ Scope {
         property bool entranceShown: false
         readonly property HyprlandMonitor monitor: Hyprland.monitorFor(panelWindow.screen)
         property bool monitorIsFocused: (Hyprland.focusedMonitor?.id == monitor?.id)
-        visible: overviewScope.panelLoaded
+        visible: overviewScope.panelVisible
 
         WlrLayershell.namespace: "quickshell:overview"
         WlrLayershell.layer: WlrLayer.Top
@@ -126,6 +129,15 @@ Scope {
             interval: 8
             repeat: false
             onTriggered: panelWindow.entranceShown = true
+        }
+        Timer {
+            id: panelUnmapTimer
+            interval: overviewScope.exitDuration + 20
+            repeat: false
+            onTriggered: {
+                if (!GlobalStates.overviewOpen)
+                    overviewScope.panelVisible = false;
+            }
         }
 
         Connections {
@@ -196,9 +208,12 @@ Scope {
             GlobalFocusGrab.dismiss();
             GlobalStates.overviewDrawerMode = false;
             contentReleaseTimer.restart();
+            panelUnmapTimer.restart();
         }
 
         function handleOverviewOpened() {
+            panelUnmapTimer.stop();
+            overviewScope.panelVisible = true;
             contentReleaseTimer.stop();
             const drawerMode = GlobalStates.overviewDrawerMode;
             panelWindow.overviewContentReady = !drawerMode;
