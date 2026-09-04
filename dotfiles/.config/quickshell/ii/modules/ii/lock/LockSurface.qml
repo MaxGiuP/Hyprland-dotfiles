@@ -193,6 +193,7 @@ MouseArea {
         Layout.fillWidth: true
         implicitHeight: 58
         radius: Appearance.rounding.normal
+        clip: true
         color: Appearance.colors.colLayer2
         border.width: 1
         border.color: ColorUtils.transparentize(Appearance.colors.colOnLayer2, 0.88)
@@ -210,11 +211,14 @@ MouseArea {
             }
             ColumnLayout {
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 spacing: 0
                 StyledText {
+                    Layout.fillWidth: true
                     text: timeoutStepper.label
                     font.pixelSize: Appearance.font.pixelSize.small
                     color: Appearance.colors.colSubtext
+                    elide: Text.ElideRight
                 }
                 StyledText {
                     text: Translation.tr("%1 min").arg(timeoutStepper.minutes)
@@ -1248,23 +1252,31 @@ MouseArea {
                         iconSize: 18
                         color: Appearance.colors.colPrimary
                     }
-                    StyledText {
-                        text: Translation.tr("Idle schedule")
-                        font.pixelSize: Appearance.font.pixelSize.normal
-                        font.weight: Font.Medium
-                        color: Appearance.colors.colOnLayer1
-                    }
-                    Item { Layout.fillWidth: true }
-                    StyledText {
-                        text: Translation.tr("Changes apply immediately")
-                        font.pixelSize: Appearance.font.pixelSize.small
-                        color: Appearance.colors.colSubtext
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: Translation.tr("Idle schedule")
+                            font.pixelSize: Appearance.font.pixelSize.normal
+                            font.weight: Font.Medium
+                            color: Appearance.colors.colOnLayer1
+                            elide: Text.ElideRight
+                        }
+                        StyledText {
+                            Layout.fillWidth: true
+                            text: Translation.tr("Changes apply immediately")
+                            font.pixelSize: Appearance.font.pixelSize.small
+                            color: Appearance.colors.colSubtext
+                            elide: Text.ElideRight
+                        }
                     }
                 }
 
-                RowLayout {
+                ColumnLayout {
                     Layout.fillWidth: true
-                    spacing: 10
+                    spacing: 8
 
                     TimeoutStepper {
                         iconName: "bedtime"
@@ -1313,9 +1325,11 @@ MouseArea {
                             }
                             StyledText {
                                 Layout.fillWidth: true
+                                Layout.minimumWidth: 0
                                 text: Translation.tr("Keep awake")
                                 font.pixelSize: Appearance.font.pixelSize.normal
                                 font.weight: Font.Medium
+                                elide: Text.ElideRight
                                 color: keepAwakeButton.toggled
                                     ? keepAwakeButton.colForegroundToggled
                                     : Appearance.colors.colOnLayer2
