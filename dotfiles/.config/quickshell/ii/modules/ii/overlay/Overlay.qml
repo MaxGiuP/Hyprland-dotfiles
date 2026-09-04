@@ -76,6 +76,16 @@ Scope {
             GlobalStates.toggleOverlay()
         }
 
+        function openWidget(identifier: string): void {
+            if (!OverlayContext.availableWidgets.some(entry => entry.identifier === identifier))
+                return
+            GlobalStates.openOverlayWidget(identifier)
+        }
+
+        function closeWidget(identifier: string): void {
+            GlobalStates.closeOverlayWidget(identifier)
+        }
+
         function pinWidget(identifier: string, pinned: bool): void {
             const widget = OverlayContext.availableWidgets.find(entry => entry.identifier === identifier)
             if (!widget || !Persistent.states.overlay[identifier])

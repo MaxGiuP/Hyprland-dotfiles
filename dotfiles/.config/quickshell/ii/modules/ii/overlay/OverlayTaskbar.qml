@@ -13,6 +13,18 @@ Rectangle {
     id: root
 
     property real padding: 8
+    readonly property var widgetEntries: OverlayContext.availableWidgets.filter(entry => entry.group !== "systemApps")
+    readonly property var systemAppEntries: OverlayContext.availableWidgets.filter(entry => entry.group === "systemApps")
+
+    function displayName(entry) {
+        if (entry?.displayName)
+            return entry.displayName
+
+        const words = String(entry?.identifier ?? "")
+            .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+            .replace(/^./, letter => letter.toUpperCase())
+        return Translation.tr(words)
+    }
 
     opacity: GlobalStates.overlayOpen ? 1 : 0
     implicitWidth: contentRow.implicitWidth + (padding * 2)
@@ -38,12 +50,29 @@ Rectangle {
             spacing: 4
             Repeater {
                 model: ScriptModel {
-                    values: OverlayContext.availableWidgets
+                    values: root.widgetEntries
                 }
                 delegate: WidgetButton {
                     required property var modelData
                     identifier: modelData.identifier
                     materialSymbol: modelData.materialSymbol
+                    displayName: root.displayName(modelData)
+                }
+            }
+        }
+
+        Separator {}
+        Row {
+            spacing: 4
+            Repeater {
+                model: ScriptModel {
+                    values: root.systemAppEntries
+                }
+                delegate: WidgetButton {
+                    required property var modelData
+                    identifier: modelData.identifier
+                    materialSymbol: modelData.materialSymbol
+                    displayName: root.displayName(modelData)
                 }
             }
         }
@@ -115,8 +144,11 @@ Rectangle {
         id: widgetButton
         required property string identifier
         required property string materialSymbol
+        required property string displayName
 
         Layout.alignment: Qt.AlignVCenter
+        activeFocusOnTab: true
+        Accessible.name: displayName
 
         toggled: Persistent.states.overlay.open.includes(identifier)
         onClicked: {
@@ -145,6 +177,10 @@ Rectangle {
                 text: widgetButton.materialSymbol
                 color: widgetButton.toggled ? Appearance.colors.colOnSecondaryContainer : Appearance.colors.colOnSurfaceVariant
             }
+        }
+
+        StyledToolTip {
+            text: widgetButton.displayName
         }
     }
 }

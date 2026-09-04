@@ -198,13 +198,19 @@ AbstractOverlayWidget {
     }
     DragHandler {
         id: dragHandler
+        property bool activated: false
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         target: null
         onActiveChanged: { // Handle drag release
-            if (!active) {
-                root.resizing = false;
-                root.savePosition();
+            if (active) {
+                activated = true
+                return
             }
+            if (!activated)
+                return
+            activated = false
+            root.resizing = false;
+            root.savePosition();
         }
         xAxis.minimum: 0
         xAxis.maximum: root.parent?.width - root.width
@@ -303,6 +309,7 @@ AbstractOverlayWidget {
                 
                 DragHandler {
                     id: titleBarDragHandler
+                    property bool activated: false
                     acceptedButtons: Qt.LeftButton
                     target: (root.draggable && !root.resizing) ? root : null
                     xAxis.minimum: 0
@@ -310,8 +317,14 @@ AbstractOverlayWidget {
                     yAxis.minimum: -root.effectiveTitleBarHeight
                     yAxis.maximum: root.parent?.height - root.height
                     onActiveChanged: {
-                        if (!active)
-                            root.savePosition()
+                        if (active) {
+                            activated = true
+                            return
+                        }
+                        if (!activated)
+                            return
+                        activated = false
+                        root.savePosition()
                     }
                 }
 
@@ -399,6 +412,7 @@ AbstractOverlayWidget {
 
                 DragHandler {
                     id: bodyDragHandler
+                    property bool activated: false
                     acceptedButtons: Qt.LeftButton
                     target: (root.bodyDragEnabledWhenPinned && !root.resizing) ? root : null
                     xAxis.minimum: 0
@@ -406,8 +420,14 @@ AbstractOverlayWidget {
                     yAxis.minimum: 0
                     yAxis.maximum: root.parent?.height - root.height
                     onActiveChanged: {
-                        if (!active)
-                            root.savePosition()
+                        if (active) {
+                            activated = true
+                            return
+                        }
+                        if (!activated)
+                            return
+                        activated = false
+                        root.savePosition()
                     }
                 }
             }

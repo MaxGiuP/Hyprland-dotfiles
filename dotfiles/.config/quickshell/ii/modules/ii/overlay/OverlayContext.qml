@@ -2,6 +2,7 @@ pragma Singleton
 pragma ComponentBehavior: Bound
 import Quickshell
 import qs.modules.common
+import qs.services
 
 Singleton {
     id: root
@@ -21,6 +22,9 @@ Singleton {
         { identifier: "liveCaptionsSettings", materialSymbol: "settings_voice" },
         { identifier: "settingsMenu", materialSymbol: "settings" },
         { identifier: "terminal", materialSymbol: "terminal" },
+        { identifier: "calculator", materialSymbol: "calculate", displayName: Translation.tr("Calculator"), group: "systemApps" },
+        { identifier: "timers", materialSymbol: "timer", displayName: Translation.tr("Timers"), group: "systemApps" },
+        { identifier: "systemDashboard", materialSymbol: "space_dashboard", displayName: Translation.tr("System Dashboard"), group: "systemApps" },
     ]
     
     readonly property list<string> persistedPinnedWidgetIdentifiers: {

@@ -258,6 +258,35 @@ Singleton {
                     property real width: 600
                     property real height: 450
                 }
+                property JsonObject calculator: JsonObject {
+                    property bool pinned: false
+                    property bool clickthrough: false
+                    property bool draggableWhenPinned: false
+                    property real x: 0.08
+                    property real y: 0.14
+                    property real width: 0.2708
+                    property real height: 0.6481
+                }
+                property JsonObject timers: JsonObject {
+                    property bool pinned: false
+                    property bool clickthrough: false
+                    property bool draggableWhenPinned: false
+                    property real x: 0.56
+                    property real y: 0.18
+                    property real width: 0.3229
+                    property real height: 0.5185
+                    property int currentTab: 0
+                }
+                property JsonObject systemDashboard: JsonObject {
+                    property bool pinned: false
+                    property bool clickthrough: false
+                    property bool draggableWhenPinned: false
+                    property real x: 0.1719
+                    property real y: 0.13
+                    property real width: 0.5729
+                    property real height: 0.6667
+                    property int currentTab: 0
+                }
             }
 
             property JsonObject timer: JsonObject {

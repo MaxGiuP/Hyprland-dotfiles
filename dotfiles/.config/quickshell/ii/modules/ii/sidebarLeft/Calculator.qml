@@ -8,6 +8,8 @@ FocusScope {
     id: root
     focus: true
     activeFocusOnTab: true
+    property bool autoFocusOnCompleted: true
+    property bool clearOnEscape: true
 
     property string expression: ""
     property string result: "0"
@@ -129,7 +131,7 @@ FocusScope {
         } else if (event.key === Qt.Key_Backspace) {
             root.backspace();
             event.accepted = true;
-        } else if (event.key === Qt.Key_Escape) {
+        } else if (event.key === Qt.Key_Escape && root.clearOnEscape) {
             root.clearAll();
             event.accepted = true;
         } else if (key && /^[0-9+\-*/().%^]$/.test(key)) {
@@ -138,7 +140,10 @@ FocusScope {
         }
     }
 
-    Component.onCompleted: root.forceActiveFocus()
+    Component.onCompleted: {
+        if (root.autoFocusOnCompleted)
+            root.forceActiveFocus()
+    }
 
     ColumnLayout {
         anchors.fill: parent

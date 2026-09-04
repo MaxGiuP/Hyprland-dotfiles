@@ -20,6 +20,9 @@ import qs.modules.ii.overlay.liveScreenTranslationOutput
 import qs.modules.ii.overlay.liveCaptionsSettings
 import qs.modules.ii.overlay.settingsMenu
 import qs.modules.ii.overlay.terminal
+import qs.modules.ii.overlay.calculator
+import qs.modules.ii.overlay.timers
+import qs.modules.ii.overlay.systemDashboard
 
 DelegateChooser {
     id: root
@@ -39,4 +42,7 @@ DelegateChooser {
     DelegateChoice { roleValue: "liveCaptionsSettings"; LiveCaptionsSettings {} }
     DelegateChoice { roleValue: "settingsMenu"; SettingsMenu {} }
     DelegateChoice { roleValue: "terminal"; Terminal {} }
+    DelegateChoice { roleValue: "calculator"; CalculatorOverlay {} }
+    DelegateChoice { roleValue: "timers"; TimersOverlay {} }
+    DelegateChoice { roleValue: "systemDashboard"; SystemDashboardOverlay {} }
 }

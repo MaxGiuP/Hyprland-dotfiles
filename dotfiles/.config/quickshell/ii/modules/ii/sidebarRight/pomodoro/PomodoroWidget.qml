@@ -7,6 +7,7 @@ import QtQuick.Layouts
 
 Item {
     id: root
+    property alias currentTab: tabBar.currentIndex
     readonly property bool editingSettings: countdownPage.showSettingsDialog || pomodoroPage.showSettingsDialog
     property var tabButtonList: [
         {"name": Translation.tr("Countdown"), "icon": "hourglass_top"},
