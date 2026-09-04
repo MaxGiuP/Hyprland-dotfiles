@@ -191,7 +191,8 @@ MouseArea {
         signal valueRequested(int value)
 
         Layout.fillWidth: true
-        implicitHeight: 58
+        Layout.minimumWidth: 0
+        implicitHeight: 52
         radius: Appearance.rounding.normal
         clip: true
         color: Appearance.colors.colLayer2
@@ -200,13 +201,13 @@ MouseArea {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 12
-            anchors.rightMargin: 8
-            spacing: 8
+            anchors.leftMargin: 10
+            anchors.rightMargin: 6
+            spacing: 6
 
             MaterialSymbol {
                 text: timeoutStepper.iconName
-                iconSize: 20
+                iconSize: 18
                 color: Appearance.colors.colPrimary
             }
             ColumnLayout {
@@ -228,8 +229,8 @@ MouseArea {
                 }
             }
             RippleButton {
-                implicitWidth: 38
-                implicitHeight: 38
+                implicitWidth: 34
+                implicitHeight: 34
                 enabled: timeoutStepper.minutes > timeoutStepper.minimumMinutes
                 onClicked: timeoutStepper.valueRequested(Math.max(
                     timeoutStepper.minimumMinutes,
@@ -238,13 +239,13 @@ MouseArea {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: "remove"
-                    iconSize: 19
+                    iconSize: 17
                     color: parent.enabled ? Appearance.colors.colOnLayer2 : Appearance.colors.colSubtext
                 }
             }
             RippleButton {
-                implicitWidth: 38
-                implicitHeight: 38
+                implicitWidth: 34
+                implicitHeight: 34
                 enabled: timeoutStepper.minutes < timeoutStepper.maximumMinutes
                 onClicked: timeoutStepper.valueRequested(Math.min(
                     timeoutStepper.maximumMinutes,
@@ -253,7 +254,7 @@ MouseArea {
                 contentItem: MaterialSymbol {
                     anchors.centerIn: parent
                     text: "add"
-                    iconSize: 19
+                    iconSize: 17
                     color: parent.enabled ? Appearance.colors.colOnLayer2 : Appearance.colors.colSubtext
                 }
             }
@@ -1242,43 +1243,36 @@ MouseArea {
             // ── Idle lock and sleep schedule ─────────────────────────────
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 6
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: 6
                     MaterialSymbol {
                         text: "schedule"
-                        iconSize: 18
+                        iconSize: 16
                         color: Appearance.colors.colPrimary
                     }
-                    ColumnLayout {
+                    StyledText {
                         Layout.fillWidth: true
-                        spacing: 0
-
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: Translation.tr("Idle schedule")
-                            font.pixelSize: Appearance.font.pixelSize.normal
-                            font.weight: Font.Medium
-                            color: Appearance.colors.colOnLayer1
-                            elide: Text.ElideRight
-                        }
-                        StyledText {
-                            Layout.fillWidth: true
-                            text: Translation.tr("Changes apply immediately")
-                            font.pixelSize: Appearance.font.pixelSize.small
-                            color: Appearance.colors.colSubtext
-                            elide: Text.ElideRight
-                        }
+                        text: Translation.tr("Idle schedule")
+                        font.pixelSize: Appearance.font.pixelSize.small
+                        font.weight: Font.Medium
+                        color: Appearance.colors.colOnLayer1
+                        elide: Text.ElideRight
                     }
                 }
 
-                ColumnLayout {
+                GridLayout {
+                    id: idleControls
                     Layout.fillWidth: true
-                    spacing: 8
+                    columns: mainCard.width >= 680 ? 2 : 1
+                    columnSpacing: 8
+                    rowSpacing: 8
 
                     TimeoutStepper {
+                        Layout.preferredWidth: 500
+                        Layout.minimumWidth: idleControls.columns === 2 ? 390 : 0
                         iconName: "bedtime"
                         label: Translation.tr("Sleep after inactivity")
                         minutes: IdleLockConfig.suspendTimeoutMinutes()
@@ -1301,7 +1295,9 @@ MouseArea {
                     RippleButton {
                         id: keepAwakeButton
                         Layout.fillWidth: true
-                        implicitHeight: 58
+                        Layout.preferredWidth: 220
+                        Layout.minimumWidth: idleControls.columns === 2 ? 170 : 0
+                        implicitHeight: 52
                         buttonRadius: Appearance.rounding.normal
                         toggled: Idle.inhibit
                         colBackground: Appearance.colors.colLayer2
@@ -1312,13 +1308,13 @@ MouseArea {
 
                         contentItem: RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 12
-                            anchors.rightMargin: 12
-                            spacing: 10
+                            anchors.leftMargin: 10
+                            anchors.rightMargin: 10
+                            spacing: 8
 
                             MaterialSymbol {
                                 text: "coffee"
-                                iconSize: 20
+                                iconSize: 18
                                 color: keepAwakeButton.toggled
                                     ? keepAwakeButton.colForegroundToggled
                                     : Appearance.colors.colPrimary
@@ -1327,7 +1323,7 @@ MouseArea {
                                 Layout.fillWidth: true
                                 Layout.minimumWidth: 0
                                 text: Translation.tr("Keep awake")
-                                font.pixelSize: Appearance.font.pixelSize.normal
+                                font.pixelSize: Appearance.font.pixelSize.small
                                 font.weight: Font.Medium
                                 elide: Text.ElideRight
                                 color: keepAwakeButton.toggled
@@ -1336,7 +1332,7 @@ MouseArea {
                             }
                             MaterialSymbol {
                                 text: keepAwakeButton.toggled ? "toggle_on" : "toggle_off"
-                                iconSize: 30
+                                iconSize: 28
                                 color: keepAwakeButton.toggled
                                     ? keepAwakeButton.colForegroundToggled
                                     : Appearance.colors.colSubtext
