@@ -16,6 +16,7 @@ ColumnLayout {
     spacing: 16
 
     StyledFlickable {
+        id: appFlickable
         Layout.fillHeight: true
         Layout.fillWidth: true
         clip: true
@@ -36,11 +37,16 @@ ColumnLayout {
                 }
             }
 
-            PagePlaceholder {
-                icon: "widgets"
-                title: Translation.tr("No applications")
-                shown: !root.hasApps
-                shape: MaterialShape.Shape.Cookie7Sided
+            Item {
+                visible: !root.hasApps
+                Layout.fillWidth: true
+                Layout.preferredHeight: visible ? Math.max(160, appFlickable.height) : 0
+
+                PagePlaceholder {
+                    icon: "widgets"
+                    title: Translation.tr("No applications")
+                    shape: MaterialShape.Shape.Cookie7Sided
+                }
             }
         }
     }

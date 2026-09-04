@@ -540,7 +540,9 @@ Singleton {
         running: true
         repeat: true
         onTriggered: {
-            if (Date.now() - root.lastNativeHyprlandActivityAt < 15000)
+            // This is a recovery path, not the normal update path. The filtered
+            // socket bridge keeps workspace highlighting live while we wait.
+            if (Date.now() - root.lastNativeHyprlandActivityAt < 60000)
                 return;
             root.lastNativeHyprlandActivityAt = Date.now();
             root.updateMonitors();

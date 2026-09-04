@@ -31,11 +31,17 @@ Scope {
         for (let i = 0; i < players.length; ++i) {
             if (used.has(i))
                 continue;
-            let p1 = players[i];
+            const p1 = players[i];
+            if (!p1) {
+                used.add(i);
+                continue;
+            }
             let group = [i];
 
             for (let j = i + 1; j < players.length; ++j) {
-                let p2 = players[j];
+                const p2 = players[j];
+                if (!p2)
+                    continue;
                 const p1kde = (p1?.dbusName ?? "").toLowerCase().includes("kdeconnect");
                 const p2kde = (p2?.dbusName ?? "").toLowerCase().includes("kdeconnect");
                 if (p1kde !== p2kde) continue; // never merge KDE Connect with local sources
@@ -59,7 +65,7 @@ Scope {
                 }
             }
             if (chosenIdx === undefined)
-                chosenIdx = group.find(idx => players[idx].trackArtUrl && players[idx].trackArtUrl.length > 0);
+                chosenIdx = group.find(idx => (players[idx]?.trackArtUrl ?? "").length > 0);
             if (chosenIdx === undefined)
                 chosenIdx = group[0];
 

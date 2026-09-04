@@ -339,9 +339,8 @@ Singleton {
         }
     }
 
-    function refreshDynamicStatus(recoverIfStopped = false) {
+    function refreshDynamicStatus() {
         dynamicStatusProc.running = false
-        dynamicStatusProc.recoverIfStopped = recoverIfStopped
         dynamicStatusProc.command = [
             root.dynamicScriptPath,
             "status",
@@ -400,31 +399,15 @@ Singleton {
         onTriggered: root.restoreDynamicMode()
     }
 
-    Timer {
-        interval: 60000
-        repeat: true
-        running: Config.ready
-            && !root.settingsApp
-            && (Config.options.background.wallpaperMode ?? "static") === "dynamic"
-        onTriggered: root.refreshDynamicStatus(true)
-    }
-
+    // The systemd unit owns continuous recovery (Restart=always). Status work
+    // here is deliberately one-shot: startup, settings, and user actions.
     Process {
         id: dynamicStatusProc
-        property bool recoverIfStopped: false
         stdout: StdioCollector {
             onStreamFinished: {
                 const first = text.split("\n")[0] ?? ""
                 root.dynamicStatus = first.trim()
                 root.dynamicRunning = root.dynamicStatus.startsWith("running")
-                const shouldRecover = dynamicStatusProc.recoverIfStopped
-                    && !root.dynamicRunning
-                    && Config.ready
-                    && !root.settingsApp
-                    && (Config.options.background.wallpaperMode ?? "static") === "dynamic"
-                dynamicStatusProc.recoverIfStopped = false
-                if (shouldRecover)
-                    root.startDynamic()
             }
         }
     }

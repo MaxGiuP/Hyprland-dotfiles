@@ -174,7 +174,7 @@ StyledOverlayWidget {
                     anchors.margins: 1
                     focus: true
                     activeFocusOnTab: true
-                    font.family: "Noto Sans Mono"
+                    font.family: Appearance.font.family.monospace
                     font.pointSize: 11
                     colorScheme: "BreezeModified"
                     session: OverlayTerminal.session
@@ -195,21 +195,17 @@ StyledOverlayWidget {
                     Component.onDestruction: OverlayTerminal.displayReady = false
                 }
 
-                Loader {
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
+                TerminalScrollbar {
+                    terminal: term
                     width: 4
-                    active: root.terminalReady
-                    sourceComponent: QMLTermScrollbar {
-                        terminal: term
+                    visible: root.terminalReady
+                    z: 2
 
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: width / 2
-                            color: Appearance.colors.colPrimary
-                            opacity: parent.opacity
-                        }
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: Appearance.colors.colPrimary
+                        opacity: parent.opacity
                     }
                 }
             }

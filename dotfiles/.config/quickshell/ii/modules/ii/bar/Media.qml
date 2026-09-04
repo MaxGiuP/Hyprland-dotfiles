@@ -62,7 +62,7 @@ Item {
         property string artFilePath: root.artFilePath
         command: [
             "bash", "-c",
-            "[ -s \"$1\" ] || curl -fsSL \"$2\" -o \"$1\"",
+            "exec 9>>\"$1\"; flock -x 9 || exit 1; if [ -s \"$1\" ]; then exit 0; fi; tmp=\"${1}.part.$$\"; trap 'rm -f -- \"$tmp\"' EXIT HUP INT TERM; curl -fsSL -o \"$tmp\" -- \"$2\" && mv -f -- \"$tmp\" \"$1\"",
             "cover-art", artFilePath, targetFile
         ]
         onExited: (exitCode) => {

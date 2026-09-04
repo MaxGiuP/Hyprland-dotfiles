@@ -29,7 +29,7 @@ Singleton {
 
     function load() {}
     function refresh() {
-        if (root.settingsApp) return;
+        if (root.settingsApp || !root.available) return;
         if (checkUpdatesProc.running) return;
         print("[Updates] Checking for system updates")
         checkUpdatesProc.running = true;
@@ -70,7 +70,8 @@ Singleton {
         command: ["/bin/bash", "-c", `[ -x "${root.updateScriptPath}" ]`]
         onExited: (exitCode, exitStatus) => {
             root.available = (exitCode === 0);
-            root.refresh();
+            if (root.available)
+                root.refresh();
         }
     }
 
@@ -103,10 +104,5 @@ Singleton {
                 }
             }
         }
-    }
-
-    Component.onCompleted: {
-        if (!root.settingsApp)
-            root.refresh()
     }
 }

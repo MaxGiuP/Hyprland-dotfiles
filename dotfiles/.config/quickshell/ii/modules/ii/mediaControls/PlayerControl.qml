@@ -55,12 +55,10 @@ Item { // Player instance
         ? Quickshell.iconPath(fallbackIconName, "image-missing")
         : ""
     readonly property string preferredPlayerThumbnail: fallbackArtPath.length > 0 ? fallbackArtPath : ""
-    // Do not pass an image-missing fallback URL to ColorQuantizer: it retries a
-    // nonexistent icon source on each player update. The visible artwork keeps
-    // its existing fallback; colour extraction only uses real image files.
-    readonly property string quantizerSource: root.downloaded
-        ? Qt.resolvedUrl(artFilePath)
-        : AppSearch.resolvedIconPath(fallbackIconName)
+    // Theme icons may resolve through the image:// provider, which
+    // ColorQuantizer cannot read as a file. Only analyze downloaded artwork;
+    // the visible image can still use its themed fallback icon.
+    readonly property string quantizerSource: root.downloaded ? Qt.resolvedUrl(artFilePath) : ""
     readonly property bool matchesActiveTrack: {
         if (!root.player || !MprisController.activePlayer)
             return false;
@@ -165,11 +163,14 @@ Item { // Player instance
         property string artFilePath: root.artFilePath
         command: [
             "bash", "-c",
-            "[ -s \"$1\" ] || curl -fsSL \"$2\" -o \"$1\"",
+            "exec 9>>\"$1\"; flock -x 9 || exit 1; if [ -s \"$1\" ]; then exit 0; fi; tmp=\"${1}.part.$$\"; trap 'rm -f -- \"$tmp\"' EXIT HUP INT TERM; curl -fsSL -o \"$tmp\" -- \"$2\" && mv -f -- \"$tmp\" \"$1\"",
             "cover-art", artFilePath, targetFile
         ]
         onExited: (exitCode) => {
             root.downloaded = exitCode === 0
+                && coverArtDownloader.targetFile.length > 0
+                && coverArtDownloader.targetFile === (root.artUrl ?? "")
+                && coverArtDownloader.artFilePath === root.artFilePath
         }
     }
 
@@ -289,7 +290,7 @@ Item { // Player instance
 
                     MaterialSymbol {
                         anchors.centerIn: parent
-                        iconSize: Appearance.font.pixelSize.tiny
+                        iconSize: Appearance.font.pixelSize.smallest
                         fill: 1
                         color: blendedColors.colOnLayer0
                         text: root.sourceIcon

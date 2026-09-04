@@ -273,7 +273,7 @@ find_quickshell_build_dir() {
 
 sync_quickshell_user_local() {
     local build_dir="${1:-}"
-    local src_root bin_src qml_src
+    local src_root bin_src qml_src dest_version candidate_version newest_version
     local dest_bin="$HOME/.local/libexec/quickshell/quickshell"
     local dest_qml="$HOME/.local/lib/qt6/qml"
 
@@ -291,6 +291,22 @@ sync_quickshell_user_local() {
 
     if [ -z "$bin_src" ]; then
         return 1
+    fi
+
+    # A host-built release may intentionally be newer than the pinned package
+    # candidate. Preserve it (and its matching QML metadata) while it remains
+    # ABI compatible; a future package at the same or newer version wins.
+    if [ -x "$dest_bin" ] && [ -d "$dest_qml/Quickshell" ] \
+        && "$dest_bin" --private-check-compat >/dev/null 2>&1; then
+        dest_version=$("$dest_bin" --version 2>/dev/null | sed -nE 's/.* ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -n 1)
+        candidate_version=$("$bin_src" --version 2>/dev/null | sed -nE 's/.* ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' | head -n 1)
+        if [ -n "$dest_version" ] && [ -n "$candidate_version" ] && [ "$dest_version" != "$candidate_version" ]; then
+            newest_version=$(printf '%s\n%s\n' "$dest_version" "$candidate_version" | sort -V | tail -n 1)
+            if [ "$newest_version" = "$dest_version" ]; then
+                printf 'Preserving newer compatible local Quickshell %s (package candidate %s)\n' "$dest_version" "$candidate_version"
+                return 0
+            fi
+        fi
     fi
 
     # Do not retain a 170+ MB byte-for-byte copy of the packaged binary. The

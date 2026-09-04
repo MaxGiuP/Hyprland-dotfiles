@@ -1,7 +1,6 @@
 local h = require("hyprland.lib")
 
 -- Bar, wallpaper
-h.exec_on_start("~/.config/hypr/hyprland/scripts/start_geoclue_agent.sh")
 h.exec_on_start("~/.config/hypr/hyprland/scripts/__restore_video_wallpaper.sh")
 h.exec_on_start("python3 ~/.config/quickshell/$qsConfig/scripts/colors/apply_gnome_accent.py")
 

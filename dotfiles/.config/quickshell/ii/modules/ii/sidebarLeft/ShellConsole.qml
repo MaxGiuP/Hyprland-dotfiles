@@ -395,7 +395,7 @@ FocusScope {
                                 anchors.margins: 1
                                 focus: index === root.currentTerminalIndex
                                 activeFocusOnTab: true
-                                font.family: "Noto Sans Mono"
+                                font.family: Appearance.font.family.monospace
                                 font.pointSize: 11
                                 colorScheme: "BreezeModified"
                                 session: QMLTermSession {
@@ -426,30 +426,20 @@ FocusScope {
                                         Qt.callLater(root.focusTerminal);
                                 }
                             }
-                        }
-                    }
-                }
 
-                Loader {
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.bottom: parent.bottom
-                    width: 4
+                            TerminalScrollbar {
+                                terminal: term
+                                width: 4
+                                visible: terminalReady
+                                z: 2
 
-                    readonly property var currentTerm: {
-                        const item = root.currentTerminalItem();
-                        return item ? item.term : null;
-                    }
-
-                    active: currentTerm !== null
-                    sourceComponent: QMLTermScrollbar {
-                        terminal: parent.currentTerm
-
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: width / 2
-                            color: Appearance.colors.colPrimary
-                            opacity: parent.opacity
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: width / 2
+                                    color: Appearance.colors.colPrimary
+                                    opacity: parent.opacity
+                                }
+                            }
                         }
                     }
                 }

@@ -658,8 +658,17 @@ Item {
                                             id: artDownloader
                                             property string targetFile: ""
                                             property string artFilePath: ""
-                                            command: ["bash", "-c", `[ -f '${artFilePath}' ] || curl -sSL '${targetFile}' -o '${artFilePath}'`]
-                                            onExited: playerPage.artReady = true
+                                            command: [
+                                                "bash", "-c",
+                                                "exec 9>>\"$1\"; flock -x 9 || exit 1; if [ -s \"$1\" ]; then exit 0; fi; tmp=\"${1}.part.$$\"; trap 'rm -f -- \"$tmp\"' EXIT HUP INT TERM; curl -fsSL -o \"$tmp\" -- \"$2\" && mv -f -- \"$tmp\" \"$1\"",
+                                                "cover-art", artFilePath, targetFile
+                                            ]
+                                            onExited: (exitCode) => {
+                                                playerPage.artReady = exitCode === 0
+                                                    && artDownloader.targetFile.length > 0
+                                                    && artDownloader.targetFile === playerPage.artUrl
+                                                    && artDownloader.artFilePath === playerPage.artPath
+                                            }
                                         }
 
                                         Image {

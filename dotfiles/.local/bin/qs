@@ -88,9 +88,9 @@ if [ -d "$HOME/.local/lib/qt6/qml" ]; then
 fi
 
 if [ -n "${QT_LOGGING_RULES:-}" ]; then
-    export QT_LOGGING_RULES="${QT_LOGGING_RULES};qt.svg=false;qt.svg.draw=false;quickshell.desktopentry.warning=false"
+    export QT_LOGGING_RULES="${QT_LOGGING_RULES};qt.svg=false;qt.svg.draw=false;qt.text.font.db.debug=false;qt.text.font.db.info=false;quickshell.desktopentry.warning=false"
 else
-    export QT_LOGGING_RULES="qt.svg=false;qt.svg.draw=false;quickshell.desktopentry.warning=false"
+    export QT_LOGGING_RULES="qt.svg=false;qt.svg.draw=false;qt.text.font.db.debug=false;qt.text.font.db.info=false;quickshell.desktopentry.warning=false"
 fi
 
 for arg in "$@"; do

@@ -277,11 +277,15 @@ Singleton {
         agendaWatchRestart.restart()
     }
 
+    Component.onCompleted: root.refresh(false)
+
     Timer {
-        interval: 5 * 60 * 1000
+        // The watcher keeps local snapshots current. Remote calendar discovery
+        // is comparatively expensive, so perform it periodically and on the
+        // existing explicit refresh actions instead of on every shell reload.
+        interval: 30 * 60 * 1000
         repeat: true
         running: true
-        triggeredOnStart: true
         onTriggered: root.refresh(true)
     }
 
