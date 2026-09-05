@@ -35,7 +35,7 @@ MouseArea {
     function handleLeftClick() {
         const notificationId = root.notification?.notificationId;
         const wasPopup = root.notification?.popup ?? false;
-        if (!Notifications.activateNotification(notificationId)) return;
+        if (!Notifications.activateNotification(notificationId, root)) return;
         if (wasPopup)
             Notifications.timeoutNotification(notificationId);
     }
@@ -225,7 +225,7 @@ MouseArea {
                 verticalPadding: 16
                 horizontalPadding: 12
                 text: modelData.text
-                onClicked: Notifications.attemptInvokeAction(root.notification.notificationId, modelData.identifier)
+                onClicked: Notifications.attemptInvokeAction(root.notification.notificationId, modelData.identifier, actionButton)
                 implicitHeight: actionButtonText.implicitHeight + verticalPadding * 2
                 contentItem: WText {
                     id: actionButtonText

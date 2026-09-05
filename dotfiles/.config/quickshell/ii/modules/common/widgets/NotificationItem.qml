@@ -51,7 +51,7 @@ Item { // Notification item area
     function handleLeftClick() {
         const notificationId = notificationObject.notificationId;
         const wasPopup = notificationObject.popup;
-        if (!Notifications.activateNotification(notificationId)) return;
+        if (!Notifications.activateNotification(notificationId, root)) return;
 
         if (wasPopup)
             Notifications.timeoutNotification(notificationId);
@@ -287,8 +287,15 @@ Item { // Notification item area
                                     : (contentItem.implicitWidth + leftPadding + rightPadding)
 
                                 onClicked: {
-                                    if (Notifications.activateNotification(notificationObject.notificationId)) {
-                                        root.destroyWithAnimation()
+                                    const hasLiveDefaultAction = Notifications.liveActionForNotification(
+                                        notificationObject.notificationId,
+                                        "default"
+                                    ) !== null;
+                                    if (Notifications.activateNotification(notificationObject.notificationId, openAppButton)) {
+                                        // A live action closes itself after the activation
+                                        // token arrives and also honours resident=true.
+                                        if (!hasLiveDefaultAction)
+                                            root.destroyWithAnimation();
                                     }
                                 }
 
@@ -333,7 +340,7 @@ Item { // Notification item area
                                     buttonText: modelData.text
                                     urgency: notificationObject.urgency
                                     onClicked: {
-                                        Notifications.attemptInvokeAction(notificationObject.notificationId, modelData.identifier);
+                                        Notifications.attemptInvokeAction(notificationObject.notificationId, modelData.identifier, notifAction);
                                     }
                                 }
                             }

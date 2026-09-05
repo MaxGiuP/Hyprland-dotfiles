@@ -61,7 +61,7 @@ MouseArea { // Notification group area
         const popupNotificationIds = root.popup
             ? root.notifications.map((notif) => notif.notificationId)
             : [];
-        if (!Notifications.activateNotification(latestNotif.notificationId)) return;
+        if (!Notifications.activateNotification(latestNotif.notificationId, root)) return;
 
         if (popupNotificationIds.length > 0) {
             popupNotificationIds.forEach((notificationId) => {

@@ -1,0 +1,3 @@
+module Linmax.NotificationActivation
+plugin notificationactivationplugin
+classname NotificationActivationPlugin

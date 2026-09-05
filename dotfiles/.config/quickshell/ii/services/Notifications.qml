@@ -9,6 +9,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Notifications
+import Linmax.NotificationActivation 1.0
 
 /**
  * Provides extra features not in Quickshell.Services.Notifications:
@@ -182,6 +183,11 @@ Singleton {
     }
 
     function persistNotifications() {
+        // A persistent sender can replay notifications as soon as the server
+        // owns the D-Bus name. Do not let those arrivals replace the history
+        // file before its asynchronous load has completed.
+        if (!root.historyLoaded)
+            return;
         notifFileView.setText(stringifyList(root.list));
     }
 
@@ -343,6 +349,7 @@ Singleton {
     // Quickshell's notification IDs starts at 1 on each run, while saved notifications
     // can already contain higher IDs. This is for avoiding id collisions
     property int idOffset
+    property bool historyLoaded: false
     signal initDone();
     signal notify(notification: var);
     signal discard(id: int);
@@ -500,16 +507,16 @@ Singleton {
         return notification.actions.find((action) => action.identifier === identifier) ?? null;
     }
 
-    function attemptInvokeAction(id, notifIdentifier) {
-        const action = root.liveActionForNotification(id, notifIdentifier);
+    function attemptInvokeAction(id, notifIdentifier, activationSource = null) {
+        const notification = root.trackedNotificationById(id);
+        const action = notification?.actions.find((candidate) => candidate.identifier === notifIdentifier) ?? null;
         if (!action) {
             console.log("[Notifications] Action " + notifIdentifier + " is no longer available for notification " + id);
             return false;
         }
 
         console.log("[Notifications] Invoking action " + notifIdentifier + " for notification " + id);
-        action.invoke();
-        return true;
+        return NotificationActivator.invokeAction(notification.id, action, activationSource);
     }
 
     function getNotificationById(id) {
@@ -563,18 +570,21 @@ Singleton {
             || root.canOpenNotificationSourceApp(id);
     }
 
-    function activateNotification(id) {
+    function activateNotification(id, activationSource = null) {
         // The sender owns the routing information for a notification. Invoking
         // its default action lets it restore the exact conversation, document,
         // browser tab, or terminal window that produced it. Kitty, for example,
         // maps this notification ID back to its originating tab and split.
-        const defaultAction = root.liveActionForNotification(id, "default");
+        const notification = root.trackedNotificationById(id);
+        const defaultAction = notification?.actions.find((action) => action.identifier === "default") ?? null;
         if (defaultAction) {
-            // Release the layer-shell focus grab before asking the application
-            // to activate its window.
-            GlobalStates.closeSidebarRight();
             console.log("[Notifications] Invoking default action for notification " + id);
-            defaultAction.invoke();
+            // Capture the click surface and Wayland serial while the overlay is
+            // still mapped. The native helper emits ActivationToken before it
+            // invokes ActionInvoked, then the overlay can release its focus grab.
+            if (!NotificationActivator.invokeAction(notification.id, defaultAction, activationSource))
+                return false;
+            GlobalStates.closeSidebarRight();
             return true;
         }
 
@@ -605,6 +615,9 @@ Singleton {
         onLoaded: {
             const fileContents = notifFileView.text()
             const storedNotifications = JSON.parse(fileContents || "[]")
+            // Notifications can arrive while FileView is loading. Keep those
+            // live wrappers and move their public IDs above the saved range.
+            const arrivedNotifications = root.list.slice()
             let maxId = 0
             const loadedNotifications = storedNotifications.map((notif) => {
                 maxId = Math.max(maxId, notif.notificationId)
@@ -621,17 +634,28 @@ Singleton {
                     "urgency": notif.urgency,
                 });
             });
-            root.list = root.trimListToHistory(loadedNotifications)
 
-            console.log("[Notifications] File loaded")
             root.idOffset = maxId
+            arrivedNotifications.forEach((notif) => {
+                if (notif?.notification == null)
+                    return;
+
+                notif.notificationId = notif.notification.id + root.idOffset;
+                if (notif.timer != null)
+                    notif.timer.notificationId = notif.notificationId;
+            });
+            root.list = root.trimListToHistory(loadedNotifications.concat(arrivedNotifications))
+            root.historyLoaded = true
             root.persistNotifications()
+            console.log("[Notifications] File loaded")
             root.initDone()
         }
         onLoadFailed: (error) => {
             if(error == FileViewError.FileNotFound) {
                 console.log("[Notifications] File not found, creating new file.")
-                root.list = []
+                root.idOffset = 0
+                root.historyLoaded = true
+                root.list = root.trimListToHistory(root.list)
                 notifFileView.setText(stringifyList(root.list));
             } else {
                 console.log("[Notifications] Error loading file: " + error)
