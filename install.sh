@@ -59,6 +59,8 @@ MANAGED=(
     Kvantum
     nwg-look
     fish
+    pipewire
+    wireplumber
     udiskie
     systemd
     user-tmpfiles.d

@@ -20,6 +20,8 @@ Personal Hyprland desktop config — Quickshell bar, Illogical-Impulse theming, 
 | `Kvantum` | Qt theming |
 | `nwg-look` | GTK theme switcher settings |
 | `fish` | Fish shell config |
+| `pipewire` | Native Combined Sound virtual output |
+| `wireplumber` | HDMI channel detection and audio-device policy |
 | `udiskie` | USB automounting, notifications, and tray controls for safe removal |
 | `wallpapers/dynamic-system` | Colour-calibrated morning/day/evening/night wallpaper set |
 

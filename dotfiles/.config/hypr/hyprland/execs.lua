@@ -17,7 +17,6 @@ h.exec_on_start("dbus-update-activation-environment --systemd DISPLAY WAYLAND_DI
 
 -- Audio
 h.exec_on_start("easyeffects --hide-window --service-mode")
-h.exec_on_start("sh -c \"~/.config/hypr/hyprland/scripts/combine_audio.sh\"")
 h.exec_on_start("systemctl --user start input-remapper.service")
 
 -- Clipboard: history
