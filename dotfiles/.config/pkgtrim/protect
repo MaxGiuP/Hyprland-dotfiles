@@ -3,9 +3,12 @@ alsa-utils
 dotnet-sdk
 go
 kde-material-you-colors
+libappindicator
 netstandard-targeting-pack
 pavucontrol
 python-beautifulsoup4
 python-readability-lxml
 ttf-gabarito-git
+udiskie
+udisks2
 webp-pixbuf-loader

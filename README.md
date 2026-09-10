@@ -20,6 +20,7 @@ Personal Hyprland desktop config — Quickshell bar, Illogical-Impulse theming, 
 | `Kvantum` | Qt theming |
 | `nwg-look` | GTK theme switcher settings |
 | `fish` | Fish shell config |
+| `udiskie` | USB automounting, notifications, and tray controls for safe removal |
 | `wallpapers/dynamic-system` | Colour-calibrated morning/day/evening/night wallpaper set |
 
 ## Screenshots
@@ -61,6 +62,24 @@ sudo pacman -S --needed kwallet-pam
 The wallet password must match the login password. SDDM's standard PAM config
 unlocks the wallet during a password-based login, and Hyprland starts
 `/usr/lib/pam_kwallet_init` to connect the desktop session to that wallet.
+
+### USB drives
+
+Hyprland starts `udiskie.service` after importing the graphical session environment.
+Removable drives mount automatically and appear in Dolphin. The Quickshell tray
+shows a removable-drive icon while devices are connected; its menu can open,
+unmount, or safely power off a drive. Wait for a successful removal before
+unplugging. The small `UEFI_NTFS` helper partition on Rufus installer sticks is
+excluded from automatic mounting; internal system disks use udiskie's defaults.
+
+On Arch, install the runtime dependencies if they are missing:
+
+```bash
+sudo pacman -S --needed udisks2 udiskie libappindicator libnotify python-yaml
+```
+
+Current Arch kernels provide FAT, exFAT, and NTFS3 mounting support. Filesystem
+creation/checking tools are optional: `dosfstools`, `exfatprogs`, and `ntfs-3g`.
 
 ## Update (system → repo)
 

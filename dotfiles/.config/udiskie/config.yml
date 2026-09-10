@@ -1,0 +1,19 @@
+# Removable-drive integration for the Hyprland / Quickshell session.
+program_options:
+  automount: true
+  notify: true
+  tray: auto
+  appindicator: true
+  file_manager: xdg-open
+
+device_config:
+  # Rufus creates this helper partition on Windows installer sticks.
+  # Keep it available for manual unmount/eject without mounting it on insertion.
+  - id_label: UEFI_NTFS
+    id_type: vfat
+    automount: false
+
+notifications:
+  device_mounted: 5
+  device_unmounted: 5
+  job_failed: -1

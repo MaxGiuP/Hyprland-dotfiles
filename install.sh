@@ -59,6 +59,7 @@ MANAGED=(
     Kvantum
     nwg-look
     fish
+    udiskie
     systemd
     user-tmpfiles.d
 )

@@ -12,6 +12,9 @@ h.exec_on_start("sleep 1 && dbus-update-activation-environment --systemd DISPLAY
 h.exec_on_start("~/.config/hypr/hyprland/scripts/quickshell_restart_from_hyprland.sh $qsConfig")
 h.exec_on_start("systemctl --user start kdeconnect-bridge.service tv-mode-daemon.service kdeconnect-cursor-sync.service")
 
+-- Removable media: import the session environment before starting the tray.
+h.exec_on_start("dbus-update-activation-environment --systemd DISPLAY WAYLAND_DISPLAY XDG_CURRENT_DESKTOP && systemctl --user start udiskie.service")
+
 -- Audio
 h.exec_on_start("easyeffects --hide-window --service-mode")
 h.exec_on_start("sh -c \"~/.config/hypr/hyprland/scripts/combine_audio.sh\"")

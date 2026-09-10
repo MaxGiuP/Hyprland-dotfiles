@@ -1,0 +1,13 @@
+[Unit]
+Description=Removable-drive automounting and tray controls
+After=graphical-session-pre.target quickshell.service
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/udiskie
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target
