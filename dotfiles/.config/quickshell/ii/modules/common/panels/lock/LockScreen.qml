@@ -18,6 +18,12 @@ Scope {
     property bool lockContentActive: false
     property bool sessionLockActive: false
     property bool releaseInProgress: false
+    property bool startupInitialized: false
+
+    LockRecovery {
+        id: lockRecovery
+        onReadyChanged: root.initIfReady()
+    }
 
     // Keep lock surface visible until lockpad unlock animation finishes.
     property int unlockReleaseDelayMs: 1500
@@ -167,6 +173,8 @@ Scope {
         root.stopBlurAnimation();
         GlobalStates.screenLockBlurProgress = 0;
         GlobalStates.screenLockHideBar = false;
+        // Clear recovery state only after the authenticated release completes.
+        lockRecovery.setLocked(false);
         if (alsoInhibitIdle) {
             lockContext.alsoInhibitIdle = false;
             Idle.toggleInhibit(true);
@@ -239,6 +247,7 @@ Scope {
             target: GlobalStates
             function onScreenLockedChanged() {
                 if (GlobalStates.screenLocked) {
+                    lockRecovery.setLocked(true);
                     root.releaseInProgress = false;
                     root.lockContentActive = true;
                     root.sessionLockActive = true;
@@ -291,16 +300,19 @@ Scope {
         id: sessionLock
         locked: root.sessionLockActive
         surface: root.sessionLockSurface
+        onSecureChanged: console.info(`[LockScreen] compositor-secure=${secure}`)
     }
 
     Component.onCompleted: {
         if (GlobalStates.screenLocked) {
+            lockRecovery.setLocked(true);
             root.lockContentActive = true;
             root.sessionLockActive = true;
         }
+        root.initIfReady();
     }
 
-    function lock() {
+    function lock(restoreQuickshellLock = false) {
         if (GlobalStates.screenLocked)
             return;
 
@@ -309,7 +321,7 @@ Scope {
         // Keep awake had been enabled earlier.
         Idle.toggleInhibit(false);
 
-        if (Config.options.lock.useHyprlock) {
+        if (Config.options.lock.useHyprlock && !restoreQuickshellLock) {
             Quickshell.execDetached(["bash", "-c", "pidof hyprlock || hyprlock"]);
             return;
         }
@@ -319,6 +331,8 @@ Scope {
         unlockSurfaceDetachTimer.stop();
         unlockUiRestoreTimer.stop();
         unlockReleaseTimer.stop();
+        // Persist before creating any lock surfaces, including during recovery.
+        lockRecovery.setLocked(true);
         root.lockContentActive = true;
         root.sessionLockActive = true;
         root.releaseInProgress = false;
@@ -331,6 +345,7 @@ Scope {
             || root.sessionLockActive
             || root.releaseInProgress
         readonly property bool idleInhibited: Idle.inhibit
+        readonly property bool secure: sessionLock.secure
 
         function status() {
             return locked ? "locked" : "unlocked";
@@ -362,10 +377,14 @@ Scope {
     }
 
     function initIfReady() {
-        if (!Config.ready || !Persistent.ready)
+        if (root.startupInitialized || !Config.ready || !Persistent.ready || !lockRecovery.ready)
             return;
 
-        if (Config.options.lock.launchOnStartup && Persistent.isNewHyprlandInstance) {
+        root.startupInitialized = true;
+        if (lockRecovery.restoreRequested) {
+            console.info("[LockScreen] Restoring session lock after shell restart");
+            root.lock(true);
+        } else if (Config.options.lock.launchOnStartup && Persistent.isNewHyprlandInstance) {
             root.lock();
         } else {
             KeyringStorage.fetchKeyringData();
