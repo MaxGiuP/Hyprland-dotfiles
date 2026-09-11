@@ -15,8 +15,6 @@ hl.env("ILLOGICAL_IMPULSE_VIRTUAL_ENV", h.expand("~/.local/state/quickshell/.ven
 
 -- Terminal application
 hl.env("TERMINAL", "kitty -1")
--- MaterialYou carries WhiteSur's full theme resources with generated colors.
-hl.env("GTK_THEME", "MaterialYou")
 -- hl.env("GTK_USE_PORTAL", "1")
 
 -- Cursor
