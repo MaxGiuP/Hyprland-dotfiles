@@ -41,6 +41,7 @@ MANAGED=(
     quickshell
     illogical-impulse
     pkgtrim
+    omarchy-apps
     rofi
     kitty
     foot

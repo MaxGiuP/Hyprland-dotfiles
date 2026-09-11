@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Upstream's helper has /usr/bin/expect in its shebang; use the scoped interpreter.
+set -euo pipefail
+readonly app_root="${HOME:?}/.local/share/omarchy-apps"
+exec "$app_root/deps/usr/bin/expect" -f "$app_root/flea-0.2.0/tools/flea-gio-auth" "$@"

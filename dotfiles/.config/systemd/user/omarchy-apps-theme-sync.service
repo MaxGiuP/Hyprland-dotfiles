@@ -1,0 +1,16 @@
+[Unit]
+Description=Refresh the Omarchy app theme from Quickshell colours
+ConditionPathExists=%h/.local/share/omarchy-apps/bin/sync-theme.py
+ConditionPathExists=%h/.local/state/quickshell/user/generated/colors.json
+ConditionPathExists=%h/.config/omarchy-apps/theme.toml
+
+[Service]
+Type=oneshot
+# Match the watched paths explicitly, independently of the user manager's XDG
+# environment. The bridge validates ownership and leaves other themes alone.
+ExecStart=/usr/bin/python3 -B %h/.local/share/omarchy-apps/bin/sync-theme.py --quiet --source=%h/.local/state/quickshell/user/generated/colors.json --config=%h/.config/omarchy-apps/theme.toml
+TimeoutStartSec=15s
+# A bad/partially written input should wait for another input change, not retry.
+Restart=no
+NoNewPrivileges=yes
+UMask=0077

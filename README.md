@@ -23,6 +23,7 @@ Personal Hyprland desktop config — Quickshell bar, Illogical-Impulse theming, 
 | `pipewire` | Native Combined Sound virtual output |
 | `wireplumber` | HDMI channel detection and audio-device policy |
 | `udiskie` | USB automounting, notifications, and tray controls for safe removal |
+| `omarchy-apps` | Scoped Flea/Omarchy QML compatibility and desktop-palette bridge |
 | `wallpapers/dynamic-system` | Colour-calibrated morning/day/evening/night wallpaper set |
 
 ## Screenshots
@@ -82,6 +83,13 @@ sudo pacman -S --needed udisks2 udiskie libappindicator libnotify python-yaml
 
 Current Arch kernels provide FAT, exFAT, and NTFS3 mounting support. Filesystem
 creation/checking tools are optional: `dosfstools`, `exfatprogs`, and `ntfs-3g`.
+
+### Flea and selected Omarchy applications
+
+[Installation and compatibility notes](tools/omarchy-apps/README.md) cover the
+user-local Flea build, shared Omarchy widgets, signed runtime dependencies, and
+live Quickshell palette bridge. This does not install the Omarchy desktop or
+change the default file manager. Other Omarchy apps need individual checks.
 
 ## Update (system → repo)
 

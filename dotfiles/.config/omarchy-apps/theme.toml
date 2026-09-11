@@ -1,0 +1,11 @@
+# Compatibility theme for Flea / official Omarchy QML components.
+# Colours follow Quickshell's generated palette; this does not install Omarchy
+# or change the desktop theme. Run omarchy-apps/sync-theme.py to regenerate.
+
+[font]
+# Official shell.toml supports the base size, not a font-family setting.
+base-size = 14
+
+[palette]
+# Material palettes have no green role. Used only when the source has no green.
+green = "#a6e3a1"

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Standalone QML applications may open several windows; never add --no-duplicate.
+set -euo pipefail
+
+readonly requested="${QS_REAL_BIN:-${HOME:?}/.local/libexec/quickshell/quickshell}"
+readonly self="$(readlink -f -- "${BASH_SOURCE[0]}")"
+selected=""
+for candidate in "$requested" /usr/bin/quickshell; do
+    [[ -x "$candidate" && "$(readlink -f -- "$candidate")" != "$self" ]] || continue
+    "$candidate" --private-check-compat >/dev/null 2>&1 || continue
+    version="$("$candidate" --version 2>/dev/null \
+        | sed -nE 's/^[Qq]uickshell ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p')" || continue
+    [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+    [[ "$(printf '%s\n' 0.3.1 "$version" | sort -V | head -n1)" == 0.3.1 ]] || continue
+    selected="$candidate"
+    break
+done
+if [[ -z "$selected" ]]; then
+    echo 'Standalone QML apps need an ABI-compatible Quickshell 0.3.1 or newer.' >&2
+    exit 42
+fi
+
+# Match the desktop wrapper's optional local QML modules without modifying it.
+# Do not duplicate paths when an application launches another instance.
+readonly local_qml="${HOME:?}/.local/lib/qt6/qml"
+if [[ -d "$local_qml" ]]; then
+    case ":${QML_IMPORT_PATH:-}:" in
+        *":$local_qml:"*) ;;
+        *) export QML_IMPORT_PATH="$local_qml${QML_IMPORT_PATH:+:$QML_IMPORT_PATH}" ;;
+    esac
+    case ":${QML2_IMPORT_PATH:-}:" in
+        *":$local_qml:"*) ;;
+        *) export QML2_IMPORT_PATH="$local_qml${QML2_IMPORT_PATH:+:$QML2_IMPORT_PATH}" ;;
+    esac
+fi
+
+exec "$selected" "$@"

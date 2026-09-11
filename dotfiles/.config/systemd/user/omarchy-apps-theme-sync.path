@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch Quickshell colours for the Omarchy app theme bridge
+
+[Path]
+# PathChanged waits for a writing file to close (also handles replacement).
+# Watch inputs only: bridge-generated theme files must never retrigger this.
+PathChanged=%h/.local/state/quickshell/user/generated/colors.json
+PathChanged=%h/.config/omarchy-apps/theme.toml
+Unit=omarchy-apps-theme-sync.service
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Scoped compatibility launcher: leave the surrounding desktop environment alone.
+set -euo pipefail
+readonly app_root="${HOME:?}/.local/share/omarchy-apps"
+readonly flea_root="$app_root/flea-0.2.0"
+
+for argument in "$@"; do
+    case "$argument" in
+        --default|--picker|--youleftmeforstrata)
+            printf '%s\n' 'Flea: automatic Omarchy default/portal setup is disabled on this desktop.' \
+                'Normal browsing works; default-handler integration needs a separate review.' >&2
+            exit 2 ;;
+    esac
+done
+
+[[ -x "$flea_root/bin/flea" && -f "$flea_root/ui/shell.qml" ]] || {
+    echo 'Flea runtime is missing; run tools/omarchy-apps/install-flea.sh.' >&2
+    exit 1
+}
+export PATH="$app_root/bin:$app_root/deps/usr/bin:$HOME/.local/bin:$PATH"
+export QT_PLUGIN_PATH="$app_root/deps/usr/lib/qt6/plugins${QT_PLUGIN_PATH:+:$QT_PLUGIN_PATH}"
+export XDG_DATA_DIRS="$app_root/deps/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+export FLEA_UI="$flea_root/ui"
+# Internal commands must use this wrapper too, including the guarded defaults UI.
+export FLEA_BIN="$HOME/.local/bin/flea"
+export FLEA_GIO_AUTH="$app_root/bin/flea-gio-auth"
+
+# A CLI probe must stay side-effect free. Refresh colours only when opening a UI.
+if [[ $# -eq 0 || "${1:-}" != --* || "${1:-}" == --gui || "${1:-}" == --tui || "${1:-}" == --select ]]; then
+    python3 -B "$app_root/bin/sync-theme.py" --quiet || \
+        echo 'Flea: theme refresh failed; keeping the last available palette.' >&2
+fi
+exec "$flea_root/bin/flea" "$@"
