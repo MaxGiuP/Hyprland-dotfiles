@@ -3658,7 +3658,9 @@ _write_materialyou_theme
 apply_qtct() {
   local qt5ct_dir="$XDG_CONFIG_HOME/qt5ct"
   local qt6ct_dir="$XDG_CONFIG_HOME/qt6ct"
-  [ -d "$qt5ct_dir" ] || return 0
+  # Qt6-only setups are common (and qt6ct is what the current session uses).
+  # Do not skip palette generation just because qt5ct is not installed.
+  [ -d "$qt5ct_dir" ] || [ -d "$qt6ct_dir" ] || return 0
 
   mkdir -p "$qt5ct_dir/colors" "$qt6ct_dir/colors"
 
