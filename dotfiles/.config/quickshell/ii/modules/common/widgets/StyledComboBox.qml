@@ -43,11 +43,17 @@ Item {
         enabled: root.enabled
         implicitHeight: 40
         Layout.fillWidth: true
+        focusPolicy: Qt.StrongFocus
+        wheelEnabled: false
+        leftPadding: 16
+        rightPadding: indicator.width + 24
 
         onActivated: index => root.activated(index)
 
         background: Rectangle {
             radius: root.buttonRadius
+            border.width: combo.visualFocus ? 2 : 0
+            border.color: Appearance.colors.colPrimary
             color: (combo.down && !combo.popup.visible)
                 ? root.colBackgroundActive
                 : combo.hovered
@@ -86,8 +92,6 @@ Item {
                 id: buttonLayout
                 anchors.fill: parent
                 spacing: 8
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
 
                 MaterialSymbol {
                     Layout.alignment: Qt.AlignVCenter
@@ -124,6 +128,7 @@ Item {
 
             required property var model
             required property int index
+            highlighted: combo.highlightedIndex === index
             property color color: {
                 if (combo.currentIndex === itemDelegate.index) {
                     if (itemDelegate.down) return Appearance.colors.colSecondaryContainerActive;
@@ -131,7 +136,7 @@ Item {
                     return Appearance.colors.colSecondaryContainer;
                 } else {
                     if (itemDelegate.down) return Appearance.colors.colLayer3Active;
-                    if (itemDelegate.hovered) return Appearance.colors.colLayer3Hover;
+                    if (itemDelegate.hovered || itemDelegate.highlighted) return Appearance.colors.colLayer3Hover;
                     return ColorUtils.transparentize(Appearance.colors.colLayer3);
                 }
             }
@@ -173,9 +178,7 @@ Item {
                     Layout.fillWidth: true
                     Layout.preferredHeight: Appearance.font.pixelSize.larger
                     color: itemDelegate.colText
-                    text: typeof itemDelegate.model === "object"
-                        ? itemDelegate.model[combo.textRole]
-                        : itemDelegate.model
+                    text: combo.textAt(itemDelegate.index)
                     elide: Text.ElideRight
                     verticalAlignment: Text.AlignVCenter
                 }
@@ -185,7 +188,9 @@ Item {
         popup: Popup {
             y: combo.height + 4
             width: combo.width
-            height: Math.min(listView.contentHeight + topPadding + bottomPadding, 300)
+            height: Math.min(listView.contentHeight + topPadding + bottomPadding,
+                300, Math.max(40, (combo.Window.window?.height ?? 340) - 24))
+            margins: 8
             padding: 8
 
             enter: Transition {
@@ -221,13 +226,16 @@ Item {
                 }
             }
 
-            contentItem: StyledListView {
+            contentItem: ListView {
                 id: listView
                 clip: true
                 implicitHeight: contentHeight
                 spacing: 2
                 model: combo.popup.visible ? combo.delegateModel : null
                 currentIndex: combo.highlightedIndex
+                boundsBehavior: Flickable.StopAtBounds
+                highlightMoveDuration: 0
+                ScrollBar.vertical: StyledScrollBar {}
             }
         }
     }

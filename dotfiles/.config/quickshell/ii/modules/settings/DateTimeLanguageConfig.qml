@@ -28,6 +28,8 @@ ContentPage {
     property var targetTranslations: ({})
     property string rawTargetJson: "{}"
     property string sysLocale: ""
+    property string pendingLocale: root.sysLocale
+    property var systemLanguages: Translation.allAvailableLanguages
     property string sysLangStatus: ""
     property bool nativeTimeActionPending: false
     property bool nativeTimeActionError: false
@@ -46,7 +48,7 @@ ContentPage {
     }
 
     function selectedLocaleCode() {
-        const raw = localeInput.text.trim()
+        const raw = root.pendingLocale
         if (!raw.length || raw === "auto")
             return Qt.locale().name
         return raw
@@ -232,6 +234,17 @@ ContentPage {
         }
     }
 
+    FileView {
+        path: "/usr/share/i18n/SUPPORTED"
+        onLoaded: {
+            const codes = text().split('\n')
+                .filter(line => /\.UTF-8\s+UTF-8$/.test(line.trim()))
+                .map(line => line.trim().split('.')[0]);
+            if (codes.length > 0)
+                root.systemLanguages = [...new Set(codes)].sort();
+        }
+    }
+
     Process {
         id: sysLangApplyProc
         property string targetLang: ""
@@ -320,7 +333,16 @@ ContentPage {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Appearance.colors.colSubtext
-            text: Translation.tr("Selecting a locale updates the shell UI translation and the system-wide locale (/etc/locale.conf and Hyprland env.lua). Re-login for system changes to fully apply.")
+            text: Translation.tr("Interface language changes apply immediately. System language changes require authentication and take full effect after signing in again.")
+        }
+
+        ContentSubsection {
+            title: Translation.tr("Interface Language")
+            LanguageSelector {
+                onLanguageSelected: language => {
+                    Config.options.language.ui = language
+                }
+            }
         }
 
         Rectangle {
@@ -362,40 +384,32 @@ ContentPage {
             }
         }
 
-        StyledComboBox {
-            Layout.fillWidth: true
-            buttonIcon: "language"
-            textRole: "text"
-            model: Translation.allAvailableLanguages.map(lang => ({ text: lang }))
-            currentIndex: Math.max(0, Translation.allAvailableLanguages.indexOf(root.sysLocale))
-            onActivated: index => localeInput.text = Translation.allAvailableLanguages[index]
-        }
-
-        ConfigRow {
-            MaterialTextArea {
-                id: localeInput
-                Layout.fillWidth: true
-                placeholderText: Translation.tr("Locale code, e.g. en_US, fr_FR, de_DE...")
-                text: root.sysLocale
-                onTextChanged: {
-                    targetTranslationFile.path = root.targetTranslationPath()
-                    targetTranslationFile.reload()
+        ContentSubsection {
+            title: Translation.tr("System language")
+            ConfigRow {
+                LanguageSelector {
+                    Layout.fillWidth: true
+                    includeAutomatic: false
+                    languageCodes: root.systemLanguages
+                    selectedLanguage: root.pendingLocale
+                    enabled: !sysLangApplyProc.running
+                    onLanguageSelected: language => root.pendingLocale = language
                 }
-            }
 
-            RippleButtonWithIcon {
-                Layout.fillHeight: true
-                materialIcon: "save"
-                enabled: !sysLangApplyProc.running && localeInput.text.trim().length > 0
-                mainText: sysLangApplyProc.running ? Translation.tr("Applying…") : Translation.tr("Apply")
-                onClicked: {
-                    const lang = localeInput.text.trim()
-                    if (!lang) return
-                    root.sysLangStatus = ""
-                    Config.options.language.ui = lang
-                    sysLangApplyProc.targetLang = lang
-                    sysLangApplyProc.running = false
-                    sysLangApplyProc.running = true
+                RippleButtonWithIcon {
+                    Layout.fillHeight: true
+                    materialIcon: "save"
+                    enabled: !sysLangApplyProc.running && /^[a-z]{2,3}_[A-Z]{2}$/.test(root.pendingLocale)
+                        && root.pendingLocale !== root.sysLocale
+                    mainText: sysLangApplyProc.running ? Translation.tr("Applying…") : Translation.tr("Apply system language")
+                    onClicked: {
+                        const lang = root.pendingLocale
+                        if (!lang) return
+                        root.sysLangStatus = ""
+                        sysLangApplyProc.targetLang = lang
+                        sysLangApplyProc.running = false
+                        sysLangApplyProc.running = true
+                    }
                 }
             }
         }
@@ -406,10 +420,10 @@ ContentPage {
             RippleButtonWithIcon {
                 Layout.fillWidth: true
                 materialIcon: "auto_awesome"
-                enabled: !translationProc.running || (translationProc.locale !== localeInput.text.trim())
+                enabled: !translationProc.running && /^[a-z]{2,3}_[A-Z]{2}$/.test(root.pendingLocale)
                 mainText: translationProc.running ? Translation.tr("Generating…") : Translation.tr("Generate translation")
                 onClicked: {
-                    translationProc.locale = localeInput.text.trim()
+                    translationProc.locale = root.pendingLocale
                     translationProc.running = false
                     translationProc.running = true
                 }
@@ -420,7 +434,6 @@ ContentPage {
                 materialIcon: "refresh"
                 mainText: Translation.tr("Reload locale file")
                 onClicked: {
-                    targetTranslationFile.path = root.targetTranslationPath()
                     targetTranslationFile.reload()
                 }
             }

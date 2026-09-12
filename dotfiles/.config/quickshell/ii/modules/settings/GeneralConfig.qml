@@ -24,31 +24,9 @@ ContentPage {
             title: Translation.tr("Interface Language")
             tooltip: Translation.tr("Select the language for the user interface.\n\"Auto\" will use your system's locale.")
 
-            StyledComboBox {
+            LanguageSelector {
                 id: languageSelector
-                buttonIcon: "language"
-                textRole: "displayName"
-
-                model: [
-                    {
-                        displayName: Translation.tr("Auto (System)"),
-                        value: "auto"
-                    },
-                    ...Translation.allAvailableLanguages.map(lang => {
-                        return {
-                            displayName: lang,
-                            value: lang
-                        };
-                    })]
-
-                currentIndex: {
-                    const index = model.findIndex(item => item.value === Config.options.language.ui);
-                    return index !== -1 ? index : 0;
-                }
-
-                onActivated: index => {
-                    Config.options.language.ui = model[index].value;
-                }
+                onLanguageSelected: language => Config.options.language.ui = language
             }
         }
         ContentSubsection {
@@ -56,20 +34,21 @@ ContentPage {
             tooltip: Translation.tr("You'll need to enter your Gemini API key first.\nType /key on the sidebar for instructions.")
 
             ConfigRow {
-                MaterialTextArea {
+                LanguageSelector {
                     id: localeInput
                     Layout.fillWidth: true
-                    placeholderText: Translation.tr("Locale code, e.g. fr_FR, de_DE, zh_CN...")
-                    text: Config.options.language.ui === "auto" ? Qt.locale().name : Config.options.language.ui
+                    includeAutomatic: false
+                    selectedLanguage: Translation.languageCode
+                    onLanguageSelected: language => selectedLanguage = language
                 }
                 RippleButtonWithIcon {
                     id: generateTranslationBtn
                     Layout.fillHeight: true
                     nerdIcon: ""
-                    enabled: !translationProc.running || (translationProc.locale !== localeInput.text.trim())
+                    enabled: !translationProc.running && localeInput.selectedLanguage.length > 0
                     mainText: enabled ? Translation.tr("Generate\nTypically takes 2 minutes") : Translation.tr("Generating...\nDon't close this window!")
                     onClicked: {
-                        translationProc.locale = localeInput.text.trim();
+                        translationProc.locale = localeInput.selectedLanguage;
                         translationProc.running = false;
                         translationProc.running = true;
                     }

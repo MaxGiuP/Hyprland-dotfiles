@@ -13,10 +13,10 @@ Singleton {
     property var availableLanguages: ["en_US"]
     property var availableGeneratedLanguages: []
     property var allAvailableLanguages: {
-        const combined = new Set([...root.availableLanguages, ...root.availableGeneratedLanguages]);
+        const combined = new Set(["en_US", ...root.availableLanguages, ...root.availableGeneratedLanguages].filter(code => code.length > 0));
         return Array.from(combined).sort();
     }
-    property bool isScanning: scanLanguagesProcess.running
+    property bool isScanning: scanLanguagesProcess.running || scanGeneratedLanguagesProcess.running
     property bool isLoading: false
     property string translationKeepSuffix: "/*keep*/"
     property string translationsDir: Quickshell.shellPath("translations")
@@ -50,10 +50,8 @@ Singleton {
 
     onLanguageCodeChanged: {
         print("[Translation] Language changed to", root.languageCode);
-        translationFileView.languageCode = root.languageCode;
-        generatedTranslationFileView.languageCode = root.languageCode;
-        translationFileView.reread();
-        generatedTranslationFileView.reread();
+        root.translations = ({});
+        root.generatedTranslations = ({});
     }
 
     TranslationReader {
@@ -105,7 +103,7 @@ Singleton {
             id: languagesCollector
             onStreamFinished: {
                 const output = languagesCollector.text;
-                const files = output.trim().split('\n').map(f => f.trim());
+                const files = output.trim().split('\n').map(f => f.trim()).filter(f => f.length > 0);
                 translationScanner.languagesScanned(files);
             }
         }
@@ -123,12 +121,9 @@ Singleton {
         property string languageCode: root.languageCode
         signal contentLoaded(var data)
 
-        function reread() { // Proper reload in case the file was incorrect before
-            translationReader.path = "";
-            translationReader.path = `${translationReader.translationsDir}/${translationReader.languageCode}.json`;
-            translationReader.reload();
-        }
-        path: ""
+        path: `${translationReader.translationsDir}/${translationReader.languageCode}.json`
+        watchChanges: true
+        onFileChanged: reload()
 
         onLoaded: {
             var textContent = "";
