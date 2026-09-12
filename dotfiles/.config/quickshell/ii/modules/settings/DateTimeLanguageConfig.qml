@@ -257,7 +257,9 @@ ContentPage {
         stderr: StdioCollector { id: sysLangApplyErr }
         onExited: (exitCode, exitStatus) => {
             if (exitCode === 0) {
-                root.sysLangStatus = Translation.tr("System locale updated to %1.UTF-8. Re-login for full effect.").arg(sysLangApplyProc.targetLang)
+                Config.options.language.ui = sysLangApplyProc.targetLang
+                root.sysLocale = sysLangApplyProc.targetLang
+                root.sysLangStatus = Translation.tr("Language updated to %1 for the interface and system. Sign in again to update other applications.").arg(sysLangApplyProc.targetLang)
                 readSysLocaleProc.running = false
                 readSysLocaleProc.running = true
             } else {
@@ -333,16 +335,7 @@ ContentPage {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Appearance.colors.colSubtext
-            text: Translation.tr("Interface language changes apply immediately. System language changes require authentication and take full effect after signing in again.")
-        }
-
-        ContentSubsection {
-            title: Translation.tr("Interface Language")
-            LanguageSelector {
-                onLanguageSelected: language => {
-                    Config.options.language.ui = language
-                }
-            }
+            text: Translation.tr("Choose one language for the interface and system. Apply authenticates the system change, then updates the interface. Other applications use the new language after you sign in again.")
         }
 
         Rectangle {
@@ -385,7 +378,7 @@ ContentPage {
         }
 
         ContentSubsection {
-            title: Translation.tr("System language")
+            title: Translation.tr("Language")
             ConfigRow {
                 LanguageSelector {
                     Layout.fillWidth: true
@@ -400,12 +393,17 @@ ContentPage {
                     Layout.fillHeight: true
                     materialIcon: "save"
                     enabled: !sysLangApplyProc.running && /^[a-z]{2,3}_[A-Z]{2}$/.test(root.pendingLocale)
-                        && root.pendingLocale !== root.sysLocale
-                    mainText: sysLangApplyProc.running ? Translation.tr("Applying…") : Translation.tr("Apply system language")
+                        && (root.pendingLocale !== root.sysLocale || Config.options.language.ui !== root.pendingLocale)
+                    mainText: sysLangApplyProc.running ? Translation.tr("Applying…") : Translation.tr("Apply language")
                     onClicked: {
                         const lang = root.pendingLocale
                         if (!lang) return
                         root.sysLangStatus = ""
+                        if (lang === root.sysLocale) {
+                            Config.options.language.ui = lang
+                            root.sysLangStatus = Translation.tr("The interface and system now use %1.").arg(lang)
+                            return
+                        }
                         sysLangApplyProc.targetLang = lang
                         sysLangApplyProc.running = false
                         sysLangApplyProc.running = true
