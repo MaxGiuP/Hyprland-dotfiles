@@ -6,7 +6,9 @@ StyledText {
     property real iconSize: Appearance?.font.pixelSize.small ?? 16
     property real fill: 0
     property real truncatedFill: fill.toFixed(1) // Reduce memory consumption spikes from constant font remapping
-    renderType: Text.NativeRendering
+    // Render icon outlines directly: native glyph textures can become solid
+    // rectangles when the same symbols are shown on multiple monitor windows.
+    renderType: Text.CurveRendering
     font {
         hintingPreference: Font.PreferNoHinting
         family: Appearance?.font.family.iconMaterial ?? "Material Symbols Rounded"
