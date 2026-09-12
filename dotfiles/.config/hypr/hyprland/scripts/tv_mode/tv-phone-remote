@@ -1,0 +1,997 @@
+#!/usr/bin/env python3
+import json
+import locale
+import os
+import base64
+import fcntl
+import hashlib
+import re
+import secrets
+import socket
+import struct
+import subprocess
+import sys
+import threading
+import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+from urllib.request import urlopen
+
+STATE_DIR = Path(os.environ.get("XDG_CACHE_HOME", str(Path.home() / ".cache"))) / "tv-phone-remote"
+PID_FILE = STATE_DIR / "server.pid"
+LOCK_FILE = STATE_DIR / "server.lock"
+TOKEN_FILE = STATE_DIR / "token"
+LOG_FILE = STATE_DIR / "events.log"
+PORT = int(os.environ.get("TV_PHONE_REMOTE_PORT", "8765"))
+DEFAULT_IDLE_TIMEOUT_SECONDS = 10 * 60
+IDLE_TIMEOUT = int(os.environ.get("TV_PHONE_REMOTE_IDLE_TIMEOUT", str(DEFAULT_IDLE_TIMEOUT_SECONDS)))
+DEVICE_ID = os.environ.get("TV_PHONE_REMOTE_KDECONNECT_DEVICE", "").strip()
+POINTER_SENSITIVITY = float(os.environ.get("TV_PHONE_REMOTE_POINTER_SENSITIVITY", "1.75"))
+SCROLL_DIVISOR = float(os.environ.get("TV_PHONE_REMOTE_SCROLL_DIVISOR", "42"))
+SCROLL_VERTICAL_DIVISOR = float(os.environ.get("TV_PHONE_REMOTE_SCROLL_VERTICAL_DIVISOR", "34"))
+SCROLL_HORIZONTAL_DIVISOR = float(os.environ.get("TV_PHONE_REMOTE_SCROLL_HORIZONTAL_DIVISOR", str(SCROLL_DIVISOR)))
+SCROLL_INERTIA = float(os.environ.get("TV_PHONE_REMOTE_SCROLL_INERTIA", "0.88"))
+SCROLL_VERTICAL_INERTIA = float(os.environ.get("TV_PHONE_REMOTE_SCROLL_VERTICAL_INERTIA", "0.78"))
+SCROLL_TICK = float(os.environ.get("TV_PHONE_REMOTE_SCROLL_TICK", "0.025"))
+CLOSE_TV_APP = Path.home() / ".config" / "hypr" / "hyprland" / "scripts" / "tv_mode" / "close_tv_app.sh"
+CHROME_DEBUG_PORT = int(os.environ.get("TV_PHONE_REMOTE_CHROME_DEBUG_PORT", "9222"))
+CHROME_DEBUG_TIMEOUT = float(os.environ.get("TV_PHONE_REMOTE_CHROME_DEBUG_TIMEOUT", "1.0"))
+TV_WORKSPACES = {"special:tv", "special:tv-app"}
+STEAM_CLASSES = {"steam", "Steam", "steamwebhelper"}
+BIG_PICTURE_TITLE_PARTS = ("Big Picture", "Modalità Big Picture")
+BROWSER_CLASS_RE = re.compile(r"(chrome|chromium|brave|browser)", re.IGNORECASE)
+
+
+HTML = r"""<!doctype html>
+<html lang="__SYSTEM_LANG__">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>TV Phone Remote</title>
+<style>
+html,body{height:100%;margin:0;background:#101314;color:#eef3ef;font-family:system-ui,sans-serif;overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;-webkit-touch-callout:none}
+body{display:grid;grid-template-rows:1fr auto}
+#pad{touch-action:none;user-select:none;display:grid;place-items:center;position:relative;background:
+radial-gradient(circle at 25% 20%,#2b4c4a 0 18%,transparent 38%),
+linear-gradient(135deg,#17201f,#101314 55%,#261f15)}
+#hint{text-align:center;line-height:1.45;font-size:18px;opacity:.88;padding:24px}
+#hint b{display:block;font-size:28px;margin-bottom:12px;color:#f2d28a}
+#status{display:block;margin-top:14px;font-size:14px;color:#9fcac2}
+#buttons{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:10px;background:#171b1c}
+button{font:700 15px system-ui,sans-serif;border:0;border-radius:16px;padding:15px 8px;background:#e7c16b;color:#17120a;white-space:normal;min-width:0}
+button.secondary{background:#263332;color:#d8e9e3}
+button.danger{background:#9f3d2f;color:#fff2ea}
+#volume-panel,#audio-panel{grid-column:1/-1;display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;background:#202829;border-radius:16px;padding:12px 14px}
+#volume-label,#volume-value,#audio-label{font:700 13px system-ui,sans-serif;color:#d8e9e3}
+#volume-dial{width:100%;accent-color:#e7c16b}
+#audio-output{width:100%;min-width:0;border:0;border-radius:12px;background:#111717;color:#eef3ef;font:700 14px system-ui,sans-serif;padding:11px 12px}
+#close{position:absolute;top:14px;left:14px;z-index:2;padding:14px 16px;box-shadow:0 10px 28px rgba(0,0,0,.28)}
+.icon{width:24px;height:24px;line-height:1;display:block;margin:0 auto}
+.icon svg{display:block;width:24px;height:24px;fill:currentColor}
+.label{font-size:11px;line-height:1;margin-top:4px;display:block;opacity:.86}
+#keyboard-input{position:absolute;left:-1000px;top:-1000px;width:1px;height:1px;opacity:.01;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="pad"><button id="close" class="danger" aria-label="Close App"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3h-2v10h2V3Zm4.83 2.17-1.42 1.42A7 7 0 1 1 7.59 6.6L6.17 5.17A9 9 0 1 0 17.83 5.17Z"/></svg></span></button><input id="keyboard-input" disabled readonly tabindex="-1" inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false"><div id="hint"><b data-i18n="title">TV Remote</b><span data-i18n="move_hint">One finger moves cursor</span><br><span data-i18n="scroll_hint">Two fingers scroll</span><br><span data-i18n="type_hint">Tap Type to open keyboard</span><span id="status" data-i18n="ready">ready</span></div></div>
+<div id="buttons">
+  <div id="audio-panel"><span id="audio-label" data-i18n="output">Output</span><select id="audio-output" aria-label="Audio output"></select></div>
+  <div id="volume-panel"><span id="volume-label" data-i18n="volume">Volume</span><input id="volume-dial" type="range" min="0" max="100" step="1" value="50" aria-label="Volume"><span id="volume-value">--%</span></div>
+  <button id="left" aria-label="Click"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7v6a7 7 0 0 0 14 0V9a7 7 0 0 0-7-7Zm-1 2.1V10H7V9a5 5 0 0 1 4-4.9ZM17 15a5 5 0 0 1-10 0v-3h10v3Z"/></svg></span><span class="label" data-i18n="click">Click</span></button>
+  <button id="keyboard" class="secondary" aria-label="Type"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2H4Zm0 2h16v8H4V8Zm2 2v2h2v-2H6Zm3 0v2h2v-2H9Zm3 0v2h2v-2h-2Zm3 0v2h2v-2h-2Zm3 0v2h2v-2h-2ZM7 13v2h10v-2H7Z"/></svg></span><span class="label" data-i18n="type">Type</span></button>
+  <button id="web-back" class="secondary" aria-label="Back"><span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.42-1.41L7.83 13H20v-2Z"/></svg></span><span class="label" data-i18n="back">Back</span></button>
+</div>
+<script>
+const token = new URLSearchParams(location.search).get("token") || "";
+const systemLang = "__SYSTEM_LANG__";
+const translations = {
+  en: {title:"TV Remote", move_hint:"One finger moves cursor", scroll_hint:"Two fingers scroll", type_hint:"Tap Type to open keyboard", ready:"ready", click:"Click", type:"Type", back:"Back", volume:"Volume", output:"Output", no_outputs:"No outputs"},
+  de: {title:"TV-Fernbedienung", move_hint:"Ein Finger bewegt den Zeiger", scroll_hint:"Zwei Finger scrollen", type_hint:"Tippe auf Schreiben, um die Tastatur zu öffnen", ready:"bereit", click:"Klick", type:"Schreiben", back:"Zurück", volume:"Lautstärke", output:"Ausgang", no_outputs:"Keine Ausgänge"},
+  it: {title:"Telecomando TV", move_hint:"Un dito muove il cursore", scroll_hint:"Due dita scorrono", type_hint:"Tocca Scrivi per aprire la tastiera", ready:"pronto", click:"Clic", type:"Scrivi", back:"Indietro", volume:"Volume", output:"Uscita", no_outputs:"Nessuna uscita"},
+  fr: {title:"Télécommande TV", move_hint:"Un doigt déplace le curseur", scroll_hint:"Deux doigts font défiler", type_hint:"Touchez Saisir pour ouvrir le clavier", ready:"prêt", click:"Cliquer", type:"Saisir", back:"Retour", volume:"Volume", output:"Sortie", no_outputs:"Aucune sortie"},
+  es: {title:"Mando TV", move_hint:"Un dedo mueve el cursor", scroll_hint:"Dos dedos desplazan", type_hint:"Toca Escribir para abrir el teclado", ready:"listo", click:"Clic", type:"Escribir", back:"Atrás", volume:"Volumen", output:"Salida", no_outputs:"Sin salidas"},
+  pt: {title:"Controle da TV", move_hint:"Um dedo move o cursor", scroll_hint:"Dois dedos rolam", type_hint:"Toque em Digitar para abrir o teclado", ready:"pronto", click:"Clique", type:"Digitar", back:"Voltar", volume:"Volume", output:"Saída", no_outputs:"Sem saídas"}
+};
+const strings = translations[systemLang.split("-")[0]] || translations.en;
+const pad = document.getElementById("pad");
+const status = document.getElementById("status");
+const keyboardInput = document.getElementById("keyboard-input");
+const volumeDial = document.getElementById("volume-dial");
+const volumeValue = document.getElementById("volume-value");
+const audioOutput = document.getElementById("audio-output");
+let last = null;
+let lastTap = 0;
+let scrollSamples = [];
+let didScroll = false;
+let touchStartCount = 0;
+let touchStartAt = 0;
+let touchMoved = false;
+let previousKeyboardValue = "";
+let keyboardOpenRequested = false;
+let volumeTimer = 0;
+let populatingOutputs = false;
+
+function applyTranslations() {
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const key = el.getAttribute("data-i18n");
+    if (strings[key]) el.textContent = strings[key];
+  });
+  document.title = strings.title;
+  document.getElementById("left").setAttribute("aria-label", strings.click);
+  document.getElementById("keyboard").setAttribute("aria-label", strings.type);
+  document.getElementById("web-back").setAttribute("aria-label", strings.back);
+  document.getElementById("close").setAttribute("aria-label", strings.close || "Close App");
+  volumeDial.setAttribute("aria-label", strings.volume);
+  audioOutput.setAttribute("aria-label", strings.output);
+}
+
+function send(payload) {
+  status.textContent = `${payload.type} ${Math.round(payload.dx || 0)}, ${Math.round(payload.dy || 0)}`;
+  payload.token = token;
+  return fetch("/event", {method:"POST", headers:{"content-type":"application/json"}, body:JSON.stringify(payload), keepalive:true}).catch(()=>{});
+}
+
+function setVolumeLabel(value) {
+  const rounded = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  volumeDial.value = String(rounded);
+  volumeValue.textContent = `${rounded}%`;
+}
+
+function outputLabel(output) {
+  return output && output.label ? output.label : output.name;
+}
+
+function renderOutputs(outputs, defaultSink) {
+  const current = audioOutput.value;
+  populatingOutputs = true;
+  audioOutput.replaceChildren();
+  if (!Array.isArray(outputs) || !outputs.length) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = strings.no_outputs || "No outputs";
+    audioOutput.appendChild(option);
+    audioOutput.disabled = true;
+    populatingOutputs = false;
+    return;
+  }
+  audioOutput.disabled = false;
+  for (const output of outputs) {
+    if (!output || !output.name) continue;
+    const option = document.createElement("option");
+    option.value = output.name;
+    option.textContent = outputLabel(output);
+    audioOutput.appendChild(option);
+  }
+  if (defaultSink && [...audioOutput.options].some(option => option.value === defaultSink)) {
+    audioOutput.value = defaultSink;
+  } else if (current && [...audioOutput.options].some(option => option.value === current)) {
+    audioOutput.value = current;
+  }
+  populatingOutputs = false;
+}
+
+function refreshState() {
+  fetch(`/state?token=${encodeURIComponent(token)}`, {cache:"no-store"})
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) return;
+      if (typeof data.volume === "number") setVolumeLabel(data.volume);
+      renderOutputs(data.outputs, data.default_sink);
+    })
+    .catch(()=>{});
+}
+
+function bindButton(id, payload) {
+  const button = document.getElementById(id);
+  const fire = ev => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    send(typeof payload === "function" ? payload() : payload);
+  };
+  button.addEventListener("pointerdown", fire);
+  button.addEventListener("touchstart", ev => {
+    ev.preventDefault();
+    ev.stopPropagation();
+  }, {passive:false});
+}
+
+function center(touches) {
+  let x = 0, y = 0;
+  for (const t of touches) { x += t.clientX; y += t.clientY; }
+  return {x: x / touches.length, y: y / touches.length, n: touches.length};
+}
+
+function disableKeyboardInput() {
+  keyboardOpenRequested = false;
+  previousKeyboardValue = "";
+  keyboardInput.value = "";
+  keyboardInput.blur();
+  keyboardInput.setAttribute("disabled", "");
+  keyboardInput.setAttribute("readonly", "");
+  keyboardInput.setAttribute("tabindex", "-1");
+  keyboardInput.setAttribute("inputmode", "none");
+}
+
+function enableKeyboardInput() {
+  keyboardOpenRequested = true;
+  previousKeyboardValue = "";
+  keyboardInput.value = "";
+  keyboardInput.removeAttribute("disabled");
+  keyboardInput.removeAttribute("readonly");
+  keyboardInput.removeAttribute("tabindex");
+  keyboardInput.setAttribute("inputmode", "text");
+  keyboardInput.focus({preventScroll:true});
+}
+
+pad.addEventListener("touchstart", ev => {
+  ev.preventDefault();
+  disableKeyboardInput();
+  last = center(ev.touches);
+  scrollSamples = [];
+  didScroll = ev.touches.length >= 2;
+  touchStartCount = Math.max(touchStartCount, ev.touches.length);
+  touchStartAt = performance.now();
+  touchMoved = false;
+  if (didScroll) send({type:"scroll_start"});
+}, {passive:false});
+
+pad.addEventListener("touchmove", ev => {
+  ev.preventDefault();
+  if (!last || ev.touches.length < 1) return;
+  const now = center(ev.touches);
+  const dx = now.x - last.x;
+  const dy = now.y - last.y;
+  last = now;
+  if (Math.abs(dx) + Math.abs(dy) > 10) touchMoved = true;
+  if (now.n >= 2) {
+    didScroll = true;
+    scrollSamples.push({dx, dy, t: performance.now()});
+    if (scrollSamples.length > 5) scrollSamples.shift();
+    send({type:"scroll", dx, dy});
+  } else {
+    send({type:"move", dx, dy});
+  }
+}, {passive:false});
+
+pad.addEventListener("touchend", ev => {
+  ev.preventDefault();
+  if (ev.touches.length) {
+    last = center(ev.touches);
+    touchStartCount = Math.max(touchStartCount, ev.touches.length);
+    if (ev.touches.length >= 2) didScroll = true;
+    return;
+  }
+  if (touchStartCount >= 3 && !touchMoved && performance.now() - touchStartAt < 360) {
+    send({type:"key", key:"back"});
+    touchStartCount = 0;
+    didScroll = false;
+    scrollSamples = [];
+    last = null;
+    return;
+  }
+  if (didScroll || scrollSamples.length) {
+    const recent = scrollSamples.filter(s => performance.now() - s.t < 160);
+    if (recent.length) {
+      const dx = recent.reduce((a, s) => a + s.dx, 0) / recent.length;
+      const dy = recent.reduce((a, s) => a + s.dy, 0) / recent.length;
+      send({type:"scroll_end", dx, dy});
+    } else {
+      send({type:"scroll_end", dx:0, dy:0});
+    }
+    scrollSamples = [];
+    didScroll = false;
+    last = null;
+    return;
+  }
+  const now = Date.now();
+  if (now - lastTap < 280) send({type:"click", button:"left"});
+  lastTap = now;
+  last = null;
+}, {passive:false});
+
+bindButton("left", {type:"click", button:"left"});
+bindButton("close", {type:"close_app"});
+bindButton("web-back", {type:"browser_back"});
+bindButton("keyboard", () => {
+  enableKeyboardInput();
+  return {type:"keyboard_open"};
+});
+
+volumeDial.addEventListener("input", () => {
+  setVolumeLabel(volumeDial.value);
+  clearTimeout(volumeTimer);
+  volumeTimer = setTimeout(() => send({type:"volume_set", volume:Number(volumeDial.value)}), 70);
+});
+
+audioOutput.addEventListener("change", () => {
+  if (populatingOutputs || !audioOutput.value) return;
+  send({type:"audio_output_set", sink:audioOutput.value}).then(() => setTimeout(refreshState, 180));
+});
+
+keyboardInput.addEventListener("input", () => {
+  if (!keyboardOpenRequested) return;
+  const value = keyboardInput.value;
+  if (value.length > previousKeyboardValue.length && value.startsWith(previousKeyboardValue)) {
+    send({type:"text", text:value.slice(previousKeyboardValue.length)});
+  } else if (value.length < previousKeyboardValue.length && previousKeyboardValue.startsWith(value)) {
+    send({type:"key", key:"backspace", count:previousKeyboardValue.length - value.length});
+  } else if (value !== previousKeyboardValue) {
+    send({type:"text", text:value});
+  }
+  previousKeyboardValue = value;
+});
+
+keyboardInput.addEventListener("keydown", ev => {
+  if (ev.key === "Enter") {
+    ev.preventDefault();
+    send({type:"key", key:"enter"});
+    keyboardInput.value = "";
+    previousKeyboardValue = "";
+  } else if (ev.key === "Escape") {
+    ev.preventDefault();
+    disableKeyboardInput();
+  }
+});
+keyboardInput.addEventListener("blur", () => {
+  disableKeyboardInput();
+});
+window.addEventListener("gesturestart", ev => ev.preventDefault(), {passive:false});
+window.addEventListener("gesturechange", ev => ev.preventDefault(), {passive:false});
+applyTranslations();
+refreshState();
+</script>
+</body>
+</html>
+"""
+
+
+def run_quiet(args):
+    return subprocess.run(args, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+
+
+def ydotool_key(*keycodes):
+    if not keycodes:
+        return
+    sequence = []
+    for keycode in keycodes:
+        sequence.append(f"{keycode}:1")
+    for keycode in reversed(keycodes):
+        sequence.append(f"{keycode}:0")
+    run_quiet(["ydotool", "key", *sequence])
+
+
+def type_text(text):
+    if not text:
+        return
+    result = subprocess.run(["wtype", text], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    if result.returncode == 0:
+        return
+    subprocess.run(["wl-copy"], input=text, text=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    run_quiet(["ydotool", "key", "29:1", "47:1", "47:0", "29:0"])  # Ctrl+V
+
+
+def command_output(args):
+    return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL).strip()
+
+
+def log_event(message):
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        with LOG_FILE.open("a") as handle:
+            handle.write(message + "\n")
+    except Exception:
+        pass
+
+
+def system_language():
+    candidates = [
+        os.environ.get("LANGUAGE", "").split(":", 1)[0],
+        os.environ.get("LC_MESSAGES", ""),
+        os.environ.get("LANG", ""),
+    ]
+    try:
+        loc = locale.getlocale()[0]
+        if loc:
+            candidates.append(loc)
+    except Exception:
+        pass
+    for candidate in candidates:
+        candidate = candidate.strip()
+        if not candidate or candidate.upper() == "C":
+            continue
+        return candidate.split(".", 1)[0].replace("_", "-")
+    return "en"
+
+
+def localised_html():
+    return HTML.replace("__SYSTEM_LANG__", system_language())
+
+
+def current_volume():
+    try:
+        output = command_output(["pactl", "get-sink-volume", "@DEFAULT_SINK@"])
+    except Exception:
+        return None
+    match = re.search(r"(\d+)%", output)
+    if not match:
+        return None
+    return max(0, min(100, int(match.group(1))))
+
+
+def default_sink():
+    try:
+        return command_output(["pactl", "get-default-sink"])
+    except Exception:
+        return ""
+
+
+def pactl_json(*args):
+    try:
+        output = command_output(["pactl", "--format=json", *args])
+        data = json.loads(output or "[]")
+    except Exception:
+        return []
+    return data if isinstance(data, list) else []
+
+
+def sink_label(sink):
+    properties = sink.get("properties") if isinstance(sink.get("properties"), dict) else {}
+    for key in ("node.nick", "device.nick", "device.description"):
+        value = str(properties.get(key) or "").strip()
+        if value:
+            return value
+    return str(sink.get("description") or sink.get("name") or "Audio output")
+
+
+def audio_outputs():
+    sinks = []
+    current = default_sink()
+    for sink in pactl_json("list", "sinks"):
+        name = str(sink.get("name") or "").strip()
+        if not name:
+            continue
+        sinks.append({
+            "index": sink.get("index"),
+            "name": name,
+            "label": sink_label(sink),
+            "description": str(sink.get("description") or ""),
+            "state": str(sink.get("state") or ""),
+            "default": name == current,
+        })
+    sinks.sort(key=lambda item: (not item["default"], item["label"].casefold(), item["name"]))
+    return sinks
+
+
+def set_volume(value):
+    try:
+        volume = int(round(float(value)))
+    except (TypeError, ValueError):
+        return
+    volume = max(0, min(100, volume))
+    run_quiet(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "0"])
+    run_quiet(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{volume}%"])
+    log_event(f"volume_set {volume}")
+
+
+def move_playback_streams(sink_name):
+    for stream in pactl_json("list", "sink-inputs"):
+        index = stream.get("index")
+        if index is None:
+            continue
+        properties = stream.get("properties") if isinstance(stream.get("properties"), dict) else {}
+        if stream.get("client") is None or str(properties.get("node.virtual", "")).lower() == "true":
+            continue
+        run_quiet(["pactl", "move-sink-input", str(index), sink_name])
+
+
+def set_audio_output(sink_name):
+    sink_name = str(sink_name or "").strip()
+    if not sink_name:
+        return
+    known_outputs = {output["name"] for output in audio_outputs()}
+    if sink_name not in known_outputs:
+        log_event(f"audio_output_set unknown {sink_name}")
+        return
+    run_quiet(["pactl", "set-default-sink", sink_name])
+    move_playback_streams(sink_name)
+    log_event(f"audio_output_set {sink_name}")
+
+
+def hypr_clients():
+    try:
+        output = command_output(["hyprctl", "-j", "clients"])
+        data = json.loads(output)
+    except Exception:
+        return []
+    return data if isinstance(data, list) else []
+
+
+def active_tv_client():
+    clients = []
+    for client in hypr_clients():
+        workspace = client.get("workspace")
+        if not isinstance(workspace, dict) or workspace.get("name") not in TV_WORKSPACES:
+            continue
+        if client.get("mapped") is False or client.get("hidden") is True:
+            continue
+        clients.append(client)
+    if not clients:
+        return None
+    clients.sort(key=lambda client: client.get("focusHistoryID", 999999))
+    return clients[0]
+
+
+def client_class_title(client):
+    window_class = str(client.get("class") or client.get("initialClass") or "")
+    title = str(client.get("title") or client.get("initialTitle") or "")
+    return window_class, title
+
+
+def client_is_steam(client):
+    window_class, title = client_class_title(client)
+    return window_class in STEAM_CLASSES or "Steam" in title
+
+
+def client_is_browser(client):
+    window_class, title = client_class_title(client)
+    return bool(BROWSER_CLASS_RE.search(window_class)) or bool(BROWSER_CLASS_RE.search(title))
+
+
+def remote_back():
+    client = active_tv_client()
+    if client and client_is_steam(client):
+        log_event("remote_back steam_escape")
+        ydotool_key(1)  # Escape: Big Picture back/cancel.
+        return
+    if client and client_is_browser(client):
+        log_event("remote_back browser_alt_left")
+        ydotool_key(56, 105)  # Alt+Left: browser history back.
+        try:
+            browser_history_back()
+        except Exception as exc:
+            log_event(f"browser_back cdp fallback failed: {exc}")
+        return
+    log_event("remote_back default_escape")
+    ydotool_key(1)
+
+
+def websocket_frame(payload):
+    data = json.dumps(payload).encode()
+    mask = os.urandom(4)
+    if len(data) < 126:
+        header = bytes([0x81, 0x80 | len(data)])
+    elif len(data) < 65536:
+        header = bytes([0x81, 0x80 | 126]) + struct.pack("!H", len(data))
+    else:
+        header = bytes([0x81, 0x80 | 127]) + struct.pack("!Q", len(data))
+    masked = bytes(byte ^ mask[index % 4] for index, byte in enumerate(data))
+    return header + mask + masked
+
+
+def read_exact(sock, length):
+    chunks = []
+    remaining = length
+    while remaining:
+        chunk = sock.recv(remaining)
+        if not chunk:
+            raise RuntimeError("websocket closed")
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def read_websocket_message(sock):
+    first, second = read_exact(sock, 2)
+    opcode = first & 0x0f
+    masked = second & 0x80
+    length = second & 0x7f
+    if length == 126:
+        length = struct.unpack("!H", read_exact(sock, 2))[0]
+    elif length == 127:
+        length = struct.unpack("!Q", read_exact(sock, 8))[0]
+    mask = read_exact(sock, 4) if masked else b""
+    payload = read_exact(sock, length) if length else b""
+    if masked:
+        payload = bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+    if opcode == 0x8:
+        raise RuntimeError("websocket closed")
+    if opcode != 0x1:
+        return None
+    return payload.decode()
+
+
+def cdp_request(websocket_url, payload):
+    parsed = urlparse(websocket_url)
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or CHROME_DEBUG_PORT
+    path = parsed.path
+    if parsed.query:
+        path += "?" + parsed.query
+    key = base64.b64encode(os.urandom(16)).decode()
+    with socket.create_connection((host, port), timeout=CHROME_DEBUG_TIMEOUT) as sock:
+        sock.settimeout(CHROME_DEBUG_TIMEOUT)
+        request = (
+            f"GET {path} HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            "Upgrade: websocket\r\n"
+            "Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            "Sec-WebSocket-Version: 13\r\n\r\n"
+        )
+        sock.sendall(request.encode())
+        response = b""
+        while b"\r\n\r\n" not in response:
+            response += sock.recv(4096)
+        if b" 101 " not in response.split(b"\r\n", 1)[0]:
+            raise RuntimeError("websocket upgrade failed")
+        expected_accept = base64.b64encode(hashlib.sha1((key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode()).digest())
+        if expected_accept not in response:
+            raise RuntimeError("websocket accept mismatch")
+        sock.sendall(websocket_frame(payload))
+        deadline = time.monotonic() + CHROME_DEBUG_TIMEOUT
+        while time.monotonic() < deadline:
+            message = read_websocket_message(sock)
+            if not message:
+                continue
+            data = json.loads(message)
+            if data.get("id") == payload.get("id"):
+                return data
+    raise RuntimeError("no chrome devtools response")
+
+
+def browser_history_back():
+    url = f"http://127.0.0.1:{CHROME_DEBUG_PORT}/json"
+    with urlopen(url, timeout=CHROME_DEBUG_TIMEOUT) as response:
+        targets = json.loads(response.read().decode())
+    pages = [
+        target for target in targets
+        if target.get("type") == "page"
+        and target.get("webSocketDebuggerUrl")
+        and str(target.get("url", "")).startswith(("http://", "https://"))
+    ]
+    if not pages:
+        raise RuntimeError("no chrome page target")
+    target = pages[0]
+    result = cdp_request(target["webSocketDebuggerUrl"], {
+        "id": 1,
+        "method": "Runtime.evaluate",
+        "params": {
+            "expression": "history.back()",
+            "userGesture": True,
+            "returnByValue": True,
+        },
+    })
+    if "error" in result:
+        raise RuntimeError(str(result["error"]))
+    log_event(f"browser_back target={target.get('url', '')[:120]}")
+
+
+def is_running(pid):
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def ensure_token():
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if TOKEN_FILE.exists():
+        token = TOKEN_FILE.read_text().strip()
+        if token:
+            return token
+    token = secrets.token_urlsafe(24)
+    TOKEN_FILE.write_text(token)
+    return token
+
+
+def acquire_server_lock():
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    handle = LOCK_FILE.open("w")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        return None
+    handle.write(str(os.getpid()))
+    handle.flush()
+    return handle
+
+
+def cleanup_pid_file():
+    try:
+        if PID_FILE.exists() and PID_FILE.read_text().strip() == str(os.getpid()):
+            PID_FILE.unlink()
+    except Exception:
+        pass
+
+
+def local_ip():
+    try:
+        route = command_output(["/usr/bin/ip", "-4", "route", "get", "1.1.1.1"])
+        parts = route.split()
+        if "src" in parts:
+            candidate = parts[parts.index("src") + 1]
+            if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", candidate):
+                return candidate
+    except Exception:
+        pass
+    try:
+        host_ips = command_output(["/usr/bin/hostname", "-I"]).split()
+        for candidate in host_ips:
+            if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", candidate) and not candidate.startswith("127."):
+                return candidate
+    except Exception:
+        pass
+    try:
+        candidate = socket.gethostbyname(socket.gethostname())
+        if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", candidate):
+            return candidate
+    except Exception:
+        pass
+    return "127.0.0.1"
+
+
+def kdeconnect_device_id():
+    if DEVICE_ID:
+        return DEVICE_ID
+    try:
+        output = command_output(["kdeconnect-cli", "--list-available", "--id-only"])
+    except Exception:
+        return ""
+    return next((line.strip() for line in output.splitlines() if line.strip()), "")
+
+
+class RemoteHandler(BaseHTTPRequestHandler):
+    pointer_carry_x = 0.0
+    pointer_carry_y = 0.0
+    pointer_lock = threading.Lock()
+    carry_x = 0.0
+    carry_y = 0.0
+    velocity_x = 0.0
+    velocity_y = 0.0
+    inertia_active = False
+    inertia_lock = threading.Lock()
+    last_activity = time.monotonic()
+
+    def log_message(self, fmt, *args):
+        return
+
+    def valid_token(self, token):
+        return token and token == ensure_token()
+
+    def touch_activity(self):
+        self.__class__.last_activity = time.monotonic()
+
+    def send_text(self, code, text, content_type="text/plain; charset=utf-8"):
+        body = text.encode()
+        self.send_response(code)
+        self.send_header("content-type", content_type)
+        self.send_header("cache-control", "no-store")
+        self.send_header("content-length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        parsed = urlparse(self.path)
+        token = parse_qs(parsed.query).get("token", [""])[0]
+        if parsed.path not in {"/", "/state"} or not self.valid_token(token):
+            self.send_text(403, "Forbidden")
+            return
+        self.touch_activity()
+        if parsed.path == "/state":
+            volume = current_volume()
+            current = default_sink()
+            self.send_text(
+                200,
+                json.dumps({
+                    "volume": volume if volume is not None else 0,
+                    "language": system_language(),
+                    "default_sink": current,
+                    "outputs": audio_outputs(),
+                }),
+                "application/json; charset=utf-8",
+            )
+            return
+        self.send_text(200, localised_html(), "text/html; charset=utf-8")
+
+    def do_POST(self):
+        if self.path != "/event":
+            self.send_text(404, "Not found")
+            return
+        try:
+            length = int(self.headers.get("content-length", "0"))
+            payload = json.loads(self.rfile.read(length).decode())
+        except Exception:
+            self.send_text(400, "Bad request")
+            return
+        if not self.valid_token(str(payload.get("token", ""))):
+            self.send_text(403, "Forbidden")
+            return
+        self.touch_activity()
+        self.handle_event(payload)
+        self.send_text(204, "")
+
+    def handle_event(self, payload):
+        event_type = payload.get("type")
+        if event_type == "move":
+            with self.__class__.pointer_lock:
+                scaled_x = float(payload.get("dx", 0)) * POINTER_SENSITIVITY + self.__class__.pointer_carry_x
+                scaled_y = float(payload.get("dy", 0)) * POINTER_SENSITIVITY + self.__class__.pointer_carry_y
+                dx = int(scaled_x)
+                dy = int(scaled_y)
+                self.__class__.pointer_carry_x = scaled_x - dx
+                self.__class__.pointer_carry_y = scaled_y - dy
+            if dx or dy:
+                run_quiet(["ydotool", "mousemove", "-x", str(dx), "-y", str(dy)])
+        elif event_type == "scroll_start":
+            self.stop_inertia()
+        elif event_type == "scroll":
+            raw_dx = float(payload.get("dx", 0))
+            raw_dy = float(payload.get("dy", 0))
+            self.stop_inertia()
+            self.emit_scroll(raw_dx, raw_dy, "scroll")
+        elif event_type == "scroll_end":
+            raw_dx = float(payload.get("dx", 0))
+            raw_dy = float(payload.get("dy", 0))
+            self.start_inertia(raw_dx, raw_dy)
+        elif event_type == "click":
+            button = {"left": "0xC0", "right": "0xC1", "middle": "0xC2"}.get(str(payload.get("button", "left")), "0xC0")
+            run_quiet(["ydotool", "click", button])
+        elif event_type == "close_app":
+            log_event("close_app")
+            run_quiet([str(CLOSE_TV_APP)])
+        elif event_type == "browser_back":
+            try:
+                remote_back()
+            except Exception as exc:
+                log_event(f"remote_back failed: {exc}")
+        elif event_type == "key":
+            key = str(payload.get("key", ""))
+            keycode = {"left": 105, "right": 106, "back": 1, "enter": 28, "backspace": 14}.get(key)
+            if keycode:
+                log_event(f"key {key}")
+                count = max(1, min(20, int(payload.get("count", 1) or 1)))
+                sequence = []
+                for _ in range(count):
+                    sequence.extend([f"{keycode}:1", f"{keycode}:0"])
+                run_quiet(["ydotool", "key", *sequence])
+        elif event_type == "text":
+            text = str(payload.get("text", ""))
+            if text:
+                log_event(f"text len={len(text)}")
+                type_text(text[:500])
+        elif event_type == "keyboard_open":
+            log_event("keyboard_open")
+        elif event_type == "volume_set":
+            set_volume(payload.get("volume"))
+        elif event_type == "audio_output_set":
+            set_audio_output(payload.get("sink"))
+
+    def stop_inertia(self):
+        with self.__class__.inertia_lock:
+            self.__class__.velocity_x = 0.0
+            self.__class__.velocity_y = 0.0
+            self.__class__.inertia_active = False
+
+    def start_inertia(self, raw_dx, raw_dy):
+        with self.__class__.inertia_lock:
+            self.__class__.velocity_x = raw_dx * 0.55
+            self.__class__.velocity_y = raw_dy * 0.55
+            if abs(self.__class__.velocity_x) < 0.5 and abs(self.__class__.velocity_y) < 0.5:
+                self.__class__.inertia_active = False
+                return
+            if self.__class__.inertia_active:
+                return
+            self.__class__.inertia_active = True
+        threading.Thread(target=self.run_inertia, daemon=True).start()
+
+    def run_inertia(self):
+        while True:
+            time.sleep(SCROLL_TICK)
+            with self.__class__.inertia_lock:
+                if not self.__class__.inertia_active:
+                    return
+                vx = self.__class__.velocity_x
+                vy = self.__class__.velocity_y
+                self.__class__.velocity_x *= SCROLL_INERTIA
+                self.__class__.velocity_y *= SCROLL_VERTICAL_INERTIA
+                if abs(self.__class__.velocity_x) < 0.35 and abs(self.__class__.velocity_y) < 0.35:
+                    self.__class__.inertia_active = False
+            self.emit_scroll(vx, vy, "inertia")
+
+    def emit_scroll(self, raw_dx, raw_dy, source):
+        self.__class__.carry_x -= raw_dx / SCROLL_HORIZONTAL_DIVISOR
+        self.__class__.carry_y += raw_dy / SCROLL_VERTICAL_DIVISOR
+        sx = int(self.__class__.carry_x)
+        sy = int(self.__class__.carry_y)
+        sx = max(-2, min(2, sx))
+        sy = max(-2, min(2, sy))
+        self.__class__.carry_x -= sx
+        self.__class__.carry_y -= sy
+        log_event(f"{source} raw_dx={raw_dx:.2f} raw_dy={raw_dy:.2f} sx={sx} sy={sy}")
+        if sx or sy:
+            run_quiet(["ydotool", "mousemove", "--wheel", "-x", str(sx), "-y", str(sy)])
+
+
+def server():
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    lock_handle = acquire_server_lock()
+    if lock_handle is None:
+        log_event("server-exit another instance is already active")
+        return
+
+    ensure_token()
+    RemoteHandler.last_activity = time.monotonic()
+    PID_FILE.write_text(str(os.getpid()))
+    httpd = ThreadingHTTPServer(("0.0.0.0", PORT), RemoteHandler)
+    threading.Thread(target=idle_shutdown, args=(httpd,), daemon=True).start()
+    try:
+        httpd.serve_forever()
+    finally:
+        httpd.server_close()
+        cleanup_pid_file()
+        try:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_UN)
+            lock_handle.close()
+        except Exception:
+            pass
+
+
+def idle_shutdown(httpd):
+    while True:
+        time.sleep(30)
+        if IDLE_TIMEOUT > 0 and time.monotonic() - RemoteHandler.last_activity > IDLE_TIMEOUT:
+            log_event(f"idle-timeout seconds={IDLE_TIMEOUT}")
+            httpd.shutdown()
+            return
+
+
+def start():
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            if is_running(pid):
+                share_url()
+                return
+        except Exception:
+            pass
+    subprocess.Popen([sys.executable, __file__, "--server"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    share_url()
+
+
+def share_url():
+    token = ensure_token()
+    url = f"http://{local_ip()}:{PORT}/?token={token}"
+    run_quiet(["notify-send", "TV Phone Remote", url])
+    device_id = kdeconnect_device_id()
+    if device_id:
+        run_quiet(["kdeconnect-cli", "--device", device_id, "--share", url])
+    print(url)
+
+
+def stop():
+    if PID_FILE.exists():
+        try:
+            pid = int(PID_FILE.read_text().strip())
+            if is_running(pid):
+                os.kill(pid, 15)
+        except Exception:
+            pass
+    try:
+        PID_FILE.unlink()
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--server":
+        server()
+    elif len(sys.argv) > 1 and sys.argv[1] == "stop":
+        stop()
+    else:
+        start()

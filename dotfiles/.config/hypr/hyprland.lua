@@ -36,6 +36,7 @@ require("hyprland.env")
 require("hyprland.execs")
 require("hyprland.general")
 require("hyprland.peripherals")
+require("hyprland.remote_input")
 require("hyprland.rules")
 require("hyprland.colors")
 -- Optional legacy custom overrides migrated to Lua; left disabled to preserve current behaviour.
