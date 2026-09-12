@@ -68,6 +68,9 @@ MouseArea {
     readonly property bool screenCaptureEnabled: !root.releasePrepared
         && !root.screenCaptureSuspended
         && !!root.captureScreen
+        // Dynamic wallpapers must keep following the schedule while locked.
+        // The wallpaper fallback binds directly to the current configured image.
+        && (Config.options.background.wallpaperMode ?? "static") !== "dynamic"
     readonly property bool useWallpaperFallback: !root.screenCaptureEnabled
     readonly property bool showWallpaperFallback: root.useWallpaperFallback
     property bool blurCapturePending: false

@@ -437,6 +437,19 @@ def stop_existing() -> None:
     PID_FILE.unlink(missing_ok=True)
 
 
+def wait_for_deadline(seconds: int, keep_running) -> None:
+    """Recheck wall time after each tick, including time spent suspended."""
+    previous = time.time()
+    deadline = previous + seconds
+    while keep_running():
+        now = time.time()
+        # Recompute the schedule after a backwards clock adjustment too.
+        if now >= deadline or now < previous:
+            return
+        previous = now
+        time.sleep(min(1, deadline - now))
+
+
 def daemon(args: argparse.Namespace) -> None:
     if is_running(read_pid()):
         raise SystemExit(f"Already running with pid {read_pid()} — use stop/status/next")
@@ -519,10 +532,7 @@ def daemon(args: argparse.Namespace) -> None:
             else:
                 seconds_to_interval = 30
             sleep_seconds = max(1, min(max(1, seconds_to_interval), seconds_to_transition))
-            for _ in range(sleep_seconds):
-                if not running:
-                    break
-                time.sleep(1)
+            wait_for_deadline(sleep_seconds, lambda: running)
     finally:
         if read_pid() == os.getpid():
             PID_FILE.unlink(missing_ok=True)
