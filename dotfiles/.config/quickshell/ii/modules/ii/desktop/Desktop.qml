@@ -48,26 +48,27 @@ Scope {
         path: root.positionsPath
         preload: true
         onLoaded: {
-            try { root.positions = JSON.parse(positionsFile.text()) } catch(e) {}
-            root.positionsReady = true
+            try {
+                const saved = JSON.parse(positionsFile.text())
+                if (!saved || typeof saved !== "object" || Array.isArray(saved))
+                    throw new Error("Invalid desktop layout")
+                root.positions = saved
+                root.positionsReady = true
+            } catch(e) { console.warn("Desktop layout could not be read; preserving the file:", e) }
         }
         onLoadFailed: error => {
             if (error === FileViewError.FileNotFound)
-                positionsFile.setText("{}")
-            root.positionsReady = true
+                root.positionsReady = true
         }
-    }
-
-    Timer {
-        id: posReadyFallback
-        interval: 500; repeat: false; running: true
-        onTriggered: { if (!root.positionsReady) root.positionsReady = true }
     }
 
     Timer {
         id: saveTimer
         interval: 400; repeat: false
-        onTriggered: positionsFile.setText(JSON.stringify(root.positions))
+        onTriggered: {
+            if (root.positionsReady)
+                positionsFile.setText(JSON.stringify(root.positions))
+        }
     }
 
     // ── Desktop-owned drag session ─────────────────────────────────────────
@@ -138,17 +139,15 @@ Scope {
 
     function initialPos(screenName, fileName, screenW, screenH, topOff) {
         const key   = screenName + "/" + fileName
-        const cellW = root.itemW + root.gridGap
-        const cellH = root.itemH + root.gridGap
-        const rows  = Math.max(1, Math.floor((screenH - topOff - root.gridPad) / cellH))
         if (root.positions[key] !== undefined) {
             const saved = root.positions[key]
-            const col   = Math.max(0, Math.round((saved.x - root.gridPad) / cellW))
-            const row   = Math.max(0, Math.min(rows - 1, Math.round((saved.y - topOff) / cellH)))
-            const snappedX = root.gridPad + col * cellW
-            const snappedY = topOff + row * cellH
-            // Resolve overlap: if the snapped cell is already taken, shift to nearest free cell
-            return root.findFreeCell(screenName, fileName, snappedX, snappedY, screenW, screenH, topOff)
+            // Restoration is not a grid rearrangement. Clamp only the displayed
+            // position for smaller monitors; leave the saved layout intact.
+            if (Number.isFinite(saved.x) && Number.isFinite(saved.y))
+                return {
+                    x: Math.max(root.gridPad, Math.min(saved.x, screenW - root.itemW)),
+                    y: Math.max(topOff, Math.min(saved.y, screenH - root.itemH))
+                }
         }
         // New item: scan the grid for the first free cell instead of using a blind slot counter
         // (slot counter always starts at 0 and overlaps existing items)
@@ -324,7 +323,7 @@ Scope {
     // ── Shared folder model ───────────────────────────────────────────────
     FolderListModel {
         id: folderModel
-        folder: root.positionsReady ? ("file://" + root.desktopPath) : ""
+        folder: "file://" + root.desktopPath
         showDirs: true; showFiles: true; showHidden: false
         sortField: FolderListModel.Name
     }
@@ -673,10 +672,13 @@ Scope {
 
                     Repeater {
                         id: desktopRepeater
-                        model: folderModel
+                        model: root.positionsReady && folderModel.status === FolderListModel.Ready ? folderModel : null
 
                         DesktopItem {
+                            id: desktopIcon
                             property bool _positionSet: false
+                            readonly property string layoutScreen: root.assignedScreen(modelData.fileName)
+                            onLayoutScreenChanged: _positionSet = false
                             visible: _positionSet &&
                                      root.assignedScreen(modelData.fileName) === desktopWindow.screen.name
                             opacity: GlobalStates.desktopDragActive
@@ -713,27 +715,36 @@ Scope {
                             dragMinimumY: desktopWindow.dragMinY
                             dragMaximumY: desktopWindow.dragMaxY
 
-                            Component.onCompleted: {
-                                try {
+                            Timer {
+                                interval: 100
+                                repeat: true
+                                running: !desktopIcon._positionSet
+                                onTriggered: {
+                                    if (!root.positionsReady || !desktopWindow.screen
+                                            || desktopWindow.width < root.itemW
+                                            || desktopWindow.height < root.itemH)
+                                        return
                                     const isHere = root.assignedScreen(modelData.fileName) === desktopWindow.screen.name
                                     if (isHere) {
                                         const topOff = desktopWindow.dragMinY + root.gridPad
                                         const pos = root.initialPos(
                                             desktopWindow.screen.name, modelData.fileName,
                                             desktopWindow.width, desktopWindow.height, topOff)
-                                        x = pos.x; y = pos.y
-                                        root.savePos(desktopWindow.screen.name, modelData.fileName, pos.x, pos.y)
+                                        desktopIcon.x = pos.x; desktopIcon.y = pos.y
+                                        const hasSavedPosition = Object.keys(root.positions).some(
+                                            key => key.endsWith("/" + modelData.fileName))
+                                        if (!hasSavedPosition)
+                                            root.savePos(desktopWindow.screen.name, modelData.fileName, pos.x, pos.y)
                                     }
-                                } catch(e) {
-                                    const fbTopOff = root.gridPad
-                                    const fbRows = Math.max(1, Math.floor(
-                                        (desktopWindow.height - fbTopOff * 2) / (root.itemH + root.gridGap)))
-                                    const fbSlot = root.nextSlot(desktopWindow.screen.name + "_fb")
-                                    x = root.gridPad + Math.floor(fbSlot / fbRows) * (root.itemW + root.gridGap)
-                                    y = fbTopOff + (fbSlot % fbRows) * (root.itemH + root.gridGap)
-                                } finally {
-                                    _positionSet = true
+                                    desktopIcon._positionSet = true
                                 }
+                            }
+
+                            Connections {
+                                target: desktopWindow
+                                function onWidthChanged() { desktopIcon._positionSet = false }
+                                function onHeightChanged() { desktopIcon._positionSet = false }
+                                function onScreenChanged() { desktopIcon._positionSet = false }
                             }
 
                             property var _syncPos: root.positions[desktopWindow.screen.name + "/" + modelData.fileName]

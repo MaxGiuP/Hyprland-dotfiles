@@ -1454,7 +1454,7 @@ MouseArea {
                 text: "dark_mode"; iconSize: 24
                 color: Appearance.colors.colOnSurfaceVariant
                 style: Text.Outline
-                styleColor: "#000000"
+                styleColor: Appearance.colors.colLayer0
             }
         }
         // Power off
@@ -1467,7 +1467,7 @@ MouseArea {
                 text: "power_settings_new"; iconSize: 24
                 color: Appearance.colors.colOnSurfaceVariant
                 style: Text.Outline
-                styleColor: "#000000"
+                styleColor: Appearance.colors.colLayer0
             }
         }
         // Restart
@@ -1480,7 +1480,7 @@ MouseArea {
                 text: "restart_alt"; iconSize: 24
                 color: Appearance.colors.colOnSurfaceVariant
                 style: Text.Outline
-                styleColor: "#000000"
+                styleColor: Appearance.colors.colLayer0
             }
         }
         // Logout
@@ -1493,7 +1493,7 @@ MouseArea {
                 text: "logout"; iconSize: 24
                 color: Appearance.colors.colOnSurfaceVariant
                 style: Text.Outline
-                styleColor: "#000000"
+                styleColor: Appearance.colors.colLayer0
             }
         }
     }
