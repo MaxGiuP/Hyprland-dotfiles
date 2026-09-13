@@ -18,9 +18,7 @@ StyledComboBox {
             codes.push(root.selectedLanguage);
         return [...(root.includeAutomatic ? [{ displayName: Translation.tr("Auto (System)"), value: "auto" }] : []),
             ...codes.map(code => ({
-                displayName: code === "en_GB" ? "English (United Kingdom)"
-                    : code === "en_US" ? "English (United States)"
-                    : `${Qt.locale(code).nativeLanguageName || code} (${code})`,
+                displayName: Translation.languageDisplayName(code),
                 value: code
             })).sort((a, b) => a.displayName.localeCompare(b.displayName))];
     }

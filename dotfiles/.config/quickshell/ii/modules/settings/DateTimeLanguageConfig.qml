@@ -259,14 +259,13 @@ ContentPage {
             if (exitCode === 0) {
                 Config.options.language.ui = sysLangApplyProc.targetLang
                 root.sysLocale = sysLangApplyProc.targetLang
-                root.sysLangStatus = Translation.tr("Language updated to %1 for the interface and system. Sign in again to update other applications.").arg(sysLangApplyProc.targetLang)
+                root.sysLangStatus = Translation.tr("Language updated to %1 for the interface and system. Sign in again to update other applications.").arg(Translation.languageDisplayName(sysLangApplyProc.targetLang))
                 readSysLocaleProc.running = false
                 readSysLocaleProc.running = true
             } else {
                 const details = (sysLangApplyErr.text || sysLangApplyOut.text).trim()
-                root.sysLangStatus = details.length > 0
-                    ? Translation.tr("Failed to update system locale. %1").arg(details)
-                    : Translation.tr("Failed to update system locale.")
+                console.warn("Language update failed:", details)
+                root.sysLangStatus = Translation.tr("Language could not be changed. Please try again.")
             }
         }
     }
@@ -363,13 +362,15 @@ ContentPage {
                     spacing: 2
 
                     StyledText {
-                        text: Translation.tr("Active system locale")
+                        text: Translation.tr("Current language")
                         color: Appearance.colors.colSubtext
                         font.pixelSize: Appearance.font.pixelSize.small
                     }
 
                     StyledText {
-                        text: root.sysLocale.length > 0 ? root.sysLocale + ".UTF-8" : "…"
+                        text: Translation.languageDisplayName(root.sysLocale)
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
                         color: Appearance.colors.colOnLayer1
                         font.weight: Font.Medium
                     }
@@ -401,7 +402,7 @@ ContentPage {
                         root.sysLangStatus = ""
                         if (lang === root.sysLocale) {
                             Config.options.language.ui = lang
-                            root.sysLangStatus = Translation.tr("The interface and system now use %1.").arg(lang)
+                            root.sysLangStatus = Translation.tr("The interface and system now use %1.").arg(Translation.languageDisplayName(lang))
                             return
                         }
                         sysLangApplyProc.targetLang = lang
@@ -430,7 +431,7 @@ ContentPage {
             RippleButtonWithIcon {
                 Layout.fillWidth: true
                 materialIcon: "refresh"
-                mainText: Translation.tr("Reload locale file")
+                mainText: Translation.tr("Reload translation")
                 onClicked: {
                     targetTranslationFile.reload()
                 }
@@ -439,7 +440,7 @@ ContentPage {
             RippleButtonWithIcon {
                 Layout.fillWidth: true
                 materialIcon: "edit_document"
-                mainText: Translation.tr("Open locale JSON")
+                mainText: Translation.tr("Open translation file")
                 onClicked: Qt.openUrlExternally(`file://${root.targetTranslationPath()}`)
             }
         }
@@ -463,7 +464,7 @@ ContentPage {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Appearance.colors.colSubtext
-            text: Translation.tr("This shows the base English source string on the left and the current target locale translation on the right for %1.").arg(root.selectedLocaleCode())
+            text: Translation.tr("This shows the English text on the left and the %1 translation on the right.").arg(Translation.languageDisplayName(root.selectedLocaleCode()))
         }
 
         MaterialTextField {
@@ -524,7 +525,7 @@ ContentPage {
                             spacing: 4
 
                             StyledText {
-                                text: root.selectedLocaleCode()
+                                text: Translation.languageDisplayName(root.selectedLocaleCode())
                                 color: Appearance.colors.colSubtext
                                 font.pixelSize: Appearance.font.pixelSize.small
                             }
@@ -545,13 +546,13 @@ ContentPage {
     ContentSection {
         visible: root.currentSubTab === 2
         icon: "code"
-        title: Translation.tr("Locale JSON editor")
+        title: Translation.tr("Translation editor")
 
         StyledText {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             color: Appearance.colors.colSubtext
-            text: Translation.tr("Edit the raw translation JSON directly for %1. This writes to the locale file in the shell translations directory.").arg(root.selectedLocaleCode())
+            text: Translation.tr("Edit the translation file for %1.").arg(Translation.languageDisplayName(root.selectedLocaleCode()))
         }
 
         ScrollView {
@@ -579,7 +580,7 @@ ContentPage {
             RippleButtonWithIcon {
                 Layout.fillWidth: true
                 materialIcon: "save"
-                mainText: Translation.tr("Save locale JSON")
+                mainText: Translation.tr("Save translation")
                 onClicked: {
                     const parsed = root.parseJson(rawJsonEditor.text, null)
                     if (parsed === null) return

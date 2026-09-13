@@ -75,6 +75,18 @@ Singleton {
         }
     }
 
+    function languageDisplayName(code) {
+        if (!code) return "…";
+        if (code === "auto") return root.tr("Auto (System)");
+        if (code === "en_GB") return "English (United Kingdom)";
+        if (code === "en_US") return "English (United States)";
+        const languageLocale = Qt.locale(code);
+        const language = languageLocale.nativeLanguageName;
+        const territory = languageLocale.nativeTerritoryName;
+        if (!language || language === "C") return root.tr("Unknown language");
+        return territory ? `${language} (${territory})` : language;
+    }
+
     function tr(text) {
         // Special cases
         if (!text) return "";

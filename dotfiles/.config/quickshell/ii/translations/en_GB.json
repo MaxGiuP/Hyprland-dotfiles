@@ -1,4 +1,12 @@
 {
+  "Current language": "Current language",
+  "Edit the translation file for %1.": "Edit the translation file for %1.",
+  "Language could not be changed. Please try again.": "Language could not be changed. Please try again.",
+  "Open translation file": "Open translation file",
+  "Reload translation": "Reload translation",
+  "Save translation": "Save translation",
+  "This shows the English text on the left and the %1 translation on the right.": "This shows the English text on the left and the %1 translation on the right.",
+  "Translation editor": "Translation editor",
   "\nLMB to enable/disable\nRMB to toggle size\nScroll to swap position": "\nLMB to enable/disable\nRMB to toggle size\nScroll to swap position",
   "## Available models\n\n%1\n\nUse `%2model MODEL_ID` to switch.": "## Available models\n\n%1\n\nUse `%2model MODEL_ID` to switch.",
   "%1\nInternet access": "%1\nInternet access",
