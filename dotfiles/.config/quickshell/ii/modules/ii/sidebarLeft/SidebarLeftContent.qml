@@ -15,12 +15,14 @@ Item {
     property bool aiEnabled: (Config.options?.policies?.ai ?? 1) !== 0
     property bool translatorEnabled: Config.options?.sidebar?.translator?.enable ?? false
     property var tabButtonList: [
+        {"id": "workspace", "icon": "space_dashboard", "name": "", "title": Translation.tr("Workspace")},
         ...(root.aiEnabled ? [{"id": "ai", "icon": "hub", "name": "", "title": Translation.tr("AI")}] : []),
         ...(root.translatorEnabled ? [{"id": "translator", "icon": "translate", "name": "", "title": Translation.tr("Translator")}] : []),
         {"id": "calculator", "icon": "calculate", "name": "", "title": Translation.tr("Calculator")},
         {"id": "kde-connect", "icon": "smartphone", "name": "", "title": Translation.tr("KDE Connect")},
     ]
     property var tabPageComponents: [
+        workspaceCompanion,
         ...(root.aiEnabled ? [aiHarness] : []),
         ...(root.translatorEnabled ? [translator] : []),
         calculatorTab,
@@ -62,14 +64,26 @@ Item {
         }
     }
 
-    Component.onCompleted: Qt.callLater(root.restorePersistedTab)
+    function introduceWorkspaceCompanion() {
+        if (!Persistent.ready || Persistent.states.sidebar.workspaceCompanionIntroduced)
+            return;
+        Persistent.states.sidebar.workspaceCompanionIntroduced = true;
+        Persistent.states.sidebar.leftTab = "workspace";
+    }
+
+    Component.onCompleted: {
+        root.introduceWorkspaceCompanion();
+        Qt.callLater(root.restorePersistedTab);
+    }
     onTabButtonListChanged: Qt.callLater(root.restorePersistedTab)
 
     Connections {
         target: Persistent
         function onReadyChanged() {
-            if (Persistent.ready)
+            if (Persistent.ready) {
+                root.introduceWorkspaceCompanion();
                 root.restorePersistedTab();
+            }
         }
     }
 
@@ -191,6 +205,10 @@ Item {
             }
         }
 
+        Component {
+            id: workspaceCompanion
+            WorkspaceCompanion { scopeRoot: root.scopeRoot }
+        }
         Component {
             id: aiHarness
             AiHarness {}

@@ -80,6 +80,8 @@ Singleton {
 
             property JsonObject sidebar: JsonObject {
                 property string leftTab: "ai"
+                property bool workspaceCompanionIntroduced: false
+                property string workspaceNotesJson: "{}"
                 property JsonObject bottomGroup: JsonObject {
                     property bool collapsed: false
                     property int tab: 0
