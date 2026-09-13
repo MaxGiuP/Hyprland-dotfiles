@@ -298,8 +298,8 @@ ContentPage {
             ConfigSpinBox {
                 icon: "loupe"
                 text: Translation.tr("Extra wallpaper zoom (%)")
-                value: Config.options.lock.blur.extraZoom * 100
-                from: 1
+                value: Math.max(1, Config.options.lock.blur.extraZoom) * 100
+                from: 100
                 to: 150
                 stepSize: 2
                 onValueChanged: {

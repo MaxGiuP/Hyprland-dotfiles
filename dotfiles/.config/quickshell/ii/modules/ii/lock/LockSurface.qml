@@ -407,7 +407,8 @@ MouseArea {
         opacity: root.useWallpaperFallback
             ? 1
             : (screenshotView.hasContent ? 1 : 0)
-        readonly property real blurScale: 1 + ((Config.options.lock.blur.extraZoom - 1) * root.lockBlurProgress)
+        // Older settings may contain zoom values below 100%; keep the background full-screen.
+        readonly property real blurScale: 1 + ((Math.max(1, Config.options.lock.blur.extraZoom) - 1) * root.lockBlurProgress)
         readonly property real blurRadius: Config.options.lock.blur.radius * root.lockBlurProgress
         readonly property real blurOverscan: Math.ceil(
             blurRadius + (Math.max(root.width, root.height) * Math.max(0, blurScale - 1) / 2)
@@ -509,7 +510,7 @@ MouseArea {
             source: root.showWallpaperFallback ? wallpaperTexture : null
             radius: screenshotLayer.blurRadius
             samples: Math.max(1, Math.ceil(radius) * 2 + 1)
-            transparentBorder: true
+            transparentBorder: false
             scale: screenshotLayer.blurScale
             transformOrigin: Item.Center
         }
