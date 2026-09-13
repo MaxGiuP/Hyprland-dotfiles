@@ -13,7 +13,7 @@ import Quickshell.Hyprland
 
 Scope {
     id: root
-    property var focusedScreen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name)
+    property var focusedScreen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
 
     Loader {
         id: sessionLoader
@@ -31,8 +31,12 @@ Scope {
             }
         }
 
-        sourceComponent: PanelWindow { // Session menu
+        sourceComponent: Variants {
+            model: Quickshell.screens
+            PanelWindow { // One session menu per output
             id: sessionRoot
+            required property var modelData
+            screen: modelData
             visible: sessionLoader.active
             property string subtitle
             
@@ -43,7 +47,8 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.namespace: "quickshell:session"
             WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            WlrLayershell.keyboardFocus: screen === root.focusedScreen
+                ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
             // This is a big surface so we needa carefully choose the transparency,
             // or we'll get a large scary rgb blob
             color: "#000000"
@@ -66,6 +71,7 @@ Scope {
                 SessionScreenContent {
                     anchors.fill: parent
                 }
+            }
             }
         }
     }

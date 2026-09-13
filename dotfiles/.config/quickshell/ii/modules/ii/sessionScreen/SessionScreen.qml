@@ -13,7 +13,16 @@ import Quickshell.Hyprland
 
 Scope {
     id: root
-    property var focusedScreen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name)
+    property var focusedScreen: Quickshell.screens.find(s => s.name === Hyprland.focusedMonitor?.name) ?? Quickshell.screens[0]
+    property bool actionPending: false
+
+    Connections {
+        target: GlobalStates
+        function onSessionOpenChanged() {
+            if (!GlobalStates.sessionOpen)
+                root.actionPending = false;
+        }
+    }
 
     Loader {
         id: sessionLoader
@@ -32,8 +41,12 @@ Scope {
             }
         }
 
-        sourceComponent: PanelWindow { // Session menu
+        sourceComponent: Variants {
+            model: Quickshell.screens
+            PanelWindow { // One session menu per output
             id: sessionRoot
+            required property var modelData
+            screen: modelData
             visible: sessionLoader.active
             property string subtitle
             property var pendingSessionAction: null
@@ -58,9 +71,10 @@ Scope {
             }
 
             function runSessionAction(iconName, action, sourceItem) {
-                if (sessionActionAnim.running)
+                if (root.actionPending)
                     return;
 
+                root.actionPending = true;
                 pendingSessionAction = action;
                 sessionActionIconSymbol.text = iconName;
 
@@ -80,17 +94,16 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.namespace: "quickshell:session"
             WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            WlrLayershell.keyboardFocus: screen === root.focusedScreen
+                ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.OnDemand
             color: ColorUtils.transparentize(Appearance.m3colors.m3background, Appearance.m3colors.darkmode ? 0.05 : 0.12)
 
             anchors {
                 top: true
                 left: true
                 right: true
+                bottom: true
             }
-
-            implicitWidth: root.focusedScreen?.width ?? 0
-            implicitHeight: root.focusedScreen?.height ?? 0
 
             MouseArea {
                 id: sessionMouseArea
@@ -375,6 +388,7 @@ Scope {
                             action();
                     }
                 }
+            }
             }
         }
     }
