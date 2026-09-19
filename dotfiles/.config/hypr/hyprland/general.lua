@@ -121,7 +121,9 @@ hl.config({
         on_focus_under_fullscreen = 2,
         allow_session_lock_restore = true,
         session_lock_xray = true,
-        initial_workspace_tracking = false,
+        -- Capture the launch workspace before a slow app maps its first window.
+        initial_workspace_tracking = 1,
+        initial_workspace_token_timeout = 60,
         focus_on_activate = true,
     },
     binds = {

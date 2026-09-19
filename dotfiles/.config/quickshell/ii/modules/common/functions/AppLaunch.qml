@@ -1,6 +1,7 @@
 pragma Singleton
 
 import Quickshell
+import Quickshell.Hyprland
 import qs.modules.common
 
 Singleton {
@@ -52,7 +53,18 @@ Singleton {
         if (normalized.length === 0)
             return false;
 
-        Quickshell.execDetached([root.launcherScriptPath, ...normalized]);
+        const launchArgs = [root.launcherScriptPath, ...normalized];
+        if (Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE")) {
+            // Give each launch its own workspace token before the app starts.
+            // The detached launcher preserves it through the systemd scope.
+            const shellCommand = launchArgs
+                .map(part => `'${StringUtils.shellSingleQuoteEscape(part)}'`).join(" ");
+            const luaCommand = shellCommand.replace(/\\/g, "\\\\")
+                .replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r");
+            Hyprland.dispatch(`hl.dsp.exec_cmd("${luaCommand}")`);
+        } else {
+            Quickshell.execDetached(launchArgs);
+        }
         return true;
     }
 
