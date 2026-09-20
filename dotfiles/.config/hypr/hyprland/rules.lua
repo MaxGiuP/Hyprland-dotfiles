@@ -431,6 +431,15 @@ window_rule({
     no_initial_focus = true,
 })
 
+-- # Give Super+D maximized windows a subtle outline using the theme's colours.
+window_rule({
+    match = {
+        fullscreen_state_internal = 1,
+    },
+    decorate = true,
+    border_size = 2,
+})
+
 -- # No shadow for tiled windows (matches windows that are not floating).
 window_rule({
     match = {
