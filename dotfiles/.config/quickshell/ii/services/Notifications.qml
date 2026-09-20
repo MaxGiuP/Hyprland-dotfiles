@@ -8,6 +8,7 @@ import qs.services
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import Quickshell.Services.Notifications
 import Linmax.NotificationActivation 1.0
 
@@ -201,7 +202,11 @@ Singleton {
     property var filePath: Directories.notificationsPath
     property list<Notif> list: []
     property var popupList: list.filter((notif) => notif.popup);
-    property bool popupInhibited: (GlobalStates?.sidebarRightOpen ?? false) || silent
+    // Wine's mouse capture can break when notification layers change, even
+    // without a keyboard focus change. Keep these notifications in history.
+    readonly property bool oblivionActive: ToplevelManager.activeToplevel?.appId === "steam_app_22330"
+        && ToplevelManager.activeToplevel?.title === "Oblivion"
+    property bool popupInhibited: (GlobalStates?.sidebarRightOpen ?? false) || silent || root.oblivionActive
     property var latestTimeForApp: ({})
     property int _phoneNotifId: 0
     property var phoneNotifList: list.filter((notif) => notif.isPhoneNotif)
@@ -383,6 +388,8 @@ Singleton {
                 const timeoutInterval = root.effectiveTimeoutInterval(notification.expireTimeout);
                 root.configurePopupTimeout(newNotifObject, timeoutInterval);
                 root.unread++;
+            } else if (root.oblivionActive) {
+                root.unread++;
             }
             root.notify(newNotifObject);
             // console.log(notifToString(newNotifObject));
@@ -414,6 +421,8 @@ Singleton {
             if (showPopup && !root.popupInhibited) {
                 newNotifObject.popup = true;
                 root.configurePopupTimeout(newNotifObject, Config?.options.notifications.timeout ?? 12000);
+                root.unread++;
+            } else if (showPopup && root.oblivionActive) {
                 root.unread++;
             }
             root.notify(newNotifObject);

@@ -22,7 +22,7 @@ Scope {
             readonly property bool tvModeVisible: HyprlandData.monitorShowsTvModeWorkspace(screenName)
             readonly property bool fullscreenOnMonitor: HyprlandData.monitorShouldSuppressShell(screenName)
 
-            readonly property bool popupsVisible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked && !tvModeVisible
+            readonly property bool popupsVisible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked && !tvModeVisible && !Notifications.oblivionActive
 
             // Unmapping even a non-focusable layer makes Hyprland refocus
             // under the pointer. Keep the surface mapped between popups.
