@@ -20,11 +20,16 @@ Scope {
             readonly property bool tvModeVisible: HyprlandData.monitorShowsTvModeWorkspace(screenName)
             readonly property bool fullscreenOnMonitor: HyprlandData.monitorShouldSuppressShell(screenName)
 
-            visible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked && !tvModeVisible
+            readonly property bool popupsVisible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked && !tvModeVisible
+
+            // Unmapping even a non-focusable layer makes Hyprland refocus
+            // under the pointer. Keep the surface mapped between popups.
+            visible: true
             screen: modelData
 
             WlrLayershell.namespace: "quickshell:notificationPopup"
-            WlrLayershell.layer: WlrLayer.Overlay
+            // An empty surface must not obstruct fullscreen presentation.
+            WlrLayershell.layer: popupsVisible ? WlrLayer.Overlay : WlrLayer.Bottom
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusiveZone: 0
 
@@ -36,7 +41,7 @@ Scope {
 
             mask: Region {
                 // Keep popup hitboxes out of a fullscreen app's mouse input.
-                item: root.fullscreenOnMonitor ? null : listview.contentItem
+                item: root.popupsVisible && !root.fullscreenOnMonitor ? listview.contentItem : null
             }
 
             color: "transparent"
@@ -44,6 +49,7 @@ Scope {
 
             NotificationListView {
                 id: listview
+                visible: root.popupsVisible
                 // Keep dismissing notifications from bleeding into the
                 // screen-edge buffer while they animate to the right.
                 clip: true
