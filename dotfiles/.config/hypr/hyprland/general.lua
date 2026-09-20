@@ -124,7 +124,8 @@ hl.config({
         -- Capture the launch workspace before a slow app maps its first window.
         initial_workspace_tracking = 1,
         initial_workspace_token_timeout = 60,
-        focus_on_activate = true,
+        -- Background apps may demand attention without taking keyboard focus.
+        focus_on_activate = false,
     },
     binds = {
         scroll_event_delay = 0,

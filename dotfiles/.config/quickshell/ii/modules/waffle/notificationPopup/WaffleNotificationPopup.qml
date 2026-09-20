@@ -20,12 +20,14 @@ Scope {
             required property var modelData
             readonly property string screenName: modelData?.name ?? ""
             readonly property bool tvModeVisible: HyprlandData.monitorShowsTvModeWorkspace(screenName)
+            readonly property bool fullscreenOnMonitor: HyprlandData.monitorShouldSuppressShell(screenName)
 
             visible: (Notifications.popupList.length > 0) && !GlobalStates.screenLocked && !tvModeVisible
             screen: modelData
 
             WlrLayershell.namespace: "quickshell:notificationPopup"
             WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             exclusiveZone: 0
 
             anchors {
@@ -35,7 +37,8 @@ Scope {
             }
 
             mask: Region {
-                item: listview.contentItem
+                // Keep popup hitboxes out of a fullscreen app's mouse input.
+                item: root.fullscreenOnMonitor ? null : listview.contentItem
             }
 
             color: "transparent"
