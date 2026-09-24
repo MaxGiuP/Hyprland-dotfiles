@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import Quickshell.Services.UPower
 import qs.services
 import qs.modules.common
@@ -23,7 +24,8 @@ ContentPage {
     }
 
     property var monitorDrafts: ({})
-    property bool draftsInitialized: false
+    property string monitorApplyMessage: ""
+    property bool monitorApplyFailed: false
     property real layoutPadding: 20
     readonly property var orientationOptions: [
         { text: Translation.tr("Normal"), value: 0 },
@@ -62,21 +64,21 @@ ContentPage {
     readonly property real layoutSpanWidth: Math.max(1, layoutMaxX - layoutMinX)
     readonly property real layoutSpanHeight: Math.max(1, layoutMaxY - layoutMinY)
 
-    function syncMonitorDrafts(force = false) {
-        if (draftsInitialized && !force)
-            return;
+    function syncMonitorDrafts(reset = false) {
         const nextDrafts = {};
         for (const mon of HyprlandData.monitors) {
             const existing = root.monitorDrafts[mon.name];
-            nextDrafts[mon.name] = {
-                x: existing?.x ?? mon.x,
-                y: existing?.y ?? mon.y,
-                scale: existing?.scale ?? mon.scale,
-                transform: existing?.transform ?? mon.transform
+            const matchesCurrent = existing && existing.x === mon.x && existing.y === mon.y
+                && existing.scale === mon.scale && existing.transform === mon.transform;
+            nextDrafts[mon.name] = !reset && existing?.dirty && !matchesCurrent ? existing : {
+                x: mon.x,
+                y: mon.y,
+                scale: mon.scale,
+                transform: mon.transform,
+                dirty: false
             };
         }
         root.monitorDrafts = nextDrafts;
-        root.draftsInitialized = true;
     }
 
     function monitorDraft(mon) {
@@ -90,42 +92,117 @@ ContentPage {
 
     function draftWidth(mon) {
         const draft = root.monitorDraft(mon);
-        return (draft.transform % 2 === 1) ? mon.height : mon.width;
+        return ((draft.transform % 2 === 1) ? mon.height : mon.width) / draft.scale;
     }
 
     function draftHeight(mon) {
         const draft = root.monitorDraft(mon);
-        return (draft.transform % 2 === 1) ? mon.width : mon.height;
+        return ((draft.transform % 2 === 1) ? mon.width : mon.height) / draft.scale;
     }
 
-    function updateMonitorPosition(mon, x, y) {
-        const draft = root.monitorDraft(mon);
-        draft.x = Math.round(x / 10) * 10;
-        draft.y = Math.round(y / 10) * 10;
-        root.monitorDrafts = Object.assign({}, root.monitorDrafts);
+    function snapMonitorPosition(mon, x, y, distance) {
+        const width = root.draftWidth(mon);
+        const height = root.draftHeight(mon);
+        let snappedX = Math.round(x / 10) * 10;
+        let snappedY = Math.round(y / 10) * 10;
+        let nearestX = distance;
+        let nearestY = distance;
+
+        for (const other of HyprlandData.monitors) {
+            if (other.name === mon.name)
+                continue;
+            const draft = root.monitorDraft(other);
+            const right = draft.x + root.draftWidth(other);
+            const bottom = draft.y + root.draftHeight(other);
+
+            // Only align edges of nearby displays. Use logical dimensions so
+            // scaled and rotated monitors meet at the same desktop coordinate.
+            if (y <= bottom + distance && y + height >= draft.y - distance) {
+                for (const edge of [draft.x - width, right, draft.x, right - width]) {
+                    const delta = Math.abs(x - edge);
+                    if (delta <= nearestX) {
+                        snappedX = edge;
+                        nearestX = delta;
+                    }
+                }
+            }
+            if (x <= right + distance && x + width >= draft.x - distance) {
+                for (const edge of [draft.y - height, bottom, draft.y, bottom - height]) {
+                    const delta = Math.abs(y - edge);
+                    if (delta <= nearestY) {
+                        snappedY = edge;
+                        nearestY = delta;
+                    }
+                }
+            }
+        }
+        return { x: Math.round(snappedX), y: Math.round(snappedY) };
     }
 
-    function monitorCommand(mon, transform) {
+    function updateMonitorPosition(mon, x, y, snapDistance = 0) {
+        const position = root.snapMonitorPosition(mon, x, y, snapDistance);
+        root.monitorDrafts = Object.assign({}, root.monitorDrafts, {
+            [mon.name]: Object.assign({}, root.monitorDraft(mon), {
+                x: position.x,
+                y: position.y,
+                dirty: true
+            })
+        });
+        root.monitorApplyMessage = "";
+    }
+
+    function monitorCommand(mon) {
         const draft = root.monitorDraft(mon);
         const refresh = Number(mon.refreshRate || 60).toFixed(2);
-        const scale = Number(draft.scale || mon.scale || 1).toFixed(2);
-        return `${mon.name},${mon.width}x${mon.height}@${refresh},${Math.round(draft.x)}x${Math.round(draft.y)},${scale},transform,${transform}`;
+        const scale = Number(draft.scale || mon.scale || 1);
+        return `hl.monitor({ output = ${JSON.stringify(mon.name)}, mode = "${mon.width}x${mon.height}@${refresh}", position = "${Math.round(draft.x)}x${Math.round(draft.y)}", scale = ${scale}, transform = ${draft.transform} })`;
     }
 
     function applyMonitorTransform(mon, transform) {
-        const draft = root.monitorDraft(mon);
-        draft.transform = transform;
-        root.monitorDrafts = Object.assign({}, root.monitorDrafts);
-        Quickshell.execDetached(["hyprctl", "keyword", "monitor", root.monitorCommand(mon, transform)]);
+        root.monitorDrafts = Object.assign({}, root.monitorDrafts, {
+            [mon.name]: Object.assign({}, root.monitorDraft(mon), { transform: transform, dirty: true })
+        });
+        root.applyMonitorLayout(mon);
     }
 
     function applyMonitorLayout(mon) {
-        Quickshell.execDetached(["hyprctl", "keyword", "monitor", root.monitorCommand(mon, root.monitorDraft(mon).transform)]);
+        root.applyMonitorLayouts([mon]);
     }
 
     function applyAllMonitorLayouts() {
-        for (const mon of HyprlandData.monitors)
-            root.applyMonitorLayout(mon);
+        root.applyMonitorLayouts(HyprlandData.monitors);
+    }
+
+    function applyMonitorLayouts(monitors) {
+        if (monitorApplyProc.running || monitors.length === 0)
+            return;
+        root.monitorApplyFailed = false;
+        root.monitorApplyMessage = Translation.tr("Applying monitor positions…");
+        // Lua configurations reject the legacy `hyprctl keyword monitor` API.
+        // Submit the whole layout together so individual monitor updates cannot race.
+        monitorApplyProc.command = ["hyprctl", "eval", monitors.map(mon => root.monitorCommand(mon)).join("\n")];
+        monitorApplyProc.running = true;
+    }
+
+    Process {
+        id: monitorApplyProc
+        stdout: StdioCollector { id: monitorApplyOutput }
+        stderr: StdioCollector { id: monitorApplyErrors }
+        onExited: (exitCode, exitStatus) => {
+            // hyprctl can return exit code zero even when its reply is an error.
+            root.monitorApplyFailed = exitCode !== 0 || exitStatus !== 0 || monitorApplyOutput.text.trim() !== "ok";
+            root.monitorApplyMessage = root.monitorApplyFailed
+                ? Translation.tr("Could not apply monitor positions") + ": "
+                    + (monitorApplyErrors.text.trim() || monitorApplyOutput.text.trim() || String(exitCode))
+                : Translation.tr("Monitor positions applied");
+            monitorRefreshTimer.restart();
+        }
+    }
+
+    Timer {
+        id: monitorRefreshTimer
+        interval: 250
+        onTriggered: HyprlandData.updateMonitors()
     }
 
     Component.onCompleted: syncMonitorDrafts(true)
@@ -133,7 +210,7 @@ ContentPage {
     Connections {
         target: HyprlandData
         function onMonitorsChanged() {
-            root.syncMonitorDrafts(true);
+            root.syncMonitorDrafts();
         }
     }
 
@@ -190,6 +267,7 @@ ContentPage {
                 delegate: Rectangle {
                     id: monitorCard
                     required property var modelData
+                    property bool dragging: false
 
                     width: Math.max(90, root.draftWidth(modelData) * layoutCanvas.scaleFactor)
                     height: Math.max(70, root.draftHeight(modelData) * layoutCanvas.scaleFactor)
@@ -201,14 +279,16 @@ ContentPage {
                     Binding {
                         target: monitorCard
                         property: "x"
-                        when: !dragArea.drag.active
+                        when: !monitorCard.dragging
+                        restoreMode: Binding.RestoreNone
                         value: root.layoutPadding + (root.monitorDraft(modelData).x - root.layoutMinX) * layoutCanvas.scaleFactor
                     }
 
                     Binding {
                         target: monitorCard
                         property: "y"
-                        when: !dragArea.drag.active
+                        when: !monitorCard.dragging
+                        restoreMode: Binding.RestoreNone
                         value: root.layoutPadding + (root.monitorDraft(modelData).y - root.layoutMinY) * layoutCanvas.scaleFactor
                     }
 
@@ -229,7 +309,7 @@ ContentPage {
                             Layout.fillWidth: true
                             color: modelData.focused ? Appearance.colors.colOnPrimaryContainer : Appearance.colors.colOnSecondaryContainer
                             font.pixelSize: Appearance.font.pixelSize.small
-                            text: `${root.draftWidth(modelData)}x${root.draftHeight(modelData)}`
+                            text: `${Math.round(root.draftWidth(modelData))}x${Math.round(root.draftHeight(modelData))}`
                             elide: Text.ElideRight
                         }
                     }
@@ -237,15 +317,43 @@ ContentPage {
                     MouseArea {
                         id: dragArea
                         anchors.fill: parent
-                        drag.target: parent
+                        enabled: !monitorApplyProc.running
+                        preventStealing: true
+                        drag.target: monitorCard
                         cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                        property real grabX: 0
+                        property real grabY: 0
 
-                        onReleased: {
-                            root.updateMonitorPosition(
+                        onPressed: mouse => {
+                            grabX = mouse.x;
+                            grabY = mouse.y;
+                            monitorCard.dragging = true;
+                        }
+                        onCanceled: monitorCard.dragging = false
+                        onPositionChanged: mouse => {
+                            if (!drag.active)
+                                return;
+                            const pointer = mapToItem(layoutCanvas, mouse.x, mouse.y);
+                            const position = root.snapMonitorPosition(
                                 modelData,
-                                ((monitorCard.x - root.layoutPadding) / layoutCanvas.scaleFactor) + root.layoutMinX,
-                                ((monitorCard.y - root.layoutPadding) / layoutCanvas.scaleFactor) + root.layoutMinY
+                                (pointer.x - grabX - root.layoutPadding) / layoutCanvas.scaleFactor + root.layoutMinX,
+                                (pointer.y - grabY - root.layoutPadding) / layoutCanvas.scaleFactor + root.layoutMinY,
+                                12 / layoutCanvas.scaleFactor
                             );
+                            monitorCard.x = root.layoutPadding + (position.x - root.layoutMinX) * layoutCanvas.scaleFactor;
+                            monitorCard.y = root.layoutPadding + (position.y - root.layoutMinY) * layoutCanvas.scaleFactor;
+                        }
+                        onReleased: {
+                            if (drag.active) {
+                                root.updateMonitorPosition(
+                                    modelData,
+                                    ((monitorCard.x - root.layoutPadding) / layoutCanvas.scaleFactor) + root.layoutMinX,
+                                    ((monitorCard.y - root.layoutPadding) / layoutCanvas.scaleFactor) + root.layoutMinY,
+                                    12 / layoutCanvas.scaleFactor
+                                );
+                            }
+                            // Commit the drop before restoring the position bindings.
+                            monitorCard.dragging = false;
                         }
                     }
                 }
@@ -259,6 +367,7 @@ ContentPage {
                 Layout.fillWidth: true
                 materialIcon: "save"
                 mainText: Translation.tr("Apply all monitor positions")
+                enabled: !monitorApplyProc.running && HyprlandData.monitors.length > 0
                 onClicked: root.applyAllMonitorLayouts()
             }
 
@@ -266,8 +375,21 @@ ContentPage {
                 Layout.fillWidth: true
                 materialIcon: "restart_alt"
                 mainText: Translation.tr("Reset from current state")
-                onClicked: root.syncMonitorDrafts(true)
+                enabled: !monitorApplyProc.running
+                onClicked: {
+                    root.monitorApplyMessage = "";
+                    root.syncMonitorDrafts(true);
+                    HyprlandData.updateMonitors();
+                }
             }
+        }
+
+        StyledText {
+            Layout.fillWidth: true
+            visible: root.monitorApplyMessage.length > 0
+            text: root.monitorApplyMessage
+            color: root.monitorApplyFailed ? Appearance.colors.colError : Appearance.colors.colSubtext
+            wrapMode: Text.Wrap
         }
 
         Repeater {
@@ -323,6 +445,7 @@ ContentPage {
                     StyledComboBox {
                         Layout.fillWidth: true
                         buttonIcon: "screen_rotation"
+                        enabled: !monitorApplyProc.running
                         textRole: "text"
                         model: root.orientationOptions
                         currentIndex: Math.max(0, root.orientationOptions.findIndex(option => option.value === root.monitorDraft(modelData).transform))
@@ -333,6 +456,7 @@ ContentPage {
                         Layout.fillWidth: true
                         materialIcon: "save"
                         mainText: Translation.tr("Apply this monitor")
+                        enabled: !monitorApplyProc.running
                         onClicked: root.applyMonitorLayout(modelData)
                     }
                 }
