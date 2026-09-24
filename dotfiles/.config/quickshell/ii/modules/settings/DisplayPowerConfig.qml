@@ -139,8 +139,50 @@ ContentPage {
         return { x: Math.round(snappedX), y: Math.round(snappedY) };
     }
 
+    function attachMonitorPosition(mon, x, y) {
+        const width = Math.round(root.draftWidth(mon));
+        const height = Math.round(root.draftHeight(mon));
+        const neighbours = HyprlandData.monitors.filter(other => other.name !== mon.name).map(other => {
+            const draft = root.monitorDraft(other);
+            return {
+                x: draft.x,
+                y: draft.y,
+                right: draft.x + Math.round(root.draftWidth(other)),
+                bottom: draft.y + Math.round(root.draftHeight(other))
+            };
+        });
+        let position = { x: x, y: y };
+        let nearest = Infinity;
+
+        // A drop always joins another display, regardless of the magnetic snap
+        // distance. Keep the offset along the shared edge where possible; for
+        // diagonal drops align the ends so the screens share more than a corner.
+        for (const other of neighbours) {
+            const alongX = x + width <= other.x ? other.x : x >= other.right ? other.right - width : x;
+            const alongY = y + height <= other.y ? other.y : y >= other.bottom ? other.bottom - height : y;
+            const candidates = [
+                { x: other.x - width, y: alongY },
+                { x: other.right, y: alongY },
+                { x: alongX, y: other.y - height },
+                { x: alongX, y: other.bottom }
+            ];
+            for (const candidate of candidates) {
+                if (neighbours.some(rect => candidate.x < rect.right && candidate.x + width > rect.x
+                    && candidate.y < rect.bottom && candidate.y + height > rect.y))
+                    continue;
+                const distance = (candidate.x - x) ** 2 + (candidate.y - y) ** 2;
+                if (distance < nearest) {
+                    nearest = distance;
+                    position = candidate;
+                }
+            }
+        }
+        return position;
+    }
+
     function updateMonitorPosition(mon, x, y, snapDistance = 0) {
-        const position = root.snapMonitorPosition(mon, x, y, snapDistance);
+        const snapped = root.snapMonitorPosition(mon, x, y, snapDistance);
+        const position = root.attachMonitorPosition(mon, snapped.x, snapped.y);
         root.monitorDrafts = Object.assign({}, root.monitorDrafts, {
             [mon.name]: Object.assign({}, root.monitorDraft(mon), {
                 x: position.x,
