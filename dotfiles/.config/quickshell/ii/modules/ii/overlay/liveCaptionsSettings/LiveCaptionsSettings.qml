@@ -11,6 +11,8 @@ StyledOverlayWidget {
     id: root
     title: Translation.tr("Live Captions")
     showCenterButton: true
+    minimumWidth: 360
+    minimumHeight: 240
 
     readonly property var speechQuickLanguages: [
         { id: "auto", label: Translation.tr("Auto") },
@@ -88,6 +90,7 @@ StyledOverlayWidget {
     }
 
     contentItem: Rectangle {
+        anchors.fill: parent
         implicitWidth: 480
         implicitHeight: 400
         radius: root.contentRadius
@@ -122,15 +125,22 @@ StyledOverlayWidget {
 
                     ColumnLayout {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
                         spacing: 1
 
                         StyledText {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                             text: Translation.tr("Live captions")
                             font.bold: true
                             color: Appearance.colors.colOnLayer1
                         }
 
                         StyledText {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                             text: LiveCaptions.summaryText
                             color: Appearance.colors.colSubtext
                             font.pixelSize: Appearance.font.pixelSize.smaller

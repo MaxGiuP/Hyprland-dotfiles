@@ -13,10 +13,6 @@ import Quickshell.Hyprland
 Scope {
     id: root
 
-    property Component regionComponent: Component {
-        Region {}
-    }
-
     // One overlay window per screen, following the same pattern as Bar.qml.
     Variants {
         model: Quickshell.screens
@@ -48,9 +44,16 @@ Scope {
 
                     mask: Region {
                         item: GlobalStates.overlayOpen ? overlayContent : null
-                        regions: OverlayContext.clickableWidgets.map((widget) => regionComponent.createObject(this, {
-                            item: widget
-                        }))
+                        regions: inputRegions.instances
+                    }
+
+                    Variants {
+                        id: inputRegions
+                        model: OverlayContext.clickableWidgets
+                        Region {
+                            required property var modelData
+                            item: modelData
+                        }
                     }
 
                     anchors {

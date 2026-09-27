@@ -47,9 +47,10 @@ Singleton {
     property string backendStatusText: Translation.tr("Backend not checked yet.")
     property string lastBackendLog: ""
     property int recoveryAttempts: 0
+    property int workerGeneration: 0
 
     readonly property bool recovering: recoveryTimer.running
-    readonly property bool active: workerActive || launchPending || recovering
+    readonly property bool active: workerActive || launchPending || recovering || stopRequested
     readonly property bool desiredRunning: Persistent.ready && Persistent.states.liveCaptions.desiredRunning
     readonly property bool translating: displayMode !== "captions"
     property var state: ({
@@ -89,6 +90,8 @@ Singleton {
     readonly property string visibleTranslatedStableText: root.tailLimitTranscript(root.translatedStableText, 26, 180)
     readonly property string visibleTranslatedUnstableText: root.tailLimitTranscript(root.translatedUnstableText, 20, 180)
     readonly property string summaryText: {
+        if (stopRequested)
+            return Translation.tr("Stopping")
         if (recovering)
             return Translation.tr("Reconnecting")
         if (active && status === "loading")
@@ -181,6 +184,7 @@ Singleton {
     function sourceCaptionMarkup() {
         const stable = root.escapeRichText(root.visibleStableText)
         const unstable = root.escapeRichText(root.visibleUnstableText)
+        const tentativeColor = Appearance.colors.colOnSurfaceVariant.toString()
 
         if (stable.length === 0 && unstable.length === 0)
             return active
@@ -188,11 +192,11 @@ Singleton {
                 : root.escapeRichText(Translation.tr("Not running"))
 
         if (stable.length === 0)
-            return `<span style="color:#CCFFFFFF;">${unstable}</span>`
+            return `<span style="color:${tentativeColor};">${unstable}</span>`
         if (unstable.length === 0)
             return stable
 
-        return `${stable} <span style="color:#CCFFFFFF;">${unstable}</span>`
+        return `${stable} <span style="color:${tentativeColor};">${unstable}</span>`
     }
 
     function syncSettingsFromPersistent() {
@@ -227,8 +231,9 @@ Singleton {
     }
 
     function probeWorker() {
-        if (workerStatusProc.running)
+        if (workerStatusProc.running || workerLaunchProc.running || root.stopRequested)
             return
+        workerStatusProc.generation = root.workerGeneration
         workerStatusProc.command = buildWorkerStatusCommand()
         workerStatusProc.running = true
     }
@@ -258,6 +263,7 @@ Singleton {
         if (backend === backendKind)
             return
         backendKind = backend
+        backendAvailable = false
         persistSettings()
         refreshBackendAvailability()
         restartIfActive()
@@ -267,7 +273,9 @@ Singleton {
         if (mode === displayMode)
             return
         displayMode = mode
+        backendAvailable = false
         persistSettings()
+        refreshBackendAvailability()
         restartIfActive()
     }
 
@@ -323,22 +331,24 @@ Singleton {
         return payload
     }
 
-    function persistStatePayload(payload) {
+    function stateWriteCommand(payload) {
         const statePath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsStatePath)
         const serialized = CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(payload ?? {}))
-        Quickshell.execDetached([
-            "bash",
-            "-c",
-            `state_path='${statePath}'; tmp_path="$state_path.tmp.$$"; ` +
-            `trap 'rm -f -- "$tmp_path"' EXIT; umask 077; ` +
-            `printf '%s' '${serialized}' > "$tmp_path" && mv -f -- "$tmp_path" "$state_path"`
-        ])
+        return `state_path='${statePath}'; tmp_path="$state_path.tmp.$$"; ` +
+            `mkdir -p -- "$(dirname -- "$state_path")" || exit 1; umask 077; ` +
+            `trap 'rm -f -- "$tmp_path"' EXIT; ` +
+            `printf '%s' '${serialized}' > "$tmp_path" && mv -f -- "$tmp_path" "$state_path" || exit 1; `
     }
 
     function handleStatePayload(payload) {
-        let nextPayload = payload ?? {}
+        if (!payload || typeof payload !== "object" || Array.isArray(payload))
+            throw new Error("Invalid caption state")
+        if (payload.target_language && payload.target_language !== root.targetLanguage)
+            return
+        let nextPayload = Object.assign({}, payload)
         nextPayload.target_language = nextPayload.target_language ?? root.targetLanguage
         nextPayload.backend_ready = nextPayload.backend_ready ?? root.backendAvailable
+        nextPayload.history = Array.isArray(nextPayload.history) ? nextPayload.history : []
         root.state = nextPayload
     }
 
@@ -357,7 +367,9 @@ Singleton {
         const targetLanguage = CF.StringUtils.shellSingleQuoteEscape(root.targetLanguage)
         const modelName = CF.StringUtils.shellSingleQuoteEscape(root.modelName)
         const tuningPreset = CF.StringUtils.shellSingleQuoteEscape(root.tuningPreset)
-        const launchScript =
+        const launchScript = workerShellPrelude() +
+            `pid="$(cat "$pid_path" 2>/dev/null)"; worker_alive && exit 0; ` +
+            stateWriteCommand(root.state) +
             `rm -f '${backendPidPath}'; ` +
             `: > '${backendLogPath}'; ` +
             `backend_venv='${backendVenvPath}'; ` +
@@ -378,7 +390,7 @@ Singleton {
             `--model '${modelName}' ` +
             `--preset '${tuningPreset}' ` +
             `--model-cache-dir '${backendModelCachePath}' ` +
-            `>>'${backendLogPath}' 2>&1 & echo $! > '${backendPidPath}'`
+            `>>'${backendLogPath}' 2>&1 </dev/null & echo $! > '${backendPidPath}'`
         return [
             "bash",
             "-c",
@@ -386,41 +398,40 @@ Singleton {
         ]
     }
 
+    function workerShellPrelude() {
+        const pidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsPidPath)
+        const scriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsBackendScriptPath)
+        return `pid_path='${pidPath}'; ` +
+            `worker_alive() { [[ "$pid" =~ ^[1-9][0-9]*$ ]] && [ "$pid" -gt 1 ] && ` +
+            `kill -0 "$pid" 2>/dev/null && ` +
+            `tr '\\0' '\\n' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fxq -- '${scriptPath}'; }; `
+    }
+
     function buildWorkerStatusCommand() {
-        const backendPidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsPidPath)
-        const backendScriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsBackendScriptPath)
-        return [
-            "bash",
-            "-c",
-            `if [ -f '${backendPidPath}' ]; then ` +
-            `pid="$(cat '${backendPidPath}')"; ` +
-            `if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null ` +
-            `&& tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fq -- '${backendScriptPath}'; then exit 0; fi; ` +
-            `rm -f '${backendPidPath}'; fi; exit 1`
-        ]
+        return ["bash", "-c", workerShellPrelude() +
+            `pid="$(cat "$pid_path" 2>/dev/null)"; worker_alive`]
     }
 
     function buildStopCommand() {
-        const backendPidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsPidPath)
-        const backendScriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsBackendScriptPath)
-        return [
-            "bash",
-            "-c",
-            `if [ -f '${backendPidPath}' ]; then ` +
-            `pid="$(cat '${backendPidPath}')"; ` +
-            `if [ -n "$pid" ] && tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fq -- '${backendScriptPath}'; ` +
-            `then kill "$pid" 2>/dev/null || true; fi; ` +
-            `rm -f '${backendPidPath}'; fi`
-        ]
+        return ["bash", "-c", workerShellPrelude() +
+            `pid="$(cat "$pid_path" 2>/dev/null)"; ` +
+            `if worker_alive; then ` +
+            `kill -- "$pid" 2>/dev/null || true; ` +
+            `for ((attempt=0; attempt<100; attempt++)); do worker_alive || break; sleep 0.1; done; ` +
+            `worker_alive && exit 1; fi; ` +
+            `rm -f -- "$pid_path"; ` + stateWriteCommand(root.state)]
     }
 
     function updateWorkerState(isRunning) {
+        if (root.stopRequested)
+            return
         const wasActive = root.workerActive || root.launchPending
         const wasWorkerActive = root.workerActive
         root.workerActive = isRunning
 
         if (isRunning) {
             root.launchPending = false
+            launchTimeoutTimer.stop()
             recoveryTimer.stop()
             if (!wasWorkerActive)
                 stableWorkerTimer.restart()
@@ -428,95 +439,82 @@ Singleton {
             return
         }
 
-        if (!wasActive) {
-            root.ensureDesiredWorker()
-            return
-        }
-
-        const shouldRestart = root.restartPending
-        const expectedStop = root.stopRequested || root.restartPending
         root.launchPending = false
-        root.workerActive = false
-
-        if (expectedStop) {
-            root.persistStatePayload(root.clearState("stopped", Translation.tr("Live captions stopped.")))
-        } else {
-            stateFileView.reload()
-            const payload = {
-                "status": "error",
-                "message": root.statusMessage.trim().length > 0
+        stableWorkerTimer.stop()
+        if (wasActive && !root.restartPending) {
+            root.state = Object.assign({}, root.state, {
+                status: "error",
+                message: root.status === "error" && root.statusMessage.trim().length > 0
                     ? root.statusMessage
-                    : Translation.tr("Live captions backend exited before it could stay running."),
-                "current_text": root.currentText,
-                "stable_text": root.stableText,
-                "unstable_text": root.unstableText,
-                "translated_text": root.translatedText,
-                "translated_stable_text": root.translatedStableText,
-                "translated_unstable_text": root.translatedUnstableText,
-                "source_language": root.sourceLanguage,
-                "target_language": root.targetLanguage,
-                "history": root.history,
-                "runtime_device": root.runtimeDevice,
-                "backend_ready": root.backendAvailable
-            }
-            root.handleStatePayload(payload)
-            root.persistStatePayload(payload)
+                    : Translation.tr("Live captions backend exited unexpectedly.")
+            })
+            stateFileView.reload()
         }
-
-        root.stopRequested = false
-        root.restartPending = false
-        root.refreshBackendAvailability()
-        if (shouldRestart)
-            delayedStartTimer.restart()
-        else if (!expectedStop)
-            root.scheduleRecovery()
+        if (!root.restartPending)
+            root.ensureDesiredWorker()
     }
 
     function refreshBackendAvailability() {
-        backendProbe.running = false
+        if (backendProbe.running)
+            return
+        backendProbe.backend = root.backendKind
+        backendProbe.needsTranslation = root.translating
         backendProbe.running = true
     }
 
     function start(recovery = false) {
+        if (recovery && !root.desiredRunning)
+            return
         if (!recovery) {
             root.setDesiredRunning(true)
             root.recoveryAttempts = 0
         }
         recoveryTimer.stop()
+        if (root.stopRequested) {
+            root.restartPending = true
+            return
+        }
         if (root.active)
             return
-
         if (!backendAvailable) {
             clearState("error", Translation.tr("Live captions backend is not installed yet."))
             refreshBackendAvailability()
             return
         }
 
-        root.stopRequested = false
         root.restartPending = false
+        root.workerGeneration += 1
         root.launchPending = true
         root.workerActive = false
-        root.persistStatePayload(root.clearState("loading", Translation.tr("Starting live captions…")))
-        Quickshell.execDetached(buildBackendLaunchCommand())
-        launchTimeoutTimer.restart()
-        initialWorkerProbeTimer.restart()
+        root.clearState("loading", Translation.tr("Starting live captions…"))
+        workerLaunchProc.command = buildBackendLaunchCommand()
+        workerLaunchProc.running = true
     }
 
     function stop(preserveRunIntent = false) {
+        restartTimer.stop()
+        recoveryTimer.stop()
+        stableWorkerTimer.stop()
+        launchTimeoutTimer.stop()
+        initialWorkerProbeTimer.stop()
         if (!preserveRunIntent) {
             root.setDesiredRunning(false)
-            recoveryTimer.stop()
-            stableWorkerTimer.stop()
+            root.restartPending = false
             root.recoveryAttempts = 0
         }
+        root.workerGeneration += 1
         root.stopRequested = true
-        root.launchPending = false
-        root.workerActive = false
-        initialWorkerProbeTimer.stop()
-        Quickshell.execDetached(buildStopCommand())
-        root.persistStatePayload(root.clearState("stopped", Translation.tr("Live captions stopped.")))
-        if (preserveRunIntent && root.restartPending)
-            delayedStartTimer.restart()
+        root.clearState("stopped", Translation.tr("Live captions stopped."))
+        // A launch must finish writing its PID before the stop can find it.
+        if (!workerLaunchProc.running)
+            root.stopWorker()
+    }
+
+    function stopWorker() {
+        if (workerStopProc.running)
+            return
+        workerStopProc.command = buildStopCommand()
+        workerStopProc.running = true
     }
 
     function toggleRunning() {
@@ -527,11 +525,15 @@ Singleton {
     }
 
     function restartIfActive() {
-        if (!root.active)
+        if (!root.active) {
+            root.clearState()
+            root.ensureDesiredWorker()
             return
+        }
         root.restartPending = true
-        root.stopRequested = false
-        restartTimer.restart()
+        root.clearState("loading", Translation.tr("Applying settings…"))
+        if (!root.stopRequested)
+            restartTimer.restart()
     }
 
     function openInstaller() {
@@ -547,13 +549,6 @@ Singleton {
         interval: 150
         repeat: false
         onTriggered: root.stop(true)
-    }
-
-    Timer {
-        id: delayedStartTimer
-        interval: 150
-        repeat: false
-        onTriggered: root.start(true)
     }
 
     Timer {
@@ -585,12 +580,7 @@ Singleton {
         interval: 2500
         repeat: true
         running: root.active || GlobalStates.liveCaptionsOpen
-        onTriggered: {
-            if (!workerStatusProc.running) {
-                workerStatusProc.command = buildWorkerStatusCommand()
-                workerStatusProc.running = true
-            }
-        }
+        onTriggered: root.probeWorker()
     }
 
     Timer {
@@ -616,6 +606,10 @@ Singleton {
         watchChanges: true
         onFileChanged: stateReloadDebounce.restart()
         onLoaded: {
+            // Ignore a previous worker's final write during stop/reconfigure.
+            if (root.stopRequested || root.restartPending || root.launchPending
+                    || (!root.active && !root.desiredRunning))
+                return
             try {
                 const parsed = JSON.parse(stateFileView.text() || "{}")
                 root.handleStatePayload(parsed)
@@ -648,14 +642,23 @@ Singleton {
 
     Process {
         id: backendProbe
+        property string backend: "whisper"
+        property bool needsTranslation: true
         command: [
             "bash",
             "-c",
+            `command -v ffmpeg >/dev/null && command -v pactl >/dev/null || exit 1; ` +
+            (needsTranslation ? `command -v trans >/dev/null || exit 1; ` : "") +
             `if [ -x '${CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsPythonPath)}' ]; then ` +
-            `exec '${CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsPythonPath)}' -c 'import faster_whisper, vosk'; ` +
-            `else exec python3 -c 'import faster_whisper, vosk'; fi`
+            `backend_python='${CF.StringUtils.shellSingleQuoteEscape(Directories.liveCaptionsPythonPath)}'; ` +
+            `else backend_python=python3; fi; ` +
+            `exec "$backend_python" -c 'import numpy, ${backend === "asr" ? "vosk" : "faster_whisper"}'`
         ]
         onExited: (exitCode, exitStatus) => {
+            if (backend !== root.backendKind || needsTranslation !== root.translating) {
+                root.refreshBackendAvailability()
+                return
+            }
             root.backendChecked = true
             root.backendAvailable = exitCode === 0
             root.backendStatusText = root.backendAvailable
@@ -668,8 +671,47 @@ Singleton {
     }
 
     Process {
-        id: workerStatusProc
+        id: workerLaunchProc
         onExited: (exitCode, exitStatus) => {
+            if (root.stopRequested) {
+                root.stopWorker()
+                return
+            }
+            if (exitCode !== 0) {
+                root.updateWorkerState(false)
+                return
+            }
+            launchTimeoutTimer.restart()
+            initialWorkerProbeTimer.restart()
+        }
+    }
+
+    Process {
+        id: workerStopProc
+        onExited: (exitCode, exitStatus) => {
+            const shouldRestart = root.restartPending && root.desiredRunning
+            root.stopRequested = false
+            root.launchPending = false
+            root.restartPending = false
+            if (exitCode !== 0) {
+                // Retain the PID and block replacement if the old worker is
+                // still decoding/loading. A later Stop can try again.
+                root.workerActive = true
+                root.clearState("error", Translation.tr("The backend is still stopping. Try stopping it again shortly."))
+                return
+            }
+            root.workerActive = false
+            if (shouldRestart)
+                root.start(true)
+        }
+    }
+
+    Process {
+        id: workerStatusProc
+        property int generation: -1
+        onExited: (exitCode, exitStatus) => {
+            if (generation !== root.workerGeneration || root.stopRequested)
+                return
             if (exitCode === 0)
                 root.updateWorkerState(true)
             else if (!root.launchPending || !launchTimeoutTimer.running)
@@ -683,6 +725,7 @@ Singleton {
             if (!Persistent.ready)
                 return
             root.syncSettingsFromPersistent()
+            root.refreshBackendAvailability()
             root.probeWorker()
         }
     }

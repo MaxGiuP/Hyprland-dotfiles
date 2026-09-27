@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import argparse
+from collections import OrderedDict, deque
 import json
 import os
+import select
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -17,6 +20,7 @@ import numpy as np
 RUNNING = True
 SAMPLE_RATE = 16000
 MAX_BUFFER_SECS = 8.0
+MAX_COMMITTED_WORDS = 128
 REVISABLE_COMMITTED_WORDS = 5
 TAIL_GUESS_CONFIRMATIONS = 3
 SMALL_REVISION_CONFIRMATIONS = 2
@@ -48,12 +52,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model", default="tiny")
     parser.add_argument("--preset", choices=["realtime", "snappy", "balanced", "accurate"], default="realtime")
     parser.add_argument("--model-cache-dir", default="")
-    parser.add_argument("--step-seconds", type=float, default=0.12)
-    parser.add_argument("--commit-ratio", type=float, default=0.45)
-    parser.add_argument("--min-buffer-seconds", type=float, default=0.18)
-    parser.add_argument("--silence-threshold", type=float, default=0.0035)
-    parser.add_argument("--stabilize-seconds", type=float, default=0.34)
-    parser.add_argument("--fast-window-seconds", type=float, default=2.4)
+    parser.add_argument("--step-seconds", type=float)
+    parser.add_argument("--commit-ratio", type=float)
+    parser.add_argument("--min-buffer-seconds", type=float)
+    parser.add_argument("--silence-threshold", type=float)
+    parser.add_argument("--stabilize-seconds", type=float)
+    parser.add_argument("--fast-window-seconds", type=float)
     parser.add_argument("--history-limit", type=int, default=8)
     return parser.parse_args()
 
@@ -96,20 +100,23 @@ PRESET_DEFAULTS = {
 
 def apply_preset(args: argparse.Namespace) -> argparse.Namespace:
     preset = PRESET_DEFAULTS.get(args.preset, PRESET_DEFAULTS["balanced"])
-    args.step_seconds = preset["step_seconds"]
-    args.stabilize_seconds = preset["stabilize_seconds"]
-    args.commit_ratio = preset["commit_ratio"]
-    args.fast_window_seconds = preset["fast_window_seconds"]
-    args.min_buffer_seconds = preset["min_buffer_seconds"]
-    args.silence_threshold = preset["silence_threshold"]
+    for key, value in preset.items():
+        if getattr(args, key, None) is None:
+            setattr(args, key, value)
     return args
 
 
 def write_state(path: Path, payload: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_suffix(".tmp")
-    temp_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    temp_path.replace(path)
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                     prefix=f".{path.name}.", suffix=".tmp", delete=False) as stream:
+        temp_path = Path(stream.name)
+        try:
+            json.dump(payload, stream, ensure_ascii=False)
+            stream.flush()
+            temp_path.replace(path)
+        finally:
+            temp_path.unlink(missing_ok=True)
 
 
 def build_base_state(args: argparse.Namespace) -> dict:
@@ -159,8 +166,98 @@ def start_audio_capture(device_name: str) -> subprocess.Popen:
     )
 
 
+def stop_process(process: subprocess.Popen, *, process_group: bool = False) -> None:
+    def send_signal(sig):
+        try:
+            if process_group:
+                os.killpg(process.pid, sig)
+            else:
+                process.send_signal(sig)
+        except ProcessLookupError:
+            pass
+
+    send_signal(signal.SIGTERM)
+    try:
+        process.wait(timeout=0.5)
+    except subprocess.TimeoutExpired:
+        send_signal(signal.SIGKILL)
+        process.wait(timeout=1)
+    finally:
+        if process_group:
+            # A shell can exit while its network helper ignores SIGTERM.
+            send_signal(signal.SIGKILL)
+
+
+class AudioCaptureReader:
+    """Drain capture continuously so decoding cannot build a delayed audio queue."""
+
+    MAX_BYTES = int(MAX_BUFFER_SECS * SAMPLE_RATE * 2)
+
+    def __init__(self, process: subprocess.Popen):
+        self.process = process
+        self._chunks: deque[bytes] = deque()
+        self._buffered_bytes = 0
+        self._lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self._ready = threading.Event()
+        self._error = ""
+        self._thread = threading.Thread(target=self._run, name="live-captions-audio", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        pending = b""
+        try:
+            while not self._stop_event.is_set():
+                readable, _, _ = select.select([self.process.stdout], [], [], 0.1)
+                if not readable:
+                    continue
+                chunk = os.read(self.process.stdout.fileno(), 16384)
+                if not chunk:
+                    raise RuntimeError("Audio capture process exited unexpectedly.")
+                pending += chunk
+                complete_bytes = len(pending) - len(pending) % 2
+                if not complete_bytes:
+                    continue
+                chunk, pending = pending[:complete_bytes], pending[complete_bytes:]
+                with self._lock:
+                    self._chunks.append(chunk)
+                    self._buffered_bytes += len(chunk)
+                    while self._buffered_bytes > self.MAX_BYTES:
+                        oldest = self._chunks.popleft()
+                        excess = self._buffered_bytes - self.MAX_BYTES
+                        if len(oldest) > excess:
+                            self._chunks.appendleft(oldest[excess:])
+                            self._buffered_bytes -= excess
+                        else:
+                            self._buffered_bytes -= len(oldest)
+                    self._ready.set()
+        except (OSError, ValueError, RuntimeError) as error:
+            if not self._stop_event.is_set():
+                self._error = str(error)
+        finally:
+            self._ready.set()
+
+    def read(self) -> bytes:
+        self._ready.wait(timeout=0.1)
+        with self._lock:
+            chunk = b"".join(self._chunks)
+            self._chunks.clear()
+            self._buffered_bytes = 0
+            self._ready.clear()
+        if not chunk and self._error:
+            raise RuntimeError(self._error)
+        return chunk
+
+    def stop(self) -> None:
+        self._stop_event.set()
+        stop_process(self.process)
+        self._thread.join(timeout=0.5)
+        if self.process.stdout is not None:
+            self.process.stdout.close()
+
+
 def pcm_to_float(pcm_bytes: bytes) -> np.ndarray:
-    return np.frombuffer(pcm_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+    return np.frombuffer(pcm_bytes, dtype="<i2").astype(np.float32) / 32768.0
 
 
 def normalize_text(text: str) -> str:
@@ -276,20 +373,19 @@ def merge_continuous_text(base_text: str, next_text: str) -> str:
     if not nxt:
         return base
 
-    base_lower = base.lower()
-    next_lower = nxt.lower()
-    if base_lower == next_lower or base_lower.endswith(next_lower):
-        return base
-    if base_lower in next_lower:
-        return nxt
-
     base_words = normalized_words(base)
     next_words = normalized_words(nxt)
+    base_keys = [comparable_word(word) for word in base_words]
+    next_keys = [comparable_word(word) for word in next_words]
+    if len(next_keys) <= len(base_keys) and base_keys[-len(next_keys):] == next_keys:
+        return base
+    if len(base_keys) <= len(next_keys) and next_keys[:len(base_keys)] == base_keys:
+        return nxt
     max_overlap = min(len(base_words), len(next_words), 16)
 
     for overlap in range(max_overlap, 0, -1):
-        base_slice = " ".join(base_words[-overlap:]).lower()
-        next_slice = " ".join(next_words[:overlap]).lower()
+        base_slice = base_keys[-overlap:]
+        next_slice = next_keys[:overlap]
         if base_slice == next_slice:
             return " ".join(base_words + next_words[overlap:])
 
@@ -322,17 +418,36 @@ def split_display_text(committed_words: list[str], partial_text: str, revisable_
     return frozen_text, unstable_text
 
 
-def translate_text(text: str, target_language: str) -> str:
+def translate_text(text: str, target_language: str, source_language: str = "",
+                   stop_event: threading.Event | None = None) -> str:
     if not text:
         return ""
     try:
-        result = subprocess.run(
-            ["trans", "-brief", f":{target_language}", text],
-            capture_output=True, text=True, timeout=10, check=True,
+        process = subprocess.Popen(
+            ["trans", "-brief", "-no-init", "-no-ansi", "-no-bidi", "-no-browser", "-no-play",
+             f"{source_language}:{target_language}", "-i", "/dev/stdin"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8", start_new_session=True,
         )
-    except Exception:
+    except OSError:
         return ""
-    return normalize_text(result.stdout or result.stderr)
+    deadline = time.monotonic() + 10
+    # translate-shell also interprets leading https:// in stdin as a web request.
+    # A leading space keeps every input line literal, including URLs and file://.
+    input_text = "\n".join(" " + line for line in text.splitlines()) + "\n"
+    try:
+        while time.monotonic() < deadline and not (stop_event and stop_event.is_set()):
+            try:
+                stdout, _ = process.communicate(input=input_text, timeout=0.1)
+                return normalize_text(stdout) if process.returncode == 0 else ""
+            except subprocess.TimeoutExpired:
+                input_text = None
+        return ""
+    finally:
+        stop_process(process, process_group=True)
+        for stream in (process.stdin, process.stdout):
+            if stream is not None:
+                stream.close()
 
 
 def set_status(path: Path, state: dict, status: str, message: str, *, backend_ready: bool = True) -> None:
@@ -344,6 +459,9 @@ def is_cuda_runtime_error(error: Exception) -> bool:
     text = str(error or "").lower()
     return (
         "libcublas" in text
+        or "libcudnn" in text
+        or "cudnn" in text
+        or "cuda error" in text
         or "cuda failed" in text
         or "no cuda-capable device" in text
         or "cannot be loaded" in text and "cuda" in text
@@ -355,7 +473,7 @@ class CaptionRuntimeFallback(RuntimeError):
 
 
 def model_is_complete(path: Path) -> bool:
-    return path.joinpath("model.bin").is_file()
+    return all(path.joinpath(name).is_file() for name in ("model.bin", "config.json", "tokenizer.json"))
 
 
 def ensure_model(model_name: str, cache_root: str, state_path: Path, state: dict) -> str:
@@ -485,35 +603,45 @@ def load_model(model_path: str, force_device: str | None = None):
 
 
 class AsyncTranslator:
+    CACHE_LIMIT = 128
+    RETRY_SECONDS = 2.0
+
     def __init__(self):
         self._lock = threading.Lock()
         self._wake_event = threading.Event()
         self._stop_event = threading.Event()
-        self._pending: tuple[str, str, str] | None = None
-        self._current: tuple[str, str, str] | None = None
-        self._cache: dict[tuple[str, str], str] = {}
-        self._latest_by_target: dict[str, tuple[str, str]] = {}
+        self._pending: OrderedDict[str, tuple[str, str, str]] = OrderedDict()
+        self._current: tuple[str, tuple[str, str, str]] | None = None
+        self._cache: OrderedDict[tuple[str, str, str], str] = OrderedDict()
+        self._retry_after: OrderedDict[tuple[str, str, str], float] = OrderedDict()
+        self._latest_by_target: dict[tuple[str, str, str], tuple[str, str]] = {}
         self._thread = threading.Thread(target=self._run, name="live-captions-translator", daemon=True)
         self._thread.start()
 
-    def request(self, text: str, target_language: str, source_language: str = "") -> str:
+    def request(self, text: str, target_language: str, source_language: str = "", *, stream: str = "live") -> str:
         normalized_text = normalize_text(text)
-        source_code = source_language.split("-")[0].lower()
+        source_code = source_language.replace("_", "-").split("-")[0].lower()
+        if source_code == "auto":
+            source_code = ""
 
         if not normalized_text:
             return ""
         if source_code and source_code == target_language:
             return normalized_text
 
-        cache_key = (normalized_text, target_language)
+        cache_key = (normalized_text, target_language, source_code)
         with self._lock:
             if cache_key in self._cache:
+                self._cache.move_to_end(cache_key)
                 return self._cache[cache_key]
 
-            latest = self._latest_by_target.get(target_language)
-            pending_key = self._pending[:2] if self._pending else None
-            if pending_key != cache_key:
-                self._pending = (normalized_text, target_language, source_language)
+            latest = self._latest_by_target.get((target_language, source_code, stream))
+            current_key = self._current[1] if self._current else None
+            if (current_key != cache_key and self._pending.get(stream) != cache_key
+                    and time.monotonic() >= self._retry_after.get(cache_key, 0)
+                    and not self._stop_event.is_set()):
+                # Keep the latest request for each pane, without starving the other pane.
+                self._pending[stream] = cache_key
                 self._wake_event.set()
 
             if latest is not None:
@@ -529,16 +657,9 @@ class AsyncTranslator:
         if not previous_words or not next_words:
             return False
 
-        shared_prefix = 0
-        for previous_word, next_word in zip(previous_words, next_words):
-            if comparable_word(previous_word) != comparable_word(next_word):
-                break
-            shared_prefix += 1
-
-        min_words = min(len(previous_words), len(next_words))
-        return (
-            shared_prefix >= 4
-            or (min_words > 0 and shared_prefix / min_words >= 0.72)
+        return len(previous_words) <= len(next_words) and all(
+            comparable_word(previous_word) == comparable_word(next_word)
+            for previous_word, next_word in zip(previous_words, next_words)
         )
 
     def stop(self) -> None:
@@ -551,26 +672,51 @@ class AsyncTranslator:
             self._wake_event.wait(timeout=0.1)
             self._wake_event.clear()
 
-            while True:
+            while not self._stop_event.is_set():
                 with self._lock:
-                    task = self._pending
-                    self._pending = None
+                    if not self._pending:
+                        break
+                    stream, task = self._pending.popitem(last=False)
+                    self._current = (stream, task)
+                    cached = self._cache.get(task)
 
-                if task is None:
-                    break
-
-                self._current = task
-                text, target_language, _source_language = task
-                translated = translate_text(text, target_language)
-                cache_key = (text, target_language)
+                text, target_language, source_language = task
+                translated = cached or translate_text(text, target_language, source_language, self._stop_event)
 
                 with self._lock:
-                    self._cache[cache_key] = translated
+                    self._current = None
                     if translated:
-                        self._latest_by_target[target_language] = (text, translated)
+                        self._cache[task] = translated
+                        self._cache.move_to_end(task)
+                        self._retry_after.pop(task, None)
+                        self._latest_by_target[(target_language, source_language, stream)] = (text, translated)
+                        while len(self._cache) > self.CACHE_LIMIT:
+                            self._cache.popitem(last=False)
+                    else:
+                        self._retry_after[task] = time.monotonic() + self.RETRY_SECONDS
+                        while len(self._retry_after) > self.CACHE_LIMIT:
+                            self._retry_after.popitem(last=False)
 
                 if self._stop_event.is_set():
                     break
+
+
+def translated_texts(translator: AsyncTranslator, display_text: str, stable_text: str,
+                     target_language: str, source_language: str) -> tuple[str, str, str]:
+    stable = translator.request(stable_text, target_language, source_language, stream="stable")
+    full = translator.request(display_text, target_language, source_language, stream="live")
+    if not full:
+        return stable, stable, ""
+    stable_words = normalized_words(stable)
+    full_words = normalized_words(full)
+    if stable_words and len(stable_words) <= len(full_words) and all(
+        comparable_word(left) == comparable_word(right)
+        for left, right in zip(stable_words, full_words)
+    ):
+        return full, stable, " ".join(full_words[len(stable_words):])
+    # A translation may reorder the sentence. Show its complete current version
+    # once instead of presenting it underneath a duplicate earlier translation.
+    return full, "", full
 
 
 class VoskStreamingTranscriber:
@@ -607,9 +753,6 @@ class VoskStreamingTranscriber:
 
         result = json.loads(self.recognizer.PartialResult() or "{}")
         partial = clean_transcript_text(result.get("partial", ""))
-        if partial and self.committed_segments:
-            partial = strip_committed_overlap(self.committed_segments[-1], partial)
-            partial = clean_transcript_text(partial)
         self.partial_text = partial
 
     def speech_active(self) -> bool:
@@ -633,21 +776,7 @@ class VoskStreamingTranscriber:
         if not segment:
             return
 
-        if self.committed_segments:
-            previous = self.committed_segments[-1]
-            previous_words = normalized_words(previous)
-            segment_words = normalized_words(segment)
-
-            if normalize_text(previous).lower() == normalize_text(segment).lower():
-                return
-
-            if len(previous_words) <= 2 or len(segment_words) <= 2:
-                merged = merge_continuous_text(previous, segment)
-                cleaned = clean_transcript_text(merged)
-                if cleaned:
-                    self.committed_segments[-1] = cleaned
-                    return
-
+        # Vosk final results are separate utterances, not overlapping windows.
         self.committed_segments.append(segment)
         self.committed_segments = self.committed_segments[-8:]
 
@@ -676,6 +805,7 @@ class StreamingTranscriber:
         self.silence_threshold = silence_threshold
         self.fast_window_samples = int(fast_window_seconds * SAMPLE_RATE)
         self.audio_buffer = np.zeros(0, dtype=np.float32)
+        self.committed_audio_end = 0.0
         self.committed_words: list[str] = []
         self.source_language = ""
         self.last_partial = ""
@@ -686,6 +816,8 @@ class StreamingTranscriber:
     def feed(self, chunk: np.ndarray) -> None:
         self.audio_buffer = np.concatenate([self.audio_buffer, chunk])
         if len(self.audio_buffer) > self.MAX_BUFFER_SAMPLES:
+            dropped_seconds = (len(self.audio_buffer) - self.MAX_BUFFER_SAMPLES) / SAMPLE_RATE
+            self.committed_audio_end = max(0.0, self.committed_audio_end - dropped_seconds)
             self.audio_buffer = self.audio_buffer[-self.MAX_BUFFER_SAMPLES:]
 
     def _audio_usable(self, audio: np.ndarray) -> bool:
@@ -730,7 +862,7 @@ class StreamingTranscriber:
         except Exception as error:
             if self.runtime_device == "cuda" and is_cuda_runtime_error(error):
                 raise CaptionRuntimeFallback(str(error))
-            return ""
+            raise RuntimeError(f"Speech decoding failed: {error}") from error
 
     def stabilize(self) -> str:
         audio = self.audio_buffer
@@ -767,18 +899,23 @@ class StreamingTranscriber:
         except Exception as error:
             if self.runtime_device == "cuda" and is_cuda_runtime_error(error):
                 raise CaptionRuntimeFallback(str(error))
-            return self._committed_tail()
+            raise RuntimeError(f"Speech decoding failed: {error}") from error
 
         if not words:
             return self._committed_tail()
 
-        to_commit = [(s, e, w) for s, e, w in words if e <= threshold]
+        to_commit = [
+            (s, e, w) for s, e, w in words
+            if e <= threshold and e > self.committed_audio_end
+            and s >= self.committed_audio_end - 0.05
+        ]
 
         if to_commit:
             last_end = to_commit[-1][1]
             self._append_committed_words([w for _, _, w in to_commit])
             trim_secs = max(0.0, last_end - 0.45)
             trim_samples = int(trim_secs * SAMPLE_RATE)
+            self.committed_audio_end = last_end - trim_samples / SAMPLE_RATE
             if trim_samples > 0:
                 self.audio_buffer = self.audio_buffer[trim_samples:]
         return self._committed_tail()
@@ -808,7 +945,7 @@ class StreamingTranscriber:
             self.committed_words.append(normalized)
 
         committed_text = clean_transcript_text(" ".join(self.committed_words))
-        self.committed_words = normalized_words(committed_text)
+        self.committed_words = normalized_words(committed_text)[-MAX_COMMITTED_WORDS:]
 
     def _smooth_partial(self, candidate: str) -> str:
         candidate = normalize_text(candidate)
@@ -877,8 +1014,6 @@ class StreamingTranscriber:
 
     def commit_partial_phrase(self, partial_text: str) -> bool:
         candidate = clean_transcript_text(normalize_text(partial_text))
-        if not candidate:
-            return False
 
         committed_context = " ".join(self.committed_words[-12:])
         if committed_context:
@@ -886,20 +1021,24 @@ class StreamingTranscriber:
             candidate = clean_transcript_text(candidate)
 
         candidate_words = normalized_words(candidate)
-        if len(candidate_words) < 2:
-            return False
-
-        self._append_committed_words(candidate_words)
+        if candidate_words:
+            self._append_committed_words(candidate_words)
+        # Silence closes the audio window even if its final word was already committed.
         self.audio_buffer = np.zeros(0, dtype=np.float32)
+        self.committed_audio_end = 0.0
         self.last_partial = ""
         self.pending_partial = ""
         self.pending_partial_count = 0
-        return True
+        return bool(candidate_words)
 
     def reset(self) -> None:
         self.audio_buffer = np.zeros(0, dtype=np.float32)
+        self.committed_audio_end = 0.0
         self.committed_words = []
         self.source_language = ""
+        self.last_partial = ""
+        self.pending_partial = ""
+        self.pending_partial_count = 0
 
 
 def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state: dict) -> int:
@@ -949,7 +1088,11 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
         write_state(state_path, state)
         return 2
 
-    capture_proc = start_audio_capture(pulse_device)
+    try:
+        capture = AudioCaptureReader(start_audio_capture(pulse_device))
+    except OSError as error:
+        set_status(state_path, state, "error", f"Could not start audio capture: {error}")
+        return 3
     translator = AsyncTranslator()
     last_display_text = ""
     last_translated_text = ""
@@ -968,13 +1111,7 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
 
     try:
         while RUNNING:
-            if capture_proc.poll() is not None:
-                print("Audio capture process exited unexpectedly.", file=sys.stderr)
-                state.update({"status": "error", "message": "Audio capture process exited unexpectedly."})
-                write_state(state_path, state)
-                return 4
-
-            chunk = capture_proc.stdout.read(4096)
+            chunk = capture.read()
             if not chunk:
                 time.sleep(0.01)
                 continue
@@ -984,36 +1121,12 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
             speech_active = transcriber.speech_active()
             committed_count = transcriber.committed_word_count()
 
-            translated_text = last_translated_text if args.display_mode != "captions" else ""
-            translated_stable_text = last_translated_stable_text if args.display_mode != "captions" else ""
-            translated_unstable_text = last_translated_unstable_text if args.display_mode != "captions" else ""
-            if args.display_mode != "captions":
-                if stable_text:
-                    requested_stable_translation = translator.request(
-                        stable_text,
-                        args.target_language,
-                        transcriber.source_language,
-                    )
-                    if requested_stable_translation:
-                        translated_stable_text = requested_stable_translation
-                else:
-                    translated_stable_text = ""
-
-                if display_text:
-                    requested_translation = translator.request(
-                        display_text,
-                        args.target_language,
-                        transcriber.source_language,
-                    )
-                    if requested_translation:
-                        translated_text = requested_translation
-                else:
-                    translated_text = ""
-
-                if translated_text and normalize_text(translated_text) != normalize_text(translated_stable_text):
-                    translated_unstable_text = translated_text
-                else:
-                    translated_unstable_text = ""
+            if args.display_mode == "captions":
+                translated_text, translated_stable_text, translated_unstable_text = "", "", ""
+            else:
+                translated_text, translated_stable_text, translated_unstable_text = translated_texts(
+                    translator, display_text, stable_text, args.target_language, transcriber.source_language,
+                )
 
             if (
                 display_text == last_display_text
@@ -1021,6 +1134,10 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
                 and translated_stable_text == last_translated_stable_text
                 and translated_unstable_text == last_translated_unstable_text
                 and committed_count == last_committed_count
+                and stable_text == state.get("stable_text")
+                and unstable_text == state.get("unstable_text")
+                and speech_active == state.get("speech_active")
+                and transcriber.source_language == state.get("source_language")
             ):
                 continue
 
@@ -1047,13 +1164,13 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
                 "backend_ready": True,
             })
             write_state(state_path, state)
+    except Exception as error:
+        print(str(error), file=sys.stderr)
+        set_status(state_path, state, "error", str(error))
+        return 4
     finally:
         translator.stop()
-        capture_proc.terminate()
-        try:
-            capture_proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            capture_proc.kill()
+        capture.stop()
 
     state.update({"status": "stopped", "message": "Live captions stopped."})
     write_state(state_path, state)
@@ -1107,7 +1224,11 @@ def main() -> int:
         write_state(state_path, state)
         return 3
 
-    capture_proc = start_audio_capture(pulse_device)
+    try:
+        capture = AudioCaptureReader(start_audio_capture(pulse_device))
+    except OSError as error:
+        set_status(state_path, state, "error", f"Could not start audio capture: {error}")
+        return 3
     transcriber = StreamingTranscriber(
         model,
         args.language,
@@ -1140,13 +1261,7 @@ def main() -> int:
 
     try:
         while RUNNING:
-            if capture_proc.poll() is not None:
-                print("Audio capture process exited unexpectedly.", file=sys.stderr)
-                state.update({"status": "error", "message": "Audio capture process exited unexpectedly."})
-                write_state(state_path, state)
-                return 4
-
-            chunk = capture_proc.stdout.read(1024)
+            chunk = capture.read()
             if not chunk:
                 time.sleep(0.01)
                 continue
@@ -1201,40 +1316,15 @@ def main() -> int:
 
             committed_count = len(transcriber.committed_words)
 
-            _stable_preview, unstable_text = split_display_text(transcriber.committed_words, current_partial)
-            stable_text = " ".join(transcriber.committed_words)
+            stable_text, unstable_text = split_display_text(transcriber.committed_words, current_partial)
             display_text = merge_continuous_text(stable_text, unstable_text)
 
-            translated_text = last_translated_text if args.display_mode != "captions" else ""
-            translated_stable_text = last_translated_stable_text if args.display_mode != "captions" else ""
-            translated_unstable_text = last_translated_unstable_text if args.display_mode != "captions" else ""
-            if args.display_mode != "captions":
-                if stable_text:
-                    requested_stable_translation = translator.request(
-                        stable_text,
-                        args.target_language,
-                        transcriber.source_language,
-                    )
-                    if requested_stable_translation:
-                        translated_stable_text = requested_stable_translation
-                else:
-                    translated_stable_text = ""
-
-                if display_text:
-                    requested_translation = translator.request(
-                        display_text,
-                        args.target_language,
-                        transcriber.source_language,
-                    )
-                    if requested_translation:
-                        translated_text = requested_translation
-                else:
-                    translated_text = ""
-
-                if translated_text and normalize_text(translated_text) != normalize_text(translated_stable_text):
-                    translated_unstable_text = translated_text
-                else:
-                    translated_unstable_text = ""
+            if args.display_mode == "captions":
+                translated_text, translated_stable_text, translated_unstable_text = "", "", ""
+            else:
+                translated_text, translated_stable_text, translated_unstable_text = translated_texts(
+                    translator, display_text, stable_text, args.target_language, transcriber.source_language,
+                )
 
             if (
                 display_text == last_display_text
@@ -1242,6 +1332,10 @@ def main() -> int:
                 and translated_stable_text == last_translated_stable_text
                 and translated_unstable_text == last_translated_unstable_text
                 and committed_count == last_committed_count
+                and stable_text == state.get("stable_text")
+                and unstable_text == state.get("unstable_text")
+                and speech_active == state.get("speech_active")
+                and transcriber.source_language == state.get("source_language")
             ):
                 continue
 
@@ -1268,13 +1362,13 @@ def main() -> int:
                 "backend_ready": True,
             })
             write_state(state_path, state)
+    except Exception as error:
+        print(str(error), file=sys.stderr)
+        set_status(state_path, state, "error", str(error))
+        return 4
     finally:
         translator.stop()
-        capture_proc.terminate()
-        try:
-            capture_proc.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            capture_proc.kill()
+        capture.stop()
 
     state.update({"status": "stopped", "message": "Live captions stopped."})
     write_state(state_path, state)

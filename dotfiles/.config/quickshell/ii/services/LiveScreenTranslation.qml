@@ -24,9 +24,10 @@ Singleton {
     property bool selectingRegion: false
     property string backendStatusText: Translation.tr("Backend not checked yet.")
     property int recoveryAttempts: 0
+    property int workerGeneration: 0
 
     readonly property bool recovering: recoveryTimer.running
-    readonly property bool active: workerActive || launchPending || recovering
+    readonly property bool active: workerActive || launchPending || recovering || stopRequested
     readonly property bool desiredRunning: Persistent.ready && Persistent.states.liveScreenTranslation.desiredRunning
     readonly property string ocrLanguage: "eng"
     readonly property var targetLanguageOptions: [
@@ -51,6 +52,8 @@ Singleton {
     readonly property string ocrText: String(state?.ocr_text ?? "")
     readonly property string translatedText: String(state?.translated_text ?? "")
     readonly property string summaryText: {
+        if (stopRequested)
+            return Translation.tr("Stopping")
         if (selectingRegion)
             return Translation.tr("Selecting region")
         if (recovering)
@@ -69,8 +72,24 @@ Singleton {
     }
 
     function isValidGeometry(r) {
-        // Must match slurp output: 'X,Y WxH' with numbers (possibly decimal)
-        return /^[\d.]+,[\d.]+\s+[\d.]+x[\d.]+$/.test(String(r ?? "").trim())
+        // Monitors to the left/above the primary have negative coordinates.
+        const number = "(?:\\d+(?:\\.\\d+)?|\\.\\d+)"
+        const match = new RegExp(`^([+-]?${number}),([+-]?${number})\\s+(${number})x(${number})$`)
+            .exec(String(r ?? "").trim())
+        return match !== null && match.slice(1).every(value => Number.isFinite(Number(value)))
+            && Number(match[3]) > 0 && Number(match[4]) > 0
+    }
+
+    function normalizedGeometry(r) {
+        if (!isValidGeometry(r))
+            return ""
+        const values = String(r).trim().split(/[,x\s]+/).map(value => {
+            const number = Number(value)
+            const lower = Math.floor(number)
+            // Match Python round() at exact half pixels.
+            return number - lower === 0.5 ? lower + Math.abs(lower % 2) : Math.round(number)
+        })
+        return `${values[0]},${values[1]} ${Math.max(1, values[2])}x${Math.max(1, values[3])}`
     }
 
     function syncSettingsFromPersistent() {
@@ -106,8 +125,9 @@ Singleton {
     }
 
     function probeWorker() {
-        if (workerStatusProc.running)
+        if (workerStatusProc.running || workerLaunchProc.running || root.stopRequested)
             return
+        workerStatusProc.generation = root.workerGeneration
         workerStatusProc.command = buildWorkerStatusCommand()
         workerStatusProc.running = true
     }
@@ -140,16 +160,13 @@ Singleton {
         return payload
     }
 
-    function persistStatePayload(payload) {
+    function stateWriteCommand(payload) {
         const statePath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationStatePath)
         const serialized = CF.StringUtils.shellSingleQuoteEscape(JSON.stringify(payload ?? {}))
-        Quickshell.execDetached([
-            "bash",
-            "-c",
-            `state_path='${statePath}'; tmp_path="$state_path.tmp.$$"; ` +
-            `trap 'rm -f -- "$tmp_path"' EXIT; umask 077; ` +
-            `printf '%s' '${serialized}' > "$tmp_path" && mv -f -- "$tmp_path" "$state_path"`
-        ])
+        return `state_path='${statePath}'; tmp_path="$state_path.tmp.$$"; ` +
+            `mkdir -p -- "$(dirname -- "$state_path")" || exit 1; umask 077; ` +
+            `trap 'rm -f -- "$tmp_path"' EXIT; ` +
+            `printf '%s' '${serialized}' > "$tmp_path" && mv -f -- "$tmp_path" "$state_path" || exit 1; `
     }
 
     function buildBackendLaunchCommand() {
@@ -160,46 +177,47 @@ Singleton {
         const region = CF.StringUtils.shellSingleQuoteEscape(root.region)
         const targetLanguage = CF.StringUtils.shellSingleQuoteEscape(root.targetLanguage)
         const ocrLanguage = CF.StringUtils.shellSingleQuoteEscape(root.ocrLanguage)
-        const launchScript =
+        const launchScript = workerShellPrelude() +
+            `pid="$(cat "$pid_path" 2>/dev/null)"; worker_alive && exit 0; ` +
+            stateWriteCommand(root.state) +
             `rm -f '${pidPath}'; ` +
             `: > '${logPath}'; ` +
             `nohup python3 '${scriptPath}' ` +
             `--state-file '${statePath}' ` +
-            `--region '${region}' ` +
+            `--region='${region}' ` +
             `--target-language '${targetLanguage}' ` +
             `--ocr-language '${ocrLanguage}' ` +
-            `>>'${logPath}' 2>&1 & echo $! > '${pidPath}'`
+            `>>'${logPath}' 2>&1 </dev/null & echo $! > '${pidPath}'`
         return ["bash", "-c", launchScript]
     }
 
-    function buildWorkerStatusCommand() {
+    function workerShellPrelude() {
         const pidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationPidPath)
         const scriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationBackendScriptPath)
-        return [
-            "bash",
-            "-c",
-            `if [ -f '${pidPath}' ]; then pid="$(cat '${pidPath}')"; ` +
-            `if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null ` +
-            `&& tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fq -- '${scriptPath}'; then exit 0; fi; ` +
-            `rm -f '${pidPath}'; fi; exit 1`
-        ]
+        return `pid_path='${pidPath}'; ` +
+            `worker_alive() { [[ "$pid" =~ ^[1-9][0-9]*$ ]] && [ "$pid" -gt 1 ] && ` +
+            `kill -0 "$pid" 2>/dev/null && ` +
+            `tr '\\0' '\\n' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fxq -- '${scriptPath}'; }; `
+    }
+
+    function buildWorkerStatusCommand() {
+        return ["bash", "-c", workerShellPrelude() +
+            `pid="$(cat "$pid_path" 2>/dev/null)"; worker_alive`]
     }
 
     function buildStopCommand() {
-        const pidPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationPidPath)
-        const scriptPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationBackendScriptPath)
-        return [
-            "bash",
-            "-c",
-            `if [ -f '${pidPath}' ]; then pid="$(cat '${pidPath}')"; ` +
-            `if [ -n "$pid" ] && tr '\\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -Fq -- '${scriptPath}'; ` +
-            `then kill "$pid" 2>/dev/null || true; fi; ` +
-            `rm -f '${pidPath}'; fi`
-        ]
+        return ["bash", "-c", workerShellPrelude() +
+            `pid="$(cat "$pid_path" 2>/dev/null)"; ` +
+            `if worker_alive; then ` +
+            `kill -- "$pid" 2>/dev/null || true; ` +
+            `for ((attempt=0; attempt<100; attempt++)); do worker_alive || break; sleep 0.1; done; ` +
+            `worker_alive && exit 1; fi; ` +
+            `rm -f -- "$pid_path"; ` + stateWriteCommand(root.state)]
     }
 
     function refreshBackendAvailability() {
-        backendProbe.running = false
+        if (backendProbe.running)
+            return
         backendProbe.running = true
     }
 
@@ -216,70 +234,81 @@ Singleton {
             return
         selectingRegion = true
         GlobalStates.overlayOpen = false
-        const selectionPath = CF.StringUtils.shellSingleQuoteEscape(Directories.liveScreenTranslationSelectionPath)
-        Quickshell.execDetached(["bash", "-lc",
-            `rm -f '${selectionPath}'; slurp > '${selectionPath}' 2>/dev/null; [ -s '${selectionPath}' ] || printf '__CANCELLED__' > '${selectionPath}'`
-        ])
-        selectionPollTimer.restart()
+        regionSelectionProc.running = true
     }
 
     function clearRegion() {
+        selectingRegion = false
+        regionSelectionProc.running = false
         region = ""
         regionLabel = ""
         persistSettings()
-        if (active)
-            stop()
-        persistStatePayload(clearState("stopped", Translation.tr("No capture region selected.")))
+        stop()
+        clearState("stopped", Translation.tr("No capture region selected."))
     }
 
     function start(recovery = false) {
+        if (recovery && !root.desiredRunning)
+            return
         if (!recovery) {
             root.setDesiredRunning(true)
             root.recoveryAttempts = 0
         }
         recoveryTimer.stop()
-        if (active)
+        if (root.stopRequested) {
+            root.restartPending = true
+            return
+        }
+        if (root.active)
             return
         if (!backendAvailable) {
-            persistStatePayload(clearState("error", Translation.tr("OCR tools are not available yet.")))
+            clearState("error", Translation.tr("OCR tools are not available yet."))
             refreshBackendAvailability()
             return
         }
-        if (region.length === 0 || !isValidGeometry(region)) {
+        if (!isValidGeometry(region)) {
             if (region.length > 0) {
                 region = ""
                 regionLabel = ""
                 persistSettings()
             }
-            persistStatePayload(clearState("error", Translation.tr("Select a screen region first.")))
+            clearState("error", Translation.tr("Select a screen region first."))
             return
         }
 
-        stopRequested = false
-        restartPending = false
-        launchPending = true
-        workerActive = false
-        persistStatePayload(clearState("loading", Translation.tr("Starting live screen translation…")))
-        Quickshell.execDetached(buildBackendLaunchCommand())
-        launchTimeoutTimer.restart()
-        initialWorkerProbeTimer.restart()
+        root.restartPending = false
+        root.workerGeneration += 1
+        root.launchPending = true
+        root.workerActive = false
+        root.clearState("loading", Translation.tr("Starting live screen translation…"))
+        workerLaunchProc.command = buildBackendLaunchCommand()
+        workerLaunchProc.running = true
     }
 
     function stop(preserveRunIntent = false) {
+        restartTimer.stop()
+        recoveryTimer.stop()
+        stableWorkerTimer.stop()
+        launchTimeoutTimer.stop()
+        initialWorkerProbeTimer.stop()
         if (!preserveRunIntent) {
             root.setDesiredRunning(false)
-            recoveryTimer.stop()
-            stableWorkerTimer.stop()
+            root.restartPending = false
             root.recoveryAttempts = 0
         }
-        stopRequested = true
-        launchPending = false
-        workerActive = false
-        initialWorkerProbeTimer.stop()
-        Quickshell.execDetached(buildStopCommand())
-        persistStatePayload(clearState("stopped", Translation.tr("Live screen translation stopped.")))
-        if (preserveRunIntent && root.restartPending)
-            delayedStartTimer.restart()
+        root.workerGeneration += 1
+        root.stopRequested = true
+        root.clearState("stopped", Translation.tr("Live screen translation stopped."))
+        // A launch must finish writing its PID before the stop can find it.
+        if (!workerLaunchProc.running)
+            root.stopWorker()
+    }
+
+    function stopWorker() {
+        if (workerStopProc.running)
+            return
+        workerStopProc.command = buildStopCommand()
+        workerStopProc.running = true
     }
 
     function toggleRunning() {
@@ -290,20 +319,27 @@ Singleton {
     }
 
     function restartIfActive() {
-        if (!active)
+        if (!root.active) {
+            root.clearState()
+            root.ensureDesiredWorker()
             return
-        restartPending = true
-        stopRequested = false
-        restartTimer.restart()
+        }
+        root.restartPending = true
+        root.clearState("loading", Translation.tr("Applying settings…"))
+        if (!root.stopRequested)
+            restartTimer.restart()
     }
 
     function updateWorkerState(isRunning) {
+        if (root.stopRequested)
+            return
         const wasActive = root.workerActive || root.launchPending
         const wasWorkerActive = root.workerActive
         root.workerActive = isRunning
 
         if (isRunning) {
             root.launchPending = false
+            launchTimeoutTimer.stop()
             recoveryTimer.stop()
             if (!wasWorkerActive)
                 stableWorkerTimer.restart()
@@ -311,26 +347,19 @@ Singleton {
             return
         }
 
-        if (!wasActive) {
-            root.ensureDesiredWorker()
-            return
-        }
-
-        const shouldRestart = root.restartPending
-        const expectedStop = root.stopRequested || root.restartPending
         root.launchPending = false
-        root.workerActive = false
-
-        if (!expectedStop) {
+        stableWorkerTimer.stop()
+        if (wasActive && !root.restartPending) {
+            root.state = Object.assign({}, root.state, {
+                status: "error",
+                message: root.status === "error" && root.statusMessage.trim().length > 0
+                    ? root.statusMessage
+                    : Translation.tr("Live screen translation backend exited unexpectedly.")
+            })
             stateFileView.reload()
         }
-
-        root.stopRequested = false
-        root.restartPending = false
-        if (shouldRestart)
-            delayedStartTimer.restart()
-        else if (!expectedStop)
-            root.scheduleRecovery()
+        if (!root.restartPending)
+            root.ensureDesiredWorker()
     }
 
     Timer {
@@ -338,13 +367,6 @@ Singleton {
         interval: 150
         repeat: false
         onTriggered: root.stop(true)
-    }
-
-    Timer {
-        id: delayedStartTimer
-        interval: 150
-        repeat: false
-        onTriggered: root.start(true)
     }
 
     Timer {
@@ -384,12 +406,7 @@ Singleton {
         interval: 2500
         repeat: true
         running: root.active
-        onTriggered: {
-            if (!workerStatusProc.running) {
-                workerStatusProc.command = buildWorkerStatusCommand()
-                workerStatusProc.running = true
-            }
-        }
+        onTriggered: root.probeWorker()
     }
 
     Timer {
@@ -405,8 +422,18 @@ Singleton {
         watchChanges: true
         onFileChanged: stateReloadDebounce.restart()
         onLoaded: {
+            // Ignore a previous worker's final write during stop/reconfigure.
+            if (root.stopRequested || root.restartPending || root.launchPending
+                    || (!root.active && !root.desiredRunning))
+                return
             try {
-                root.state = JSON.parse(stateFileView.text() || "{}")
+                const payload = JSON.parse(stateFileView.text() || "{}")
+                if (!payload || typeof payload !== "object" || Array.isArray(payload))
+                    throw new Error("Invalid OCR state")
+                if ((payload.target_language && payload.target_language !== root.targetLanguage)
+                        || (payload.region && root.normalizedGeometry(payload.region) !== root.normalizedGeometry(root.region)))
+                    return
+                root.state = payload
             } catch (e) {
                 root.state = root.clearState("error", Translation.tr("Could not parse OCR state."))
             }
@@ -437,45 +464,65 @@ Singleton {
         }
     }
 
-    Timer {
-        id: selectionPollTimer
-        interval: 300
-        repeat: true
-        running: false
-        onTriggered: {
-            if (!selectionResultProc.running) {
-                selectionResultProc.command = ["cat", Directories.liveScreenTranslationSelectionPath]
-                selectionResultProc.running = true
-            }
-        }
-    }
-
     Process {
-        id: selectionResultProc
+        id: regionSelectionProc
+        command: ["bash", "-c", "exec slurp"]
         stdout: StdioCollector {
             onStreamFinished: {
                 const selected = String(this.text ?? "").trim()
-                if (selected.length === 0)
-                    return
-                selectionPollTimer.running = false
-                root.selectingRegion = false
-                if (selected === "__CANCELLED__" || !root.isValidGeometry(selected))
+                if (!root.selectingRegion || !root.isValidGeometry(selected))
                     return
                 root.region = selected
                 root.regionLabel = selected
                 root.persistSettings()
-                if (root.active)
-                    root.restartIfActive()
+                root.restartIfActive()
             }
         }
-        onExited: (exitCode) => {
-            // exitCode != 0 means the file doesn't exist yet — keep polling
+        onExited: root.selectingRegion = false
+    }
+
+    Process {
+        id: workerLaunchProc
+        onExited: (exitCode, exitStatus) => {
+            if (root.stopRequested) {
+                root.stopWorker()
+                return
+            }
+            if (exitCode !== 0) {
+                root.updateWorkerState(false)
+                return
+            }
+            launchTimeoutTimer.restart()
+            initialWorkerProbeTimer.restart()
+        }
+    }
+
+    Process {
+        id: workerStopProc
+        onExited: (exitCode, exitStatus) => {
+            const shouldRestart = root.restartPending && root.desiredRunning
+            root.stopRequested = false
+            root.launchPending = false
+            root.restartPending = false
+            if (exitCode !== 0) {
+                // Retain the PID and block replacement if the old worker is
+                // still decoding/loading. A later Stop can try again.
+                root.workerActive = true
+                root.clearState("error", Translation.tr("The backend is still stopping. Try stopping it again shortly."))
+                return
+            }
+            root.workerActive = false
+            if (shouldRestart)
+                root.start(true)
         }
     }
 
     Process {
         id: workerStatusProc
+        property int generation: -1
         onExited: (exitCode, exitStatus) => {
+            if (generation !== root.workerGeneration || root.stopRequested)
+                return
             if (exitCode === 0)
                 root.updateWorkerState(true)
             else if (!root.launchPending || !launchTimeoutTimer.running)

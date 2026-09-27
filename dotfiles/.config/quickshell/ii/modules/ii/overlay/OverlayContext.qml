@@ -52,7 +52,7 @@ Singleton {
     function registerClickableWidget(widget: var, clickable = true) {
         if (clickable) {
             if (!root.clickableWidgets.includes(widget)) {
-                root.clickableWidgets.push(widget)
+                root.clickableWidgets = root.clickableWidgets.concat([widget])
             }
         } else {
             root.clickableWidgets = root.clickableWidgets.filter(w => w !== widget)

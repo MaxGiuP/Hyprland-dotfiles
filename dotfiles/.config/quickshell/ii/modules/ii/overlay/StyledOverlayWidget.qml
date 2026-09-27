@@ -61,30 +61,33 @@ AbstractOverlayWidget {
     hoverEnabled: true
     property bool resizable: true
     property bool resizing: false
-    property int resizeXDirection: getXResizeDirection(mouseX)
-    property int resizeYDirection: getYResizeDirection(mouseY)
+    property int resizeXDirection: 0
+    property int resizeYDirection: 0
+    property real resizeStartMouseX: 0
+    property real resizeStartMouseY: 0
+    property real resizeStartX: 0
+    property real resizeStartY: 0
+    property real resizeStartWidth: 0
+    property real resizeStartHeight: 0
+    property real resizeContentWidth: 0
+    property real resizeContentHeight: 0
+    preventStealing: resizing
     property bool draggableWhenPinned: persistentStateEntry.draggableWhenPinned ?? false
     readonly property bool bodyDragEnabledWhenPinned: draggableWhenPinned && actuallyPinned && !GlobalStates.overlayOpen
     draggable: GlobalStates.overlayOpen || bodyDragEnabledWhenPinned
     drag.target: undefined
-    animateXPos: !(dragHandler.active || titleBarDragHandler.active || bodyDragHandler.active)
-    animateYPos: !(dragHandler.active || titleBarDragHandler.active || bodyDragHandler.active)
-    z: (dragHandler.active || titleBarDragHandler.active || bodyDragHandler.active) ? 2 : 1
+    animateXPos: !(resizing || titleBarDragHandler.active || bodyDragHandler.active)
+    animateYPos: !(resizing || titleBarDragHandler.active || bodyDragHandler.active)
+    z: (resizing || titleBarDragHandler.active || bodyDragHandler.active) ? 2 : 1
     cursorShape: {
-        if (dragHandler.active || titleBarDragHandler.active || bodyDragHandler.active) return root.resizing ? cursorShape : Qt.ArrowCursor;
-        if (resizeMargin < mouseX && mouseX < width - resizeMargin &&
-            resizeMargin < mouseY && mouseY < height - resizeMargin) {
+        if (!root.resizable || titleBarDragHandler.active || bodyDragHandler.active)
             return Qt.ArrowCursor;
-        } else {
-            if (!root.resizable) return Qt.ArrowCursor;
-            const dragIsLeft = mouseX < width / 2
-            const dragIsTop = mouseY < height / 2
-            if ((dragIsLeft && dragIsTop) || (!dragIsLeft && !dragIsTop)) {
-                return Qt.SizeFDiagCursor
-            } else {
-                return Qt.SizeBDiagCursor
-            }
-        }
+        const horizontal = root.resizing ? root.resizeXDirection : getXResizeDirection(mouseX);
+        const vertical = root.resizing ? root.resizeYDirection : getYResizeDirection(mouseY);
+        if (horizontal === 0 && vertical === 0) return Qt.ArrowCursor;
+        if (vertical === 0) return Qt.SizeHorCursor;
+        if (horizontal === 0) return Qt.SizeVerCursor;
+        return horizontal === vertical ? Qt.SizeFDiagCursor : Qt.SizeBDiagCursor;
     }
 
     // Geometry is stored as fractions of the current screen size so the same
@@ -171,51 +174,42 @@ AbstractOverlayWidget {
             event.accepted = false;
             return;
         }
-        // Resizing setup
-        root.resizing = true;
+        // Snapshot the displayed geometry: stored y includes title-bar space,
+        // and layout constraints can make the actual content larger than saved.
+        const pointer = root.mapToItem(root.parent, event.x, event.y);
+        root.resizeStartMouseX = pointer.x;
+        root.resizeStartMouseY = pointer.y;
+        root.resizeStartX = root.x;
+        root.resizeStartY = root.y;
+        root.resizeStartWidth = contentContainer.width;
+        root.resizeStartHeight = contentContainer.height;
+        root.resizeContentWidth = root.resizeStartWidth;
+        root.resizeContentHeight = root.resizeStartHeight;
         root.resizeXDirection = getXResizeDirection(event.x);
         root.resizeYDirection = getYResizeDirection(event.y);
-        if (root.resizeYDirection !== 0 && root.resizeXDirection === 0) {
-            root.resizeXDirection = event.x < root.width / 2 ? -1 : 1;
-        } else if (root.resizeXDirection !== 0 && root.resizeYDirection === 0) {
-            root.resizeYDirection = event.y < root.height / 2 ? -1 : 1;
-        }
+        root.resizing = true;
     }
     onPositionChanged: (event) => {
         if (!resizing) return;
-        contentContainer.implicitWidth = Math.max(root.resolveStoredMetric("width", root.screenWidth) + dragHandler.xAxis.activeValue * root.resizeXDirection, root.minimumWidth);
-        contentContainer.implicitHeight = Math.max(root.resolveStoredMetric("height", root.screenHeight) + dragHandler.yAxis.activeValue * root.resizeYDirection, root.minimumHeight);
-        const negativeXDrag = root.resizeXDirection === -1;
-        const negativeYDrag = root.resizeYDirection === -1;
-        const baseX = root.resolveStoredMetric("x", root.screenWidth)
-        const baseY = root.resolveStoredMetric("y", root.screenHeight)
-        const wantedX = baseX + (negativeXDrag ? dragHandler.xAxis.activeValue : 0)
-        const wantedY = baseY + (negativeYDrag ? dragHandler.yAxis.activeValue : 0)
-        const negativeXDragLimit = baseX + root.resolveStoredMetric("width", root.screenWidth) - contentContainer.implicitWidth;
-        const negativeYDragLimit = baseY + root.resolveStoredMetric("height", root.screenHeight) - contentContainer.implicitHeight;
-        root.x = negativeXDrag ? Math.min(wantedX, negativeXDragLimit) : wantedX;
-        root.y = negativeYDrag ? Math.min(wantedY, negativeYDragLimit) : wantedY;
+        const pointer = root.mapToItem(root.parent, event.x, event.y);
+        const dx = pointer.x - root.resizeStartMouseX;
+        const dy = pointer.y - root.resizeStartMouseY;
+        root.resizeContentWidth = Math.max(root.minimumWidth,
+            root.resizeStartWidth + dx * root.resizeXDirection);
+        root.resizeContentHeight = Math.max(root.minimumHeight,
+            root.resizeStartHeight + dy * root.resizeYDirection);
+        root.x = root.resizeStartX + (root.resizeXDirection === -1
+            ? root.resizeStartWidth - root.resizeContentWidth : 0);
+        root.y = root.resizeStartY + (root.resizeYDirection === -1
+            ? root.resizeStartHeight - root.resizeContentHeight : 0);
     }
-    DragHandler {
-        id: dragHandler
-        property bool activated: false
-        acceptedButtons: Qt.LeftButton | Qt.RightButton
-        target: null
-        onActiveChanged: { // Handle drag release
-            if (active) {
-                activated = true
-                return
-            }
-            if (!activated)
-                return
-            activated = false
-            root.resizing = false;
-            root.savePosition();
-        }
-        xAxis.minimum: 0
-        xAxis.maximum: root.parent?.width - root.width
-        yAxis.minimum: -root.effectiveTitleBarHeight
-        yAxis.maximum: root.parent?.height - root.height
+    onReleased: root.finishResize()
+    onCanceled: root.finishResize()
+
+    function finishResize() {
+        if (!root.resizing) return;
+        root.savePosition(root.x, root.y, root.resizeContentWidth, root.resizeContentHeight);
+        root.resizing = false;
     }
 
     function close() {
@@ -237,13 +231,17 @@ AbstractOverlayWidget {
         persistentStateEntry.draggableWhenPinned = !persistentStateEntry.draggableWhenPinned;
     }
 
-    function savePosition(xPos = root.x, yPos = root.y, width = contentContainer.implicitWidth, height = contentContainer.implicitHeight) {
+    function savePosition(xPos = root.x, yPos = root.y, width = contentContainer.width, height = contentContainer.height) {
         const sw = root.screenWidth
         const sh = root.screenHeight
         persistentStateEntry.x = xPos / sw
         persistentStateEntry.y = (yPos + root.effectiveTitleBarHeight) / sh
         persistentStateEntry.width = width / sw
         persistentStateEntry.height = height / sh
+        // Drag handlers and resizing assign x/y directly. Restore the bindings
+        // so monitor size changes and title-bar visibility still reposition us.
+        root.x = Qt.binding(() => Math.round(root.resolveStoredMetric("x", root.screenWidth)))
+        root.y = Qt.binding(() => root.resolvedY())
     }
 
     function center() {
@@ -346,6 +344,10 @@ AbstractOverlayWidget {
                     
                     StyledText {
                         Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        // Give the title remaining space without making its
+                        // natural text width a minimum for the entire panel.
+                        Layout.preferredWidth: 0
                         text: root.title
                         elide: Text.ElideRight
                     }
@@ -406,8 +408,10 @@ AbstractOverlayWidget {
                 Layout.margins: root.fancyBorders ? root.padding : 0
                 Layout.topMargin: -border.border.width // Border of a rectangle is drawn inside its bounds, so we do this to make the gap not too big
                 Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
-                implicitWidth: Math.max(root.resolveStoredMetric("width", root.screenWidth), root.minimumWidth)
-                implicitHeight: Math.max(root.resolveStoredMetric("height", root.screenHeight), root.minimumHeight)
+                implicitWidth: Math.max(root.resizing ? root.resizeContentWidth
+                    : root.resolveStoredMetric("width", root.screenWidth), root.minimumWidth)
+                implicitHeight: Math.max(root.resizing ? root.resizeContentHeight
+                    : root.resolveStoredMetric("height", root.screenHeight), root.minimumHeight)
                 children: [root.contentItem]
 
                 DragHandler {

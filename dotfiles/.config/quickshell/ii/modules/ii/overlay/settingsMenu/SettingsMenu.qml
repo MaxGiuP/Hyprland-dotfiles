@@ -14,8 +14,11 @@ StyledOverlayWidget {
 
     title: Translation.tr("Settings")
     showCenterButton: true
+    minimumWidth: 600
+    minimumHeight: 400
 
     property real contentPadding: 8
+    property bool navigationExpanded: true
     property int currentPage: 0
     property bool configPathCopied: false
     property int requestedSubTab: -1
@@ -103,6 +106,7 @@ StyledOverlayWidget {
 
     contentItem: Rectangle {
         id: contentRoot
+        anchors.fill: parent
         implicitWidth: 1100
         implicitHeight: 750
         radius: root.contentRadius
@@ -155,10 +159,12 @@ StyledOverlayWidget {
                         id: navRail
                         width: navRailFlickable.width
                         spacing: 2
-                        expanded: contentRoot.width > 960
+                        expanded: contentRoot.width > 960 && root.navigationExpanded
 
                         NavigationRailExpandButton {
                             focus: root.visible
+                            visible: contentRoot.width > 960
+                            downAction: () => root.navigationExpanded = !root.navigationExpanded
                         }
 
                         NavigationRailTabArray {
