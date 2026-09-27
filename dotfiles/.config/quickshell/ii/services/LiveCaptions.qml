@@ -63,6 +63,7 @@ Singleton {
         "translated_stable_text": "",
         "translated_unstable_text": "",
         "translation_segments": [],
+        "translation_error": "",
         "source_language": "",
         "target_language": targetLanguage,
         "history": [],
@@ -78,6 +79,7 @@ Singleton {
     readonly property string translatedStableText: String(state?.translated_stable_text ?? "")
     readonly property string translatedUnstableText: String(state?.translated_unstable_text ?? "")
     readonly property var translationSegments: CaptionSegments.sanitizeSegments(state?.translation_segments)
+    readonly property string translationError: String(state?.translation_error ?? "")
     readonly property string sourceLanguage: String(state?.source_language ?? "")
     readonly property string runtimeDevice: String(state?.runtime_device ?? "")
     readonly property var history: state?.history ?? []
@@ -322,6 +324,7 @@ Singleton {
             "unstable_text": "",
             "translated_text": "",
             "translation_segments": [],
+            "translation_error": "",
             "translated_stable_text": "",
             "translated_unstable_text": "",
             "source_language": "",
@@ -348,6 +351,8 @@ Singleton {
             throw new Error("Invalid caption state")
         if (payload.target_language && payload.target_language !== root.targetLanguage)
             return
+        if (payload.translation_style && payload.translation_style !== CaptionAppearance.translationStyle)
+            return
         let nextPayload = Object.assign({}, payload)
         nextPayload.target_language = nextPayload.target_language ?? root.targetLanguage
         nextPayload.backend_ready = nextPayload.backend_ready ?? root.backendAvailable
@@ -371,6 +376,7 @@ Singleton {
         const modelName = CF.StringUtils.shellSingleQuoteEscape(root.modelName)
         const tuningPreset = CF.StringUtils.shellSingleQuoteEscape(root.tuningPreset)
         const translationGranularity = CaptionAppearance.translationGranularity
+        const translationStyle = CaptionAppearance.translationStyle
         const launchScript = workerShellPrelude() +
             `pid="$(cat "$pid_path" 2>/dev/null)"; worker_alive && exit 0; ` +
             stateWriteCommand(root.state) +
@@ -392,6 +398,7 @@ Singleton {
             `--language '${preferredLanguage}' ` +
             `--target-language '${targetLanguage}' ` +
             `--translation-granularity '${translationGranularity}' ` +
+            `--translation-style '${translationStyle}' ` +
             `--model '${modelName}' ` +
             `--preset '${tuningPreset}' ` +
             `--model-cache-dir '${backendModelCachePath}' ` +
@@ -626,6 +633,7 @@ Singleton {
                     "stable_text": "",
                     "unstable_text": "",
                     "translated_text": "",
+                    "translation_error": "",
                     "translated_stable_text": "",
                     "translated_unstable_text": "",
                     "source_language": "",
@@ -727,7 +735,11 @@ Singleton {
     Connections {
         target: CaptionAppearance
         function onTranslationGranularityChanged() {
-            if (Persistent.ready && root.active)
+            if (Persistent.ready && root.active && !root.stopRequested)
+                root.restartIfActive()
+        }
+        function onTranslationStyleChanged() {
+            if (Persistent.ready && root.active && !root.stopRequested)
                 root.restartIfActive()
         }
     }

@@ -181,6 +181,7 @@ Singleton {
         const targetLanguage = CF.StringUtils.shellSingleQuoteEscape(root.targetLanguage)
         const ocrLanguage = CF.StringUtils.shellSingleQuoteEscape(root.ocrLanguage)
         const translationGranularity = CaptionAppearance.translationGranularity
+        const translationStyle = CaptionAppearance.translationStyle
         const launchScript = workerShellPrelude() +
             `pid="$(cat "$pid_path" 2>/dev/null)"; worker_alive && exit 0; ` +
             stateWriteCommand(root.state) +
@@ -191,6 +192,7 @@ Singleton {
             `--region='${region}' ` +
             `--target-language '${targetLanguage}' ` +
             `--translation-granularity '${translationGranularity}' ` +
+            `--translation-style '${translationStyle}' ` +
             `--ocr-language '${ocrLanguage}' ` +
             `>>'${logPath}' 2>&1 </dev/null & echo $! > '${pidPath}'`
         return ["bash", "-c", launchScript]
@@ -436,6 +438,7 @@ Singleton {
                 if (!payload || typeof payload !== "object" || Array.isArray(payload))
                     throw new Error("Invalid OCR state")
                 if ((payload.target_language && payload.target_language !== root.targetLanguage)
+                        || (payload.translation_style && payload.translation_style !== CaptionAppearance.translationStyle)
                         || (payload.region && root.normalizedGeometry(payload.region) !== root.normalizedGeometry(root.region)))
                     return
                 root.state = payload
@@ -538,7 +541,11 @@ Singleton {
     Connections {
         target: CaptionAppearance
         function onTranslationGranularityChanged() {
-            if (Persistent.ready && root.active)
+            if (Persistent.ready && root.active && !root.stopRequested)
+                root.restartIfActive()
+        }
+        function onTranslationStyleChanged() {
+            if (Persistent.ready && root.active && !root.stopRequested)
                 root.restartIfActive()
         }
     }

@@ -101,7 +101,45 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.minimumWidth: 0
         wrapMode: Text.WordWrap
-        text: Translation.tr("Short phrases share matching colours across both panes. Whole sentences keep more context for translation. Changing this restarts active translation; text size and colours update immediately.")
+        text: Translation.tr("Short phrases share matching colours across both panes. Whole sentences keep more context. This grouping applies to both translation styles.")
+        color: Appearance.colors.colSubtext
+        font.pixelSize: Appearance.font.pixelSize.smaller
+    }
+
+    StyledText {
+        Layout.fillWidth: true
+        text: Translation.tr("Translation style")
+        color: Appearance.colors.colOnLayer1
+    }
+
+    Flow {
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        spacing: 8
+
+        Repeater {
+            model: [
+                { id: "natural", label: Translation.tr("Natural") },
+                { id: "literal", label: Translation.tr("Literal (source order)") }
+            ]
+            delegate: DialogButton {
+                required property var modelData
+                buttonText: modelData.label
+                colBackground: CaptionAppearance.translationStyle === modelData.id
+                    ? Appearance.colors.colPrimaryContainer : Appearance.colors.colLayer1
+                colBackgroundHover: CaptionAppearance.translationStyle === modelData.id
+                    ? Appearance.colors.colPrimaryContainer : Appearance.colors.colLayer1Hover
+                colText: Appearance.colors.colOnLayer1
+                downAction: () => CaptionAppearance.setTranslationStyle(modelData.id)
+            }
+        }
+    }
+
+    StyledText {
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        wrapMode: Text.WordWrap
+        text: Translation.tr("Literal translation keeps the original word order, so it may sound ungrammatical. It uses your installed local model and can be slower. Changing style or grouping restarts active translation; text size and colours update immediately.")
         color: Appearance.colors.colSubtext
         font.pixelSize: Appearance.font.pixelSize.smaller
     }

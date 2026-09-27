@@ -24,7 +24,7 @@ function service(name, directory = '/tmp/live-service-test') {
         state: {}, selectingRegion: false,
         Persistent: { ready: true, states: { [kind]: settings } },
         Translation: { tr: text => text },
-        CaptionAppearance: { translationGranularity: 'phrase' },
+        CaptionAppearance: { translationGranularity: 'phrase', translationStyle: 'natural' },
         Appearance: { colors: { colOnSurfaceVariant: '#202020' } },
         CF: { StringUtils: { shellSingleQuoteEscape: value => String(value).replaceAll("'", "'\\''") } },
         Directories: {}, GlobalStates: { overlayOpen: true },
@@ -57,6 +57,20 @@ function service(name, directory = '/tmp/live-service-test') {
         assert.ok(body, `exit handler for ${id}`);
         root.generation = root[id].generation;
         vm.runInContext(`(function(exitCode, exitStatus) {${body}\n})(${code}, 0)`, context);
+    };
+    root.appearanceChanged = property => {
+        const signal = property[0].toUpperCase() + property.slice(1);
+        const block = source.match(/    Connections \{\n        target: CaptionAppearance\n(.*?)\n    }/s)?.[1];
+        const body = block?.match(new RegExp(`function on${signal}Changed\\(\\) \\{(.*?)\\n        }`, 's'))?.[1];
+        assert.ok(body, `appearance change handler for ${property}`);
+        vm.runInContext(`(function() {${body}\n})()`, context);
+    };
+    root.loadState = payload => {
+        root.stateFileView.text = () => JSON.stringify(payload);
+        const block = source.match(/    FileView \{\n        id: stateFileView\n(.*?)\n    }/s)?.[1];
+        const body = block?.match(/onLoaded: \{(.*?)\n        }/s)?.[1];
+        assert.ok(body, 'state file load handler');
+        vm.runInContext(`(function() {${body}\n})()`, context);
     };
     return root;
 }
@@ -175,6 +189,38 @@ test('caption state excludes stale target translations and invalid history', () 
     assert.throws(() => s.handleStatePayload(null), /Invalid caption state/);
 });
 
+test('caption state ignores output from the previous translation style', () => {
+    const s = service('LiveCaptions');
+    s.CaptionAppearance.translationStyle = 'literal';
+    s.clearState();
+    s.handleStatePayload({ translation_style: 'natural', translated_text: 'old natural translation' });
+    assert.equal(s.state.translated_text, '');
+    s.handleStatePayload({ translation_style: 'literal', translated_text: 'new literal translation' });
+    assert.equal(s.state.translated_text, 'new literal translation');
+});
+
+test('caption translation failures remain separate from capture status and clear on stop', () => {
+    const s = service('LiveCaptions');
+    s.handleStatePayload({ status: 'running', current_text: 'Speech continues',
+        translation_error: 'The local translation model is unavailable' });
+    assert.equal(s.status, 'running');
+    assert.equal(s.state.current_text, 'Speech continues');
+    assert.equal(s.state.translation_error, 'The local translation model is unavailable');
+    s.clearState('stopped');
+    assert.equal(s.state.translation_error, '');
+});
+
+test('screen state ignores output from the previous translation style', () => {
+    const s = service('LiveScreenTranslation');
+    s.workerActive = true;
+    s.CaptionAppearance.translationStyle = 'literal';
+    s.clearState();
+    s.loadState({ translation_style: 'natural', translated_text: 'old natural translation' });
+    assert.equal(s.state.translated_text, '');
+    s.loadState({ translation_style: 'literal', translated_text: 'new literal translation' });
+    assert.equal(s.state.translated_text, 'new literal translation');
+});
+
 test('tentative captions use the current theme and escape rich text', () => {
     const s = service('LiveCaptions');
     s.visibleStableText = 'one <two>';
@@ -192,5 +238,68 @@ for (const name of ['LiveCaptions', 'LiveScreenTranslation']) {
             s.CaptionAppearance.translationGranularity = mode;
             assert.ok(s.buildBackendLaunchCommand()[2].includes(`--translation-granularity '${mode}'`));
         }
+    });
+
+    test(`${name}: passes either translation style with either grouping`, () => {
+        const s = service(name);
+        for (const style of ['natural', 'literal']) {
+            for (const mode of ['phrase', 'sentence']) {
+                s.CaptionAppearance.translationStyle = style;
+                s.CaptionAppearance.translationGranularity = mode;
+                const command = s.buildBackendLaunchCommand()[2];
+                assert.ok(command.includes(`--translation-style '${style}'`));
+                assert.ok(command.includes(`--translation-granularity '${mode}'`));
+            }
+        }
+    });
+
+    for (const property of ['translationStyle', 'translationGranularity']) {
+        test(`${name}: ${property} changes only restart an active worker`, () => {
+            const s = service(name);
+            s.appearanceChanged(property);
+            assert.equal(s.workerLaunchProc.running, false);
+            assert.equal(s.workerStopProc.running, false);
+            assert.equal(s.restartTimer.running, false);
+            assert.equal(s.desiredRunning, false);
+            s.workerActive = true;
+            s.Persistent.ready = false;
+            s.appearanceChanged(property);
+            assert.equal(s.restartTimer.running, false, 'initial persistence load cannot trigger a restart');
+            s.Persistent.ready = true;
+            s.Persistent.states[name === 'LiveCaptions' ? 'liveCaptions' : 'liveScreenTranslation'].desiredRunning = true;
+            s.appearanceChanged(property);
+            assert.equal(s.restartTimer.running, true);
+            assert.equal(s.restartPending, true);
+            assert.equal(s.desiredRunning, true);
+        });
+
+        test(`${name}: ${property} changes during Stop preserve stopped intent`, () => {
+            const s = service(name);
+            s.workerActive = true;
+            s.Persistent.states[name === 'LiveCaptions' ? 'liveCaptions' : 'liveScreenTranslation'].desiredRunning = true;
+            s.stop();
+            s.appearanceChanged(property);
+            s.exit('workerStopProc');
+            assert.equal(s.desiredRunning, false);
+            assert.equal(s.active, false);
+            assert.equal(s.status, 'stopped');
+            assert.equal(s.restartPending, false);
+            assert.equal(s.restartTimer.running, false);
+            assert.equal(s.workerLaunchProc.running, false);
+        });
+    }
+
+    test(`${name}: a queued restart uses the style selected while stopping`, () => {
+        const s = service(name);
+        s.start();
+        s.exit('workerLaunchProc');
+        s.updateWorkerState(true);
+        s.restartIfActive();
+        s.stop(true);
+        s.CaptionAppearance.translationStyle = 'literal';
+        s.appearanceChanged('translationStyle');
+        s.exit('workerStopProc');
+        assert.equal(s.workerLaunchProc.running, true);
+        assert.ok(s.workerLaunchProc.command[2].includes("--translation-style 'literal'"));
     });
 }

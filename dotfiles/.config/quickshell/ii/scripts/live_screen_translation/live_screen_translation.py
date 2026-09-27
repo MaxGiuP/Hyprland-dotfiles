@@ -40,6 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-language", default="en")
     parser.add_argument("--ocr-language", default="eng")
     parser.add_argument("--translation-granularity", choices=["phrase", "sentence"], default="phrase")
+    parser.add_argument("--translation-style", choices=["natural", "literal"], default="natural")
     parser.add_argument("--interval-seconds", type=float, default=0.6)
     parser.add_argument("--confidence-threshold", type=float, default=60.0,
                         help="Minimum mean word confidence (0-100) to accept an OCR result")
@@ -140,14 +141,31 @@ def translate_text(text: str, target_language: str,
     return translated
 
 
+def translate_literal(text: str, target_language: str, source_language: str = "",
+                      stop_event: threading.Event | None = None) -> str:
+    # Keep normal translation independent of the optional local model helper.
+    # Missing literal support is an explicit error, never a natural fallback.
+    try:
+        from literal_translation import translate_literal as translate
+    except ImportError as error:
+        raise RuntimeError("Literal translation backend is not installed.") from error
+    return translate(text, target_language, source_language=source_language, stop_event=stop_event)
+
+
 class AsyncTranslator:
     """Translate exact source phrases without blocking or guessing correspondence."""
 
     CACHE_LIMIT = 128
     MAX_CONCURRENT = 2
 
-    def __init__(self, language: str, granularity: str = "phrase") -> None:
+    def __init__(self, language: str, granularity: str = "phrase",
+                 translation_style: str = "natural") -> None:
+        if translation_style not in {"natural", "literal"}:
+            raise ValueError("Translation style must be 'natural' or 'literal'.")
         self._language = language
+        # Style is fixed for this worker's lifetime, isolating its source cache.
+        self._translation_style = translation_style
+        self._max_concurrent = 1 if translation_style == "literal" else self.MAX_CONCURRENT
         self._lock = threading.Lock()
         self._error = ""
         self._latest_text = ""
@@ -229,11 +247,27 @@ class AsyncTranslator:
         with self._lock:
             return self._snapshot_locked()
 
+    def _translate(self, text: str) -> str:
+        if self._translation_style == "natural":
+            return translate_text(text, self._language, self._closed)
+        try:
+            # Tesseract's English recognition model does not prove the source
+            # is English; let the local literal translator identify it.
+            translated = translate_literal(text, self._language, source_language="", stop_event=self._closed)
+            if not isinstance(translated, str) or not translated.strip():
+                raise RuntimeError("The local model returned no text.")
+            return translated.strip()
+        except Exception as error:
+            message = str(error)
+            if message.lower().startswith("literal translation"):
+                raise
+            raise RuntimeError(f"Literal translation unavailable: {message}") from error
+
     def _run(self) -> None:
         active = {}
         queued = []
         generation = -1
-        with ThreadPoolExecutor(max_workers=self.MAX_CONCURRENT,
+        with ThreadPoolExecutor(max_workers=self._max_concurrent,
                                 thread_name_prefix="screen-phrase") as pool:
             while True:
                 with self._lock:
@@ -247,13 +281,13 @@ class AsyncTranslator:
                         queued = []
                     queued = [item for item in queued if item["source"] not in self._cache]
                     active_sources = {text for _, text in active.values()}
-                    while queued and len(active) < self.MAX_CONCURRENT:
+                    while queued and len(active) < self._max_concurrent:
                         candidate = next((index for index, item in enumerate(queued)
                                           if item["source"] not in active_sources), None)
                         if candidate is None:
                             break
                         text = queued.pop(candidate)["source"]
-                        future = pool.submit(translate_text, text, self._language, self._closed)
+                        future = pool.submit(self._translate, text)
                         active[future] = (generation, text)
                         active_sources.add(text)
                     if not active:
@@ -408,6 +442,7 @@ def main() -> int:
         "translated_text": "",
         "translation_segments": [],
         "target_language": args.target_language,
+        "translation_style": args.translation_style,
         "ocr_language": args.ocr_language,
         "region": args.region,
     }
@@ -427,7 +462,7 @@ def main() -> int:
 
     last_ocr_text = ""
     empty_frames = 0
-    translator = AsyncTranslator(args.target_language, args.translation_granularity)
+    translator = AsyncTranslator(args.target_language, args.translation_granularity, args.translation_style)
     frame_cache = OcrFrameCache()
     exit_code = 0
 
@@ -488,6 +523,7 @@ def main() -> int:
                     "translated_text": translated,
                     "translation_segments": translation_segments,
                     "target_language": args.target_language,
+                    "translation_style": args.translation_style,
                     "ocr_language": args.ocr_language,
                     "region": args.region,
                 })

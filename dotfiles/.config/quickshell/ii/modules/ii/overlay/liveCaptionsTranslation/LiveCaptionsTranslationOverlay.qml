@@ -7,12 +7,14 @@ import qs.modules.ii.overlay
 
 StyledOverlayWidget {
     id: root
-    title: Translation.tr("Translation")
+    title: CaptionAppearance.translationStyle === "literal"
+        ? Translation.tr("Literal translation") : Translation.tr("Translation")
     showCenterButton: true
     minimumWidth: 320
     minimumHeight: 80
+    readonly property bool translationFailed: (LiveCaptions.translationError ?? "").length > 0
     readonly property bool showSentenceColors: CaptionAppearance.sentenceHighlighting
-        && LiveCaptions.translating && LiveCaptions.translationSegments.length > 0
+        && LiveCaptions.translating && LiveCaptions.translationSegments.length > 0 && !root.translationFailed
     readonly property bool singleStreamMode: LiveCaptions.backendKind === "asr"
     function asrMarkup() {
         const committed = String(LiveCaptions.translatedStableText ?? "").trim()
@@ -61,9 +63,22 @@ StyledOverlayWidget {
                 ? Translation.tr("Translating…") : Translation.tr("Not running")
         }
 
+        Text {
+            visible: root.translationFailed
+            anchors.fill: parent
+            anchors.margins: 12
+            text: LiveCaptions.translationError ?? ""
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+            verticalAlignment: Text.AlignVCenter
+            color: bubble.translationForeground
+            font.family: Appearance.font.family.main
+            font.pixelSize: CaptionAppearance.mainTextPixelSize
+        }
+
         Item {
             id: singleStreamViewport
-            visible: root.singleStreamMode && !root.showSentenceColors
+            visible: root.singleStreamMode && !root.showSentenceColors && !root.translationFailed
             anchors.fill: parent
             anchors.margins: 12
             clip: true
@@ -96,7 +111,7 @@ StyledOverlayWidget {
 
             Column {
                 id: textColumn
-                visible: !root.singleStreamMode && !root.showSentenceColors
+                visible: !root.singleStreamMode && !root.showSentenceColors && !root.translationFailed
                 width: parent.width
                 y: Math.min(0, parent.height - height)
                 spacing: root.singleStreamMode ? 0 : (previewTranslationText.visible && stableTranslationText.visible ? 4 : 0)

@@ -113,6 +113,7 @@ Singleton {
                 property real textScale: 1.0
                 property bool sentenceHighlighting: true
                 property string translationGranularity: "phrase"
+                property string translationStyle: "natural"
             }
 
             property JsonObject audio: JsonObject {

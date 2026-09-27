@@ -7,7 +7,8 @@ import qs.modules.ii.overlay
 
 StyledOverlayWidget {
     id: root
-    title: Translation.tr("Screen Translation")
+    title: CaptionAppearance.translationStyle === "literal"
+        ? Translation.tr("Literal screen translation") : Translation.tr("Screen Translation")
     showCenterButton: true
     minimumWidth: 320
     minimumHeight: 80

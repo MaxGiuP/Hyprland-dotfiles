@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -40,6 +41,146 @@ class GeometryTests(unittest.TestCase):
         for region in ("0,0 0x20", "0,0 20x0", "0,0 -20x10", "0,0 2..0x10", "nan,0 20x10"):
             with self.subTest(region=region), self.assertRaises(ValueError):
                 backend.normalize_geometry(region)
+
+
+class TranslationStyleCliTests(unittest.TestCase):
+    def test_default_style_is_natural_and_literal_is_explicit(self):
+        arguments = [str(SCRIPT), "--state-file", "synthetic.json", "--region=0,0 100x40"]
+        with patch.object(sys, "argv", arguments):
+            self.assertEqual(backend.parse_args().translation_style, "natural")
+        with patch.object(sys, "argv", arguments + ["--translation-style", "literal"]):
+            self.assertEqual(backend.parse_args().translation_style, "literal")
+        with patch.object(sys, "argv", arguments + ["--translation-style", "unknown"]), \
+             patch.object(sys, "stderr", io.StringIO()), self.assertRaises(SystemExit):
+            backend.parse_args()
+
+
+class LiteralTranslatorTests(unittest.TestCase):
+    def setUp(self):
+        backend.STOP_REQUESTED.clear()
+
+    def test_literal_word_order_is_preserved_without_assuming_english_ocr_source(self):
+        with patch.object(backend, "translate_literal", return_value="I have twenty years.") as literal, \
+             patch.object(backend, "translate_text") as natural:
+            worker = backend.AsyncTranslator("en", translation_style="literal")
+            try:
+                worker.submit("Ho venti anni.")
+                wait_for(lambda: worker._thread is None)
+                translated, error, segments = worker.snapshot_segments()
+                self.assertEqual(translated, "I have twenty years.")
+                self.assertEqual(error, "")
+                self.assertEqual(segments[0]["source"], "Ho venti anni.")
+                self.assertEqual(segments[0]["translated"], "I have twenty years.")
+                self.assertFalse(segments[0]["pending"])
+                literal.assert_called_once_with("Ho venti anni.", "en", source_language="", stop_event=worker._closed)
+                natural.assert_not_called()
+            finally:
+                worker.close()
+
+    def test_literal_pending_and_errors_never_fall_back_to_natural_text(self):
+        started, release = threading.Event(), threading.Event()
+
+        def translate(*_, **__):
+            started.set()
+            release.wait(2)
+            raise RuntimeError("The local model is unavailable.")
+
+        with patch.object(backend, "translate_literal", side_effect=translate) as literal, \
+             patch.object(backend, "translate_text", return_value="A fluent fallback") as natural:
+            worker = backend.AsyncTranslator("en", translation_style="literal")
+            try:
+                worker.submit("Ho venti anni.")
+                self.assertTrue(started.wait(1))
+                pending = worker.snapshot_segments()[2][0]
+                self.assertEqual(pending["translated"], "")
+                self.assertTrue(pending["pending"])
+                release.set()
+                wait_for(lambda: worker._thread is None)
+                translated, error, failed = worker.snapshot_segments()
+                self.assertEqual(translated, "")
+                self.assertIn("Literal translation unavailable", error)
+                self.assertEqual(failed[0]["id"], pending["id"])
+                self.assertTrue(failed[0]["pending"])
+                worker.submit("Ho venti anni.")
+                self.assertEqual(literal.call_count, 1, "failed literal requests keep retry backoff")
+                natural.assert_not_called()
+            finally:
+                release.set()
+                worker.close()
+
+    def test_style_caches_are_isolated_and_natural_mode_keeps_existing_call(self):
+        with patch.object(backend, "translate_literal", return_value="I have twenty years.") as literal, \
+             patch.object(backend, "translate_text", return_value="I am twenty years old.") as natural:
+            normal_worker = backend.AsyncTranslator("en")
+            literal_worker = backend.AsyncTranslator("en", translation_style="literal")
+            try:
+                for worker in (normal_worker, literal_worker):
+                    worker.submit("Ho venti anni.")
+                    wait_for(lambda: worker._thread is None)
+                    worker.submit("Ho venti anni.")
+                self.assertEqual(normal_worker.result(), "I am twenty years old.")
+                self.assertEqual(literal_worker.result(), "I have twenty years.")
+                natural.assert_called_once_with("Ho venti anni.", "en", normal_worker._closed)
+                self.assertEqual(literal.call_count, 1)
+            finally:
+                normal_worker.close()
+                literal_worker.close()
+
+    def test_literal_model_requests_are_serial_even_with_multiple_pending_groups(self):
+        started, second_started, release = threading.Event(), threading.Event(), threading.Event()
+        calls = []
+
+        def translate(text, *_, **__):
+            calls.append(text)
+            if len(calls) == 1:
+                started.set()
+                release.wait(2)
+            else:
+                second_started.set()
+            return text.upper()
+
+        with patch.object(backend, "translate_literal", side_effect=translate):
+            worker = backend.AsyncTranslator("en", translation_style="literal")
+            try:
+                worker.submit("First sentence. Second sentence. Third sentence.")
+                self.assertTrue(started.wait(1))
+                self.assertFalse(second_started.wait(0.05), "only one local inference runs at a time")
+                release.set()
+                wait_for(lambda: worker._thread is None)
+                self.assertEqual(len(calls), 3)
+                self.assertEqual(worker.result(), "FIRST SENTENCE.\nSECOND SENTENCE.\nTHIRD SENTENCE.")
+            finally:
+                release.set()
+                worker.close()
+
+    def test_literal_close_signals_active_request_and_empty_results_are_errors(self):
+        started = threading.Event()
+
+        def translate(text, target_language, source_language, stop_event):
+            started.set()
+            stop_event.wait(2)
+            raise RuntimeError("Literal translation cancelled.")
+
+        with patch.object(backend, "translate_literal", side_effect=translate):
+            worker = backend.AsyncTranslator("en", translation_style="literal")
+            worker.submit("Synthetic source.")
+            self.assertTrue(started.wait(1))
+            worker.close()
+            self.assertIsNone(worker._thread)
+            self.assertEqual(worker.snapshot_segments(), ("", "", []))
+        with patch.object(backend, "translate_literal", return_value=""), \
+             patch.object(backend, "translate_text") as natural:
+            worker = backend.AsyncTranslator("en", translation_style="literal")
+            try:
+                worker.submit("Synthetic source.")
+                wait_for(lambda: worker._thread is None)
+                self.assertEqual(worker.result(), "")
+                self.assertIn("Literal translation", worker.snapshot()[1])
+                natural.assert_not_called()
+            finally:
+                worker.close()
+        with self.assertRaises(ValueError):
+            backend.AsyncTranslator("en", translation_style="unknown")
 
 
 class TranslatorTests(unittest.TestCase):
@@ -380,18 +521,21 @@ class OcrTests(unittest.TestCase):
 
 
 class MainLoopTests(unittest.TestCase):
-    def run_frames(self, frames, images=None, delayed_translation=False):
+    def run_frames(self, frames, images=None, delayed_translation=False, translation_style="natural"):
         backend.STOP_REQUESTED.clear()
         states = []
         with tempfile.TemporaryDirectory() as temp:
             args = argparse.Namespace(state_file=str(Path(temp) / "state.json"), region="-10,0 100x40",
                                       target_language="en", ocr_language="eng", interval_seconds=0.1,
-                                      confidence_threshold=60, translation_granularity="phrase")
+                                      confidence_threshold=60, translation_granularity="phrase",
+                                      translation_style=translation_style)
+            worker_styles = []
             # Fake translator results make frame/state timing deterministic.
             class Translator:
-                def __init__(self, language, granularity="phrase"):
+                def __init__(self, language, granularity="phrase", translation_style="natural"):
                     self.text = ""
                     self.submits = 0
+                    worker_styles.append(translation_style)
                 def submit(self, text):
                     self.text = text
                     self.submits += 1
@@ -427,6 +571,8 @@ class MainLoopTests(unittest.TestCase):
                  patch.object(backend.STOP_REQUESTED, "wait", side_effect=wait):
                 self.assertEqual(backend.main(), 0)
                 self.ocr_calls = ocr.call_count
+                self.assertEqual(worker_styles, [translation_style])
+                self.assertTrue(all(state["translation_style"] == translation_style for state in states))
         backend.STOP_REQUESTED.clear()
         return states[2:-1]
 
@@ -456,6 +602,12 @@ class MainLoopTests(unittest.TestCase):
         self.assertEqual(self.ocr_calls, 1)
         self.assertEqual([state["translated_text"] for state in states], ["", "HELLO"])
         self.assertFalse(states[-1]["translation_segments"][0]["pending"])
+
+    def test_literal_style_is_reported_in_initial_running_error_and_stopped_states(self):
+        states = self.run_frames([("synthetic", 90), RuntimeError("Synthetic OCR failure")],
+                                 translation_style="literal")
+        self.assertEqual([state["status"] for state in states], ["running", "error"])
+        self.assertTrue(all(state["translation_style"] == "literal" for state in states))
 
     def test_successful_low_confidence_capture_clears_previous_ocr_error(self):
         states = self.run_frames([("hello", 90), RuntimeError("Synthetic OCR failure"), ("noise", 10)])

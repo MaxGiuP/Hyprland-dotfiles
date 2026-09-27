@@ -54,6 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--language", default="auto")
     parser.add_argument("--target-language", choices=["en", "fr", "de", "es", "it", "pt", "nl", "ru", "zh", "ja", "ko", "pl", "ar", "hi", "tr", "sv", "da", "fi", "cs", "ro"], default="en")
     parser.add_argument("--translation-granularity", choices=["phrase", "sentence"], default="phrase")
+    parser.add_argument("--translation-style", choices=["natural", "literal"], default="natural")
     parser.add_argument("--model", default="tiny")
     parser.add_argument("--preset", choices=["realtime", "snappy", "balanced", "accurate"], default="realtime")
     parser.add_argument("--model-cache-dir", default="")
@@ -135,6 +136,8 @@ def build_base_state(args: argparse.Namespace) -> dict:
         "translated_stable_text": "",
         "translated_unstable_text": "",
         "translation_segments": [],
+        "translation_style": getattr(args, "translation_style", "natural"),
+        "translation_error": "",
         "source_language": "",
         "target_language": args.target_language,
         "history": [],
@@ -424,6 +427,16 @@ def split_display_text(committed_words: list[str], partial_text: str, revisable_
     return frozen_text, unstable_text
 
 
+def translate_literal(text: str, target_language: str, source_language: str = "",
+                      stop_event: threading.Event | None = None) -> str:
+    # Natural translation remains independent of the optional local provider.
+    try:
+        from literal_translation import translate_literal as local_literal_translation
+    except ImportError as error:
+        raise RuntimeError("Literal translation backend is not installed.") from error
+    return local_literal_translation(text, target_language, source_language, stop_event)
+
+
 def translate_text(text: str, target_language: str, source_language: str = "",
                    stop_event: threading.Event | None = None) -> str:
     if not text:
@@ -615,19 +628,24 @@ class AsyncTranslator:
     RETRY_SECONDS = 2.0
     MAX_WORKERS = 2
 
-    def __init__(self):
+    def __init__(self, translation_style: str = "natural"):
+        if translation_style not in {"natural", "literal"}:
+            raise ValueError("Translation style must be 'natural' or 'literal'.")
+        self.translation_style = translation_style
         self._lock = threading.Lock()
         self._ready = threading.Condition(self._lock)
         self._stop_event = threading.Event()
         self._pending: OrderedDict[str, tuple[str, str, str]] = OrderedDict()
         self._inflight: set[tuple[str, str, str]] = set()
         self._desired_by_stream: dict[str, tuple[str, str, str]] = {}
+        self._visible_tasks: dict[str, tuple[str, str, str]] = {}
+        self._errors: OrderedDict[tuple[str, str, str], str] = OrderedDict()
         self._cache: OrderedDict[tuple[str, str, str], str] = OrderedDict()
         self._retry_after: OrderedDict[tuple[str, str, str], float] = OrderedDict()
         self._latest_by_target: dict[tuple[str, str, str], tuple[str, str]] = {}
         self._threads = [threading.Thread(target=self._run,
                                          name=f"live-captions-translator-{index + 1}", daemon=True)
-                         for index in range(self.MAX_WORKERS)]
+                         for index in range(1 if translation_style == "literal" else self.MAX_WORKERS)]
         for thread in self._threads:
             thread.start()
 
@@ -643,8 +661,10 @@ class AsyncTranslator:
             if not normalized_text or (source_code and source_code == target_language):
                 self._pending.pop(stream, None)
                 self._desired_by_stream.pop(stream, None)
+                self._visible_tasks.pop(stream, None)
                 return normalized_text
 
+            self._visible_tasks[stream] = cache_key
             if cache_key in self._cache:
                 self._pending.pop(stream, None)
                 self._desired_by_stream.pop(stream, None)
@@ -668,7 +688,7 @@ class AsyncTranslator:
                 self._desired_by_stream[stream] = cache_key
                 self._ready.notify_all()
 
-            if allow_partial and latest is not None:
+            if allow_partial and self.translation_style == "natural" and latest is not None:
                 latest_source, latest_translation = latest
                 if latest_translation and self._is_reusable_translation(latest_source, normalized_text):
                     return latest_translation
@@ -681,8 +701,16 @@ class AsyncTranslator:
                                         if key in streams)
             self._desired_by_stream = {key: value for key, value in self._desired_by_stream.items()
                                        if key in streams}
+            self._visible_tasks = {key: value for key, value in self._visible_tasks.items()
+                                   if key in streams}
             self._latest_by_target = {key: value for key, value in self._latest_by_target.items()
                                       if key[2] in streams}
+
+    def error(self) -> str:
+        """Expose errors only for source revisions still visible in this pane."""
+        with self._lock:
+            return next((self._errors[task] for task in self._visible_tasks.values()
+                         if task in self._errors), "")
 
     @staticmethod
     def _is_reusable_translation(previous_source: str, next_source: str) -> bool:
@@ -701,6 +729,7 @@ class AsyncTranslator:
             self._stop_event.set()
             self._pending.clear()
             self._desired_by_stream.clear()
+            self._visible_tasks.clear()
             self._ready.notify_all()
         # Both subprocesses receive cancellation together. Use one bounded
         # deadline rather than adding a full shutdown timeout per worker.
@@ -714,15 +743,21 @@ class AsyncTranslator:
         while len(self._latest_by_target) > self.CACHE_LIMIT:
             del self._latest_by_target[next(iter(self._latest_by_target))]
 
-    def _finish(self, task: tuple[str, str, str], translated: str) -> None:
+    def _finish(self, task: tuple[str, str, str], translated: str, error: str = "") -> None:
         """Publish under the lock only to streams still requesting this revision."""
         if translated:
             self._cache[task] = translated
             self._cache.move_to_end(task)
             self._retry_after.pop(task, None)
+            self._errors.pop(task, None)
             while len(self._cache) > self.CACHE_LIMIT:
                 self._cache.popitem(last=False)
         else:
+            if self.translation_style == "literal":
+                self._errors[task] = error or "Literal translation unavailable. Retrying…"
+                self._errors.move_to_end(task)
+                while len(self._errors) > self.CACHE_LIMIT:
+                    self._errors.popitem(last=False)
             self._retry_after[task] = time.monotonic() + self.RETRY_SECONDS
             self._retry_after.move_to_end(task)
             while len(self._retry_after) > self.CACHE_LIMIT:
@@ -757,17 +792,21 @@ class AsyncTranslator:
                     break
 
             text, target_language, source_language = task
+            error = ""
             try:
-                translated = translate_text(text, target_language, source_language, self._stop_event)
-            except Exception:
+                provider = translate_literal if self.translation_style == "literal" else translate_text
+                translated = provider(text, target_language, source_language, self._stop_event)
+            except Exception as exception:
                 # A provider or decoding error must not permanently kill a worker.
                 translated = ""
+                if self.translation_style == "literal":
+                    error = str(exception) or "Literal translation unavailable. Retrying…"
 
             with self._ready:
                 self._inflight.discard(task)
                 if self._stop_event.is_set():
                     return
-                self._finish(task, translated)
+                self._finish(task, translated, error)
                 self._ready.notify_all()
 
 
@@ -1190,7 +1229,7 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
     except OSError as error:
         set_status(state_path, state, "error", f"Could not start audio capture: {error}")
         return 3
-    translator = AsyncTranslator()
+    translator = AsyncTranslator(getattr(args, "translation_style", "natural"))
     segment_tracker = SegmentTracker(granularity=getattr(args, "translation_granularity", "phrase"))
     last_display_text = ""
     last_translated_text = ""
@@ -1229,12 +1268,15 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
                     args.target_language, transcriber.source_language,
                 )
 
+            translation_error = translator.error() if args.display_mode != "captions" else ""
+
             if (
                 display_text == last_display_text
                 and translated_text == last_translated_text
                 and translated_stable_text == last_translated_stable_text
                 and translated_unstable_text == last_translated_unstable_text
                 and translation_segments == state.get("translation_segments")
+                and translation_error == state.get("translation_error", "")
                 and committed_count == last_committed_count
                 and stable_text == state.get("stable_text")
                 and unstable_text == state.get("unstable_text")
@@ -1251,7 +1293,8 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
 
             state.update({
                 "status": "running",
-                "message": language_message or "Listening to audio…",
+                "message": translation_error or language_message or "Listening to audio…",
+                "translation_error": translation_error,
                 "current_text": display_text,
                 "stable_text": stable_text,
                 "unstable_text": unstable_text,
@@ -1276,7 +1319,7 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
         capture.stop()
 
     state.update({"status": "stopped", "message": "Live captions stopped.",
-                  "translation_segments": []})
+                  "translation_segments": [], "translation_error": ""})
     write_state(state_path, state)
     return 0
 
@@ -1342,7 +1385,7 @@ def main() -> int:
         args.fast_window_seconds,
     )
     transcriber.runtime_device = runtime_device
-    translator = AsyncTranslator()
+    translator = AsyncTranslator(getattr(args, "translation_style", "natural"))
     segment_tracker = SegmentTracker(granularity=getattr(args, "translation_granularity", "phrase"))
     last_fast_tick = time.monotonic()
     last_stable_tick = time.monotonic()
@@ -1434,12 +1477,15 @@ def main() -> int:
                     args.target_language, transcriber.source_language,
                 )
 
+            translation_error = translator.error() if args.display_mode != "captions" else ""
+
             if (
                 display_text == last_display_text
                 and translated_text == last_translated_text
                 and translated_stable_text == last_translated_stable_text
                 and translated_unstable_text == last_translated_unstable_text
                 and translation_segments == state.get("translation_segments")
+                and translation_error == state.get("translation_error", "")
                 and committed_count == last_committed_count
                 and stable_text == state.get("stable_text")
                 and unstable_text == state.get("unstable_text")
@@ -1456,7 +1502,8 @@ def main() -> int:
 
             state.update({
                 "status": "running",
-                "message": "Listening to audio…",
+                "message": translation_error or "Listening to audio…",
+                "translation_error": translation_error,
                 "current_text": display_text,
                 "stable_text": stable_text,
                 "unstable_text": unstable_text,
@@ -1481,7 +1528,7 @@ def main() -> int:
         capture.stop()
 
     state.update({"status": "stopped", "message": "Live captions stopped.",
-                  "translation_segments": []})
+                  "translation_segments": [], "translation_error": ""})
     write_state(state_path, state)
     return 0
 
