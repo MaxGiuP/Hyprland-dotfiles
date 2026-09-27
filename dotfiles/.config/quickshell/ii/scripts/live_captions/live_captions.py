@@ -13,6 +13,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -53,7 +54,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--display-mode", choices=["captions", "translated", "bilingual"], default="bilingual")
     parser.add_argument("--language", default="auto")
     parser.add_argument("--target-language", choices=["en", "fr", "de", "es", "it", "pt", "nl", "ru", "zh", "ja", "ko", "pl", "ar", "hi", "tr", "sv", "da", "fi", "cs", "ro"], default="en")
-    parser.add_argument("--translation-granularity", choices=["phrase", "sentence"], default="phrase")
+    parser.add_argument("--translation-granularity", choices=["phrase", "sentence"], default="sentence")
     parser.add_argument("--translation-style", choices=["natural", "literal"], default="natural")
     parser.add_argument("--model", default="tiny")
     parser.add_argument("--preset", choices=["realtime", "snappy", "balanced", "accurate"], default="realtime")
@@ -428,13 +429,15 @@ def split_display_text(committed_words: list[str], partial_text: str, revisable_
 
 
 def translate_literal(text: str, target_language: str, source_language: str = "",
-                      stop_event: threading.Event | None = None) -> str:
+                      stop_event: threading.Event | None = None, *, on_progress=None,
+                      cache=None) -> str:
     # Natural translation remains independent of the optional local provider.
     try:
         from literal_translation import translate_literal as local_literal_translation
     except ImportError as error:
         raise RuntimeError("Literal translation backend is not installed.") from error
-    return local_literal_translation(text, target_language, source_language, stop_event)
+    return local_literal_translation(text, target_language, source_language, stop_event,
+                                     on_progress=on_progress, cache=cache)
 
 
 def translate_text(text: str, target_language: str, source_language: str = "",
@@ -637,10 +640,16 @@ class AsyncTranslator:
         self._stop_event = threading.Event()
         self._pending: OrderedDict[str, tuple[str, str, str]] = OrderedDict()
         self._inflight: set[tuple[str, str, str]] = set()
+        self._task_stops: dict[tuple[str, str, str], threading.Event] = {}
         self._desired_by_stream: dict[str, tuple[str, str, str]] = {}
         self._visible_tasks: dict[str, tuple[str, str, str]] = {}
         self._errors: OrderedDict[tuple[str, str, str], str] = OrderedDict()
         self._cache: OrderedDict[tuple[str, str, str], str] = OrderedDict()
+        self._progress: OrderedDict[tuple[str, str, str], dict] = OrderedDict()
+        self._literal_cache = None
+        if translation_style == "literal":
+            from literal_translation import LiteralCache
+            self._literal_cache = LiteralCache()
         self._retry_after: OrderedDict[tuple[str, str, str], float] = OrderedDict()
         self._latest_by_target: dict[tuple[str, str, str], tuple[str, str]] = {}
         self._threads = [threading.Thread(target=self._run,
@@ -662,9 +671,11 @@ class AsyncTranslator:
                 self._pending.pop(stream, None)
                 self._desired_by_stream.pop(stream, None)
                 self._visible_tasks.pop(stream, None)
+                self._cancel_obsolete_literal_work()
                 return normalized_text
 
             self._visible_tasks[stream] = cache_key
+            self._cancel_obsolete_literal_work()
             if cache_key in self._cache:
                 self._pending.pop(stream, None)
                 self._desired_by_stream.pop(stream, None)
@@ -676,7 +687,8 @@ class AsyncTranslator:
             if self._stop_event.is_set() or time.monotonic() < self._retry_after.get(cache_key, 0):
                 self._pending.pop(stream, None)
                 self._desired_by_stream.pop(stream, None)
-            elif cache_key in self._inflight:
+            elif cache_key in self._inflight and not (
+                    cache_key in self._task_stops and self._task_stops[cache_key].is_set()):
                 # A revision can revert to text already being translated. Remove
                 # its superseded queue entry even though no new task is needed.
                 self._pending.pop(stream, None)
@@ -694,6 +706,68 @@ class AsyncTranslator:
                     return latest_translation
         return ""
 
+    @staticmethod
+    def _exact_prefix(prefix: str, text: str) -> bool:
+        # Never reuse half of a word, or a translation of text Whisper revised.
+        return bool(prefix) and text.startswith(prefix) and (
+            len(prefix) == len(text) or text[len(prefix)].isspace()
+            or (unicodedata.category(text[len(prefix)]).startswith("P")
+                and text[len(prefix)] not in "'’_-\u2010\u2011")
+        )
+
+    def request_snapshot(self, text: str, target_language: str, source_language: str = "", *,
+                         stream: str = "live") -> dict:
+        """Keep completed prefixes visible while a growing source is translated."""
+        empty = {"source": "", "translated": "", "complete": False}
+        if self._stop_event.is_set():
+            return empty
+        text = normalize_text(text)
+        source_code = source_language.replace("_", "-").split("-")[0].lower()
+        if source_code == "auto":
+            source_code = ""
+        translated = self.request(text, target_language, source_code,
+                                  stream=stream, allow_partial=False)
+        if translated:
+            with self._lock:
+                if self._stop_event.is_set():
+                    return empty
+                return {"source": text, "translated": translated, "complete": True}
+        # The literal cache keeps a revisable tail for new right-hand context.
+        # Do not bypass that safeguard by exposing all of an older callback.
+        best = (self._literal_cache.snapshot(text, target_language, source_code)
+                if self._literal_cache is not None else None) or empty
+        with self._lock:
+            if self._stop_event.is_set():
+                return empty
+            candidates = [(key, {"source": key[0], "translated": value})
+                          for key, value in self._cache.items()]
+            candidates.extend(self._progress.items())
+            for key, candidate in candidates:
+                if self.translation_style == "literal" and key[0] != text:
+                    continue
+                prefix = candidate["source"]
+                if (key[1:] == (target_language, source_code)
+                        and candidate["translated"] and self._exact_prefix(prefix, text)
+                        and len(prefix) >= len(best["source"])):
+                    best = {"source": prefix, "translated": candidate["translated"],
+                            "complete": prefix == text and candidate.get("complete", True)}
+        return best
+
+    def _publish_progress(self, task: tuple[str, str, str], snapshot: dict) -> None:
+        prefix = normalize_text(snapshot.get("source", ""))
+        translated = normalize_text(snapshot.get("translated", ""))
+        if not translated or not self._exact_prefix(prefix, task[0]):
+            return
+        with self._lock:
+            task_stop = self._task_stops.get(task)
+            if self._stop_event.is_set() or (task_stop is not None and task_stop.is_set()):
+                return
+            self._progress[task] = {"source": prefix, "translated": translated,
+                                    "complete": bool(snapshot.get("complete", False))}
+            self._progress.move_to_end(task)
+            while len(self._progress) > self.CACHE_LIMIT:
+                self._progress.popitem(last=False)
+
     def retain_streams(self, streams: set[str]) -> None:
         """Drop obsolete queued phrases when the source window scrolls."""
         with self._lock:
@@ -705,6 +779,15 @@ class AsyncTranslator:
                                    if key in streams}
             self._latest_by_target = {key: value for key, value in self._latest_by_target.items()
                                       if key[2] in streams}
+            self._cancel_obsolete_literal_work()
+
+    def _cancel_obsolete_literal_work(self) -> None:
+        """Cancel unrelated work, while useful prefixes survive ASR tail edits."""
+        for task, stop in self._task_stops.items():
+            if not any(task[1:] == visible[1:] and self._literal_cache is not None
+                       and self._literal_cache.can_reuse_source(task[0], visible[0])
+                       for visible in self._visible_tasks.values()):
+                stop.set()
 
     def error(self) -> str:
         """Expose errors only for source revisions still visible in this pane."""
@@ -730,6 +813,8 @@ class AsyncTranslator:
             self._pending.clear()
             self._desired_by_stream.clear()
             self._visible_tasks.clear()
+            for stop in self._task_stops.values():
+                stop.set()
             self._ready.notify_all()
         # Both subprocesses receive cancellation together. Use one bounded
         # deadline rather than adding a full shutdown timeout per worker.
@@ -789,13 +874,21 @@ class AsyncTranslator:
                         self._desired_by_stream.pop(stream, None)
                         continue
                     self._inflight.add(task)
+                    task_stop = self._stop_event
+                    if self.translation_style == "literal":
+                        task_stop = threading.Event()
+                        self._task_stops[task] = task_stop
                     break
 
             text, target_language, source_language = task
             error = ""
             try:
-                provider = translate_literal if self.translation_style == "literal" else translate_text
-                translated = provider(text, target_language, source_language, self._stop_event)
+                if self.translation_style == "literal":
+                    translated = translate_literal(text, target_language, source_language,
+                        task_stop, cache=self._literal_cache,
+                        on_progress=lambda snapshot: self._publish_progress(task, snapshot))
+                else:
+                    translated = translate_text(text, target_language, source_language, self._stop_event)
             except Exception as exception:
                 # A provider or decoding error must not permanently kill a worker.
                 translated = ""
@@ -804,9 +897,11 @@ class AsyncTranslator:
 
             with self._ready:
                 self._inflight.discard(task)
+                self._task_stops.pop(task, None)
                 if self._stop_event.is_set():
                     return
-                self._finish(task, translated, error)
+                if not task_stop.is_set():
+                    self._finish(task, translated, error)
                 self._ready.notify_all()
 
 
@@ -836,18 +931,20 @@ def paired_translations(translator: AsyncTranslator, tracker: SegmentTracker,
     translator.retain_streams({item["id"] for item in segments})
     # Start the most recent phrase first; unchanged older phrases use the cache.
     for item in reversed(segments):
-        translated = translator.request(item["source"], target_language, source_language,
-                                        stream=item["id"], allow_partial=False)
-        item.update({"translated": translated, "pending": not bool(translated)})
+        snapshot = translator.request_snapshot(item["source"], target_language, source_language,
+                                               stream=item["id"])
+        item.update({"translated": snapshot["translated"], "translated_source": snapshot["source"],
+                     "pending": not snapshot["complete"]})
 
     stable_source = normalize_text(stable_text)
     stable_parts, live_parts = [], []
     offset = 0
     for item in segments:
-        position = stable_source.find(item["source"], offset)
-        if position >= 0:
+        completed_source = item["translated_source"]
+        position = stable_source.find(completed_source, offset)
+        if completed_source and position >= 0:
             stable_parts.append(item["translated"])
-            offset = position + len(item["source"])
+            offset = position + len(completed_source)
         else:
             live_parts.append(item["translated"])
     return (" ".join(item["translated"] for item in segments if item["translated"]),
@@ -1000,13 +1097,13 @@ class StreamingTranscriber:
                 raise CaptionRuntimeFallback(str(error))
             raise RuntimeError(f"Speech decoding failed: {error}") from error
 
-    def stabilize(self) -> str:
+    def stabilize(self, final: bool = False) -> str:
         audio = self.audio_buffer
         if not self._audio_usable(audio):
             return self._committed_tail()
 
         buf_dur = len(audio) / SAMPLE_RATE
-        threshold = buf_dur * self.commit_ratio
+        threshold = buf_dur if final else buf_dur * self.commit_ratio
 
         try:
             segs, info = self.model.transcribe(
@@ -1044,16 +1141,36 @@ class StreamingTranscriber:
             (s, e, w) for s, e, w in words
             if e <= threshold and e > self.committed_audio_end
             and s >= self.committed_audio_end - 0.05
+            and (not final or self._word_has_audio(s, e))
         ]
 
         if to_commit:
             last_end = to_commit[-1][1]
             self._append_committed_words([w for _, _, w in to_commit])
-            trim_secs = max(0.0, last_end - 0.45)
+            # A final pass must cover the entire remaining utterance. Keep its
+            # timestamp origin intact until finalize_phrase clears the buffer.
+            trim_secs = 0.0 if final else max(0.0, last_end - 0.45)
             trim_samples = int(trim_secs * SAMPLE_RATE)
             self.committed_audio_end = last_end - trim_samples / SAMPLE_RATE
             if trim_samples > 0:
                 self.audio_buffer = self.audio_buffer[trim_samples:]
+        return self._committed_tail()
+
+    def _word_has_audio(self, start: float, end: float) -> bool:
+        first = max(0, int(start * SAMPLE_RATE))
+        last = min(len(self.audio_buffer), int(end * SAMPLE_RATE))
+        audio = self.audio_buffer[first:last]
+        return bool(len(audio)) and float(np.sqrt(np.mean(audio ** 2))) >= self.silence_threshold
+
+    def finalize_phrase(self, partial_text: str = "") -> str:
+        """Flush real uncommitted speech before discarding a silent audio window."""
+        previous_end = self.committed_audio_end
+        uncommitted = self.audio_buffer[max(0, int(previous_end * SAMPLE_RATE)):]
+        had_uncommitted_speech = self._audio_usable(uncommitted)
+        # Exceptions leave the buffer intact so a CPU fallback can retry it.
+        self.stabilize(final=True)
+        fallback = partial_text if had_uncommitted_speech and self.committed_audio_end <= previous_end else ""
+        self.commit_partial_phrase(fallback)
         return self._committed_tail()
 
     def speech_active(self) -> bool:
@@ -1230,7 +1347,7 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
         set_status(state_path, state, "error", f"Could not start audio capture: {error}")
         return 3
     translator = AsyncTranslator(getattr(args, "translation_style", "natural"))
-    segment_tracker = SegmentTracker(granularity=getattr(args, "translation_granularity", "phrase"))
+    segment_tracker = SegmentTracker(granularity=getattr(args, "translation_granularity", "sentence"))
     last_display_text = ""
     last_translated_text = ""
     last_translated_stable_text = ""
@@ -1386,7 +1503,7 @@ def main() -> int:
     )
     transcriber.runtime_device = runtime_device
     translator = AsyncTranslator(getattr(args, "translation_style", "natural"))
-    segment_tracker = SegmentTracker(granularity=getattr(args, "translation_granularity", "phrase"))
+    segment_tracker = SegmentTracker(granularity=getattr(args, "translation_granularity", "sentence"))
     last_fast_tick = time.monotonic()
     last_stable_tick = time.monotonic()
     last_display_text = ""
@@ -1457,8 +1574,21 @@ def main() -> int:
                 phrase_closed_for_silence = False
             elif now - silence_started_at > 0.75:
                 if not phrase_closed_for_silence:
-                    if transcriber.commit_partial_phrase(current_partial or transcriber.last_partial):
-                        committed_tail = transcriber._committed_tail()
+                    final_partial = current_partial or transcriber.last_partial
+                    try:
+                        committed_tail = transcriber.finalize_phrase(final_partial)
+                    except CaptionRuntimeFallback:
+                        model, runtime_device = load_model(model_path, force_device="cpu")
+                        transcriber.model = model
+                        transcriber.runtime_device = runtime_device
+                        state.update({
+                            "status": "running",
+                            "message": "CUDA failed during decoding, fell back to CPU.",
+                            "runtime_device": runtime_device,
+                            "backend_ready": True,
+                        })
+                        write_state(state_path, state)
+                        committed_tail = transcriber.finalize_phrase(final_partial)
                     phrase_closed_for_silence = True
                 current_partial = ""
 

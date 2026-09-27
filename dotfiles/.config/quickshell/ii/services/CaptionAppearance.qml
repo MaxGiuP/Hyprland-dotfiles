@@ -8,7 +8,7 @@ Singleton {
 
     readonly property real textScale: root.normalizedScale(Persistent.states.captionAppearance.textScale)
     readonly property bool sentenceHighlighting: Persistent.states.captionAppearance.sentenceHighlighting
-    readonly property string translationGranularity: Persistent.states.captionAppearance.translationGranularity === "sentence" ? "sentence" : "phrase"
+    readonly property string translationGranularity: Persistent.states.captionAppearance.translationGranularity === "phrase" ? "phrase" : "sentence"
     readonly property string translationStyle: Persistent.states.captionAppearance.translationStyle === "literal" ? "literal" : "natural"
     readonly property int mainTextPixelSize: Math.round(Appearance.font.pixelSize.large * root.textScale)
 
@@ -28,10 +28,27 @@ Singleton {
     }
 
     function setTranslationGranularity(value) {
-        Persistent.states.captionAppearance.translationGranularity = value === "sentence" ? "sentence" : "phrase"
+        Persistent.states.captionAppearance.translationQualityVersion = 1
+        Persistent.states.captionAppearance.translationGranularity = value === "phrase" ? "phrase" : "sentence"
     }
 
     function setTranslationStyle(value) {
         Persistent.states.captionAppearance.translationStyle = value === "literal" ? "literal" : "natural"
     }
+
+    function migrateTranslationQuality() {
+        if (!Persistent.ready || (Persistent.states.captionAppearance.translationQualityVersion ?? 0) >= 1)
+            return
+        // Restore sentence context once for earlier installations. A later
+        // explicit choice of short phrases is retained across shell reloads.
+        Persistent.states.captionAppearance.translationQualityVersion = 1
+        Persistent.states.captionAppearance.translationGranularity = "sentence"
+    }
+
+    Connections {
+        target: Persistent
+        function onReadyChanged() { root.migrateTranslationQuality() }
+    }
+
+    Component.onCompleted: root.migrateTranslationQuality()
 }

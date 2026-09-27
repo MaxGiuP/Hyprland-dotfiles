@@ -13,7 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "live_screen_translation.py"
@@ -48,6 +48,7 @@ class TranslationStyleCliTests(unittest.TestCase):
         arguments = [str(SCRIPT), "--state-file", "synthetic.json", "--region=0,0 100x40"]
         with patch.object(sys, "argv", arguments):
             self.assertEqual(backend.parse_args().translation_style, "natural")
+            self.assertEqual(backend.parse_args().translation_granularity, "sentence")
         with patch.object(sys, "argv", arguments + ["--translation-style", "literal"]):
             self.assertEqual(backend.parse_args().translation_style, "literal")
         with patch.object(sys, "argv", arguments + ["--translation-style", "unknown"]), \
@@ -58,6 +59,11 @@ class TranslationStyleCliTests(unittest.TestCase):
 class LiteralTranslatorTests(unittest.TestCase):
     def setUp(self):
         backend.STOP_REQUESTED.clear()
+        self.cache = Mock()
+        self.cache.snapshot.return_value = None
+        cache_factory = patch.object(backend, "create_literal_cache", return_value=self.cache)
+        cache_factory.start()
+        self.addCleanup(cache_factory.stop)
 
     def test_literal_word_order_is_preserved_without_assuming_english_ocr_source(self):
         with patch.object(backend, "translate_literal", return_value="I have twenty years.") as literal, \
@@ -70,9 +76,16 @@ class LiteralTranslatorTests(unittest.TestCase):
                 self.assertEqual(translated, "I have twenty years.")
                 self.assertEqual(error, "")
                 self.assertEqual(segments[0]["source"], "Ho venti anni.")
+                self.assertEqual(segments[0]["translated_source"], "Ho venti anni.")
                 self.assertEqual(segments[0]["translated"], "I have twenty years.")
                 self.assertFalse(segments[0]["pending"])
-                literal.assert_called_once_with("Ho venti anni.", "en", source_language="", stop_event=worker._closed)
+                self.assertEqual(literal.call_count, 1)
+                self.assertEqual(literal.call_args.args, ("Ho venti anni.", "en"))
+                self.assertEqual(literal.call_args.kwargs["source_language"], "")
+                self.assertIsInstance(literal.call_args.kwargs["stop_event"], threading.Event)
+                self.assertIs(literal.call_args.kwargs["cache"], self.cache)
+                self.assertTrue(callable(literal.call_args.kwargs["on_progress"]))
+                self.cache.snapshot.assert_called_with("Ho venti anni.", "en", "")
                 natural.assert_not_called()
             finally:
                 worker.close()
@@ -156,7 +169,7 @@ class LiteralTranslatorTests(unittest.TestCase):
     def test_literal_close_signals_active_request_and_empty_results_are_errors(self):
         started = threading.Event()
 
-        def translate(text, target_language, source_language, stop_event):
+        def translate(text, target_language, source_language, stop_event, **kwargs):
             started.set()
             stop_event.wait(2)
             raise RuntimeError("Literal translation cancelled.")
@@ -181,6 +194,271 @@ class LiteralTranslatorTests(unittest.TestCase):
                 worker.close()
         with self.assertRaises(ValueError):
             backend.AsyncTranslator("en", translation_style="unknown")
+
+    def test_streamed_prefix_stays_visible_across_successive_source_growth(self):
+        first, latest = "I have read the book", "I have read the book today with you"
+        callbacks, calls = {}, []
+        release_first, release_latest = threading.Event(), threading.Event()
+        self.cache.snapshot.side_effect = lambda source, *_: (
+            {"source": "I have", "translated": "Ich habe", "complete": False}
+            if source != first else None)
+
+        def translate(text, *_, on_progress, **kwargs):
+            calls.append(text)
+            callbacks[text] = on_progress
+            (release_first if text == first else release_latest).wait(2)
+            return "Ich habe gelesen das Buch" if text == first else "Ich habe gelesen das Buch heute mit dir"
+
+        with patch.object(backend, "translate_literal", side_effect=translate):
+            worker = backend.AsyncTranslator("de", translation_style="literal")
+            try:
+                worker.submit(first)
+                wait_for(lambda: first in callbacks)
+                callbacks[first]({"source": "I", "translated": "Ich", "complete": False})
+                original = worker.snapshot_segments()[2][0]
+                self.assertEqual(original["translated_source"], "I")
+                self.assertEqual(worker.result(), "Ich")
+                for source in (first + " today", first + " today with", latest):
+                    worker.submit(source)
+                    callbacks[first]({"source": first, "translated": "Ich habe gelesen das Buch", "complete": True})
+                    translated, error, segments = worker.snapshot_segments()
+                    self.assertEqual(translated, "Ich habe")
+                    self.assertEqual(error, "")
+                    self.assertEqual(len(segments), 1, "progress keeps one logical color identity")
+                    self.assertEqual(segments[0]["id"], original["id"])
+                    self.assertEqual(segments[0]["source"], source)
+                    self.assertEqual(segments[0]["translated_source"], "I have",
+                                     "append growth honors the cache's revisable three-word buffer")
+                    self.assertTrue(segments[0]["pending"])
+                release_first.set()
+                wait_for(lambda: latest in callbacks)
+                self.assertEqual(calls, [first, latest], "obsolete intermediate requests are dropped")
+                callbacks[latest]({"source": "I have read", "translated": "Ich habe gelesen", "complete": False})
+                self.assertEqual(worker.result(), "Ich habe gelesen")
+                current = worker.snapshot_segments()[2][0]
+                self.assertEqual(current["translated_source"], "I have read")
+                self.assertEqual(current["source"], latest)
+                self.assertEqual(current["id"], original["id"])
+                callbacks[latest]({"source": "I", "translated": "Ich", "complete": False})
+                self.assertEqual(worker.result(), "Ich habe gelesen", "late shorter updates cannot rewind progress")
+                release_latest.set()
+                wait_for(lambda: worker._thread is None)
+                final = worker.snapshot_segments()[2][0]
+                self.assertFalse(final["pending"])
+                self.assertEqual(final["translated_source"], latest)
+            finally:
+                release_first.set()
+                release_latest.set()
+                worker.close()
+
+    def test_late_progress_cannot_survive_source_correction_reset_or_stop(self):
+        callbacks = []
+
+        def translate(text, *_, on_progress, stop_event, **kwargs):
+            callbacks.append(on_progress)
+            stop_event.wait(2)
+            on_progress({"source": text, "translated": "Late translation", "complete": True})
+            return "Late translation"
+
+        with patch.object(backend, "translate_literal", side_effect=translate):
+            worker = backend.AsyncTranslator("de", translation_style="literal")
+            try:
+                worker.submit("Old source words")
+                wait_for(lambda: callbacks)
+                progress = {"source": "Old", "translated": "Alt", "complete": False}
+                callbacks[0](progress)
+                self.assertEqual(worker.result(), "Alt")
+                worker.submit("Old corrected words")
+                self.assertEqual(worker.result(), "", "progress from corrected source is removed immediately")
+                callbacks[0](progress)
+                self.assertEqual(worker.result(), "")
+                worker.reset()
+                worker.submit("Old source words")
+                callbacks[0](progress)
+                self.assertEqual(worker.result(), "", "the previous reset epoch cannot publish again")
+                worker.close()
+                callbacks[0](progress)
+                self.assertEqual(worker.snapshot_segments(), ("", "", []))
+                self.assertEqual(worker._progress, {})
+            finally:
+                worker.close()
+
+    def test_cached_literal_progress_is_visible_before_next_request_returns(self):
+        started, release = threading.Event(), threading.Event()
+        self.cache.snapshot.return_value = {"source": "I have", "translated": "Ich habe", "complete": False}
+
+        def translate(*_, **kwargs):
+            started.set()
+            release.wait(2)
+            return "Ich habe gelesen"
+
+        with patch.object(backend, "translate_literal", side_effect=translate):
+            worker = backend.AsyncTranslator("de", translation_style="literal")
+            try:
+                worker.submit("I have read")
+                self.assertTrue(started.wait(1))
+                translated, error, segments = worker.snapshot_segments()
+                self.assertEqual(translated, "Ich habe")
+                self.assertEqual(error, "")
+                self.assertEqual(segments[0]["translated_source"], "I have")
+                self.assertTrue(segments[0]["pending"])
+            finally:
+                release.set()
+                worker.close()
+
+    def test_obsolete_error_keeps_valid_progress_and_does_not_mark_current_source_failed(self):
+        callbacks = {}
+        release_old, release_current = threading.Event(), threading.Event()
+        self.cache.snapshot.side_effect = lambda source, *_: (
+            {"source": "I have", "translated": "Ich habe", "complete": False}
+            if source == "I have read" else None)
+
+        def translate(text, *_, on_progress, **kwargs):
+            callbacks[text] = on_progress
+            if text == "I have":
+                release_old.wait(2)
+                raise RuntimeError("Obsolete inference failed")
+            release_current.wait(2)
+            return "Ich habe gelesen"
+
+        with patch.object(backend, "translate_literal", side_effect=translate):
+            worker = backend.AsyncTranslator("de", translation_style="literal")
+            try:
+                worker.submit("I have")
+                wait_for(lambda: "I have" in callbacks)
+                worker.submit("I have read")
+                callbacks["I have"]({"source": "I have", "translated": "Ich habe", "complete": False})
+                release_old.set()
+                wait_for(lambda: "I have read" in callbacks)
+                self.assertEqual(worker.snapshot(), ("Ich habe", ""))
+                self.assertTrue(worker.snapshot_segments()[2][0]["pending"])
+            finally:
+                release_old.set()
+                release_current.set()
+                worker.close()
+
+    def test_unrelated_edit_reset_and_scroll_out_cancel_literal_work_before_next_request(self):
+        for change in ("edit", "reset", "scroll"):
+            with self.subTest(change=change):
+                old_started, old_cancelled, new_started = (threading.Event() for _ in range(3))
+
+                def translate(text, *_, stop_event, **kwargs):
+                    if text == "Old sentence.":
+                        old_started.set()
+                        if stop_event.wait(1):
+                            old_cancelled.set()
+                        return "Stale result from cancelled request"
+                    new_started.set()
+                    return text.upper()
+
+                with patch.object(backend, "translate_literal", side_effect=translate):
+                    worker = backend.AsyncTranslator("de", translation_style="literal")
+                    try:
+                        worker.submit("Old sentence.")
+                        self.assertTrue(old_started.wait(1))
+                        if change == "reset":
+                            worker.reset()
+                        source = ("Old sentence. " + " ".join(f"Sentence {index}." for index in range(12))
+                                  if change == "scroll" else "New sentence.")
+                        worker.submit(source)
+                        self.assertTrue(old_cancelled.wait(0.5), "obsolete model work must release capacity promptly")
+                        self.assertTrue(new_started.wait(0.5))
+                        wait_for(lambda: worker._thread is None)
+                        self.assertNotIn("Old sentence.", worker._cache)
+                        self.assertNotIn("Stale result", worker.result())
+                        self.assertEqual(worker.snapshot()[1], "")
+                    finally:
+                        worker.close()
+
+    def test_shared_streaming_cache_revises_tail_and_requests_only_missing_words(self):
+        import literal_translation as literal
+
+        first, latest = "I have read the book", "I have read the book today"
+        first_started, latest_started = threading.Event(), threading.Event()
+        release_first, release_latest = threading.Event(), threading.Event()
+        requests = []
+        glosses = {"0": "Ich", "1": "habe", "2": "gelesen", "3": "das", "4": "Buch", "5": "heute"}
+
+        def request(path, payload, *, on_content, **kwargs):
+            data = json.loads(payload["messages"][-1]["content"])
+            requests.append(data)
+            content = json.dumps({key: glosses[key] for key in data["words"]})
+            if data["context"] == first:
+                on_content(content)
+                first_started.set()
+                release_first.wait(2)
+            else:
+                latest_started.set()
+                release_latest.wait(2)
+                on_content(content)
+            return {"done": True, "message": {"content": content}}
+
+        with patch.object(backend, "create_literal_cache", return_value=literal.LiteralCache()), \
+             patch.object(literal, "_installed_model", return_value="synthetic-model"), \
+             patch.object(literal, "_request_json", side_effect=request):
+            worker = backend.AsyncTranslator("de", translation_style="literal")
+            try:
+                worker.submit(first)
+                self.assertTrue(first_started.wait(1))
+                self.assertEqual(worker.result(), "Ich habe gelesen das Buch")
+                worker.submit(latest)
+                self.assertEqual(worker.result(), "Ich habe", "three context-sensitive words must be revised")
+                self.assertEqual(worker.snapshot_segments()[2][0]["translated_source"], "I have")
+                release_first.set()
+                self.assertTrue(latest_started.wait(1))
+                self.assertEqual(worker.result(), "Ich habe")
+                self.assertEqual(requests[-1]["context"], latest, "missing words retain complete sentence context")
+                self.assertEqual(set(requests[-1]["words"]), {"2", "3", "4", "5"})
+                release_latest.set()
+                wait_for(lambda: worker._thread is None)
+                self.assertEqual(worker.result(), "Ich habe gelesen das Buch heute")
+                self.assertFalse(worker.snapshot_segments()[2][0]["pending"])
+            finally:
+                release_first.set()
+                release_latest.set()
+                worker.close()
+
+    def test_rapid_tail_revisions_retain_useful_literal_work_and_show_progress(self):
+        import literal_translation as literal
+
+        stable = "I have already discussed the important details of this project"
+        cancelled, requests = [], []
+
+        def request(path, payload, *, on_content, stop_event, **kwargs):
+            data = json.loads(payload["messages"][-1]["content"])
+            requests.append(data["context"])
+            if stop_event.wait(0.08):
+                cancelled.append(data["context"])
+                raise RuntimeError("Literal translation cancelled.")
+            content = json.dumps({key: "wort" for key in data["words"]})
+            on_content(content)
+            return {"done": True, "message": {"content": content}}
+
+        with patch.object(backend, "create_literal_cache", return_value=literal.LiteralCache()), \
+             patch.object(literal, "_installed_model", return_value="synthetic-model"), \
+             patch.object(literal, "_request_json", side_effect=request):
+            worker = backend.AsyncTranslator("de", translation_style="literal")
+            try:
+                visible = []
+                for revision in range(30):
+                    source = stable + (" tonight" if revision % 2 else " tomorrow")
+                    worker.submit(source)
+                    time.sleep(0.015)
+                    translated, error, segments = worker.snapshot_segments()
+                    self.assertEqual(error, "")
+                    if translated:
+                        visible.append(revision)
+                        self.assertEqual(segments[0]["source"], source)
+                        self.assertTrue(source.startswith(segments[0]["translated_source"]))
+                        if segments[0]["translated_source"] != source:
+                            self.assertLessEqual(len(segments[0]["translated_source"].split()),
+                                                 len(stable.split()) - literal.LiteralCache.REVISABLE_WORDS)
+                self.assertTrue(visible, "ongoing tail revisions must not keep the pane empty")
+                self.assertLess(visible[0], 15, "useful first inference must survive rapid OCR revisions")
+                self.assertEqual(cancelled, [], "unchanged source prefix keeps in-flight work useful")
+                self.assertLessEqual(len(requests), 3, "cached alternating revisions avoid repeated inference")
+            finally:
+                worker.close()
 
 
 class TranslatorTests(unittest.TestCase):
@@ -232,6 +510,66 @@ class TranslatorTests(unittest.TestCase):
             finally:
                 release.set()
                 worker.close()
+
+    def test_natural_growth_retains_completed_prefix_until_new_context_finishes(self):
+        calls = []
+        releases = {source: threading.Event() for source in ("I have read", "I have read the book")}
+
+        def translate(text, *_):
+            calls.append(text)
+            if text in releases:
+                releases[text].wait(2)
+            return text.upper()
+
+        with patch.object(backend, "translate_text", side_effect=translate):
+            worker = backend.AsyncTranslator("de")
+            try:
+                worker.submit("I have")
+                wait_for(lambda: worker._thread is None)
+                original_id = worker.snapshot_segments()[2][0]["id"]
+                worker.submit("I have read")
+                wait_for(lambda: "I have read" in calls)
+                worker.submit("I have read the book")
+                wait_for(lambda: "I have read the book" in calls)
+                self.assertEqual(worker.result(), "I HAVE")
+                releases["I have read"].set()
+                wait_for(lambda: worker.result() == "I HAVE READ")
+                current = worker.snapshot_segments()[2][0]
+                self.assertEqual(current["source"], "I have read the book")
+                self.assertEqual(current["translated_source"], "I have read")
+                self.assertEqual(current["id"], original_id)
+                self.assertTrue(current["pending"])
+                releases["I have read the book"].set()
+                wait_for(lambda: worker._thread is None)
+                final = worker.snapshot_segments()[2][0]
+                self.assertEqual(final["translated_source"], final["source"])
+                self.assertFalse(final["pending"])
+            finally:
+                for release in releases.values():
+                    release.set()
+                worker.close()
+
+    def test_completed_prefix_requires_exact_text_and_a_word_boundary(self):
+        cases = (("read", "reading", False), ("can", "can't", False),
+                 ("can", "can’t", False), ("under", "under_score", False),
+                 ("long", "long-term", False), ("long", "long‐term", False),
+                 ("long", "long‑term", False), ("Hello", "hello world", False),
+                 ("Hello", "Hello, world", True), ("Hello", "Hello world", True))
+        for previous, current, accepted in cases:
+            with self.subTest(previous=previous, current=current):
+                worker = backend.AsyncTranslator("de")
+                try:
+                    # Synthetic completed output isolates the correspondence
+                    # rule without making translation or capture requests.
+                    with worker._lock:
+                        worker._cache[previous] = "Completed translation"
+                        worker._segments = [{"id": "segment-1", "source": current, "separator": ""}]
+                    translated, _, segments = worker.snapshot_segments()
+                    self.assertEqual(translated, "Completed translation" if accepted else "")
+                    self.assertEqual(segments[0]["translated_source"], previous if accepted else "")
+                    self.assertTrue(segments[0]["pending"])
+                finally:
+                    worker.close()
 
     def test_reset_discards_in_flight_result(self):
         started, release = threading.Event(), threading.Event()
@@ -322,10 +660,12 @@ class TranslatorTests(unittest.TestCase):
                 self.assertTrue(started.wait(1))
                 result, _, changed = worker.snapshot_segments()
                 self.assertEqual([item["id"] for item in original], [item["id"] for item in changed])
-                self.assertEqual(result, "COMPLETE SENTENCE.")
+                self.assertEqual(result, "COMPLETE SENTENCE.\nA LIVE TAIL")
                 self.assertFalse(changed[0]["pending"])
                 self.assertTrue(changed[1]["pending"])
-                self.assertEqual(changed[1]["translated"], "")
+                self.assertEqual(changed[1]["translated"], "A LIVE TAIL")
+                self.assertEqual(changed[1]["translated_source"], "A live tail")
+                self.assertEqual(changed[1]["source"], "A live tail keeps growing")
                 release.set()
                 wait_for(lambda: worker._thread is None)
                 self.assertEqual(calls.count("Complete sentence."), 1)
@@ -450,7 +790,7 @@ class TranslatorTests(unittest.TestCase):
             return text.upper()
 
         with patch.object(backend, "translate_text", side_effect=translate):
-            worker = backend.AsyncTranslator("fr")
+            worker = backend.AsyncTranslator("fr", granularity="phrase")
             try:
                 worker.submit("First sentence. I opened the settings panel, and I changed the font size.")
                 wait_for(lambda: len(worker._cache) == 2)

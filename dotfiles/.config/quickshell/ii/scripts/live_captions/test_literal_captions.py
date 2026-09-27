@@ -81,7 +81,7 @@ class LiteralCaptionTests(unittest.TestCase):
 
     def test_late_error_for_old_revision_does_not_poison_new_source(self):
         entered, release = threading.Event(), threading.Event()
-        def translate(text, *_):
+        def translate(text, *_, **kwargs):
             if text == 'old':
                 entered.set()
                 release.wait(2)
@@ -102,7 +102,7 @@ class LiteralCaptionTests(unittest.TestCase):
 
     def test_literal_mode_serializes_inference_and_cancels_promptly(self):
         entered = threading.Event()
-        def translate(text, target, source, stop):
+        def translate(text, target, source, stop, **kwargs):
             entered.set()
             stop.wait(2)
             raise RuntimeError('Cancelled')
@@ -121,7 +121,7 @@ class LiteralCaptionTests(unittest.TestCase):
 
     def test_literal_mode_never_reuses_a_changed_prefix_result(self):
         entered, release = threading.Event(), threading.Event()
-        def translate(text, *_):
+        def translate(text, *_, **kwargs):
             if text == 'Er hat gestern':
                 entered.set()
                 release.wait(2)

@@ -81,8 +81,8 @@ ColumnLayout {
 
         Repeater {
             model: [
-                { id: "phrase", label: Translation.tr("Short phrases") },
-                { id: "sentence", label: Translation.tr("Whole sentences") }
+                { id: "sentence", label: Translation.tr("Whole sentences") },
+                { id: "phrase", label: Translation.tr("Short phrases") }
             ]
             delegate: DialogButton {
                 required property var modelData
@@ -101,7 +101,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.minimumWidth: 0
         wrapMode: Text.WordWrap
-        text: Translation.tr("Short phrases share matching colours across both panes. Whole sentences keep more context. This grouping applies to both translation styles.")
+        text: Translation.tr("Whole sentences keep more context for better translation. Short phrases use less context for smaller colour groups. This grouping applies to both styles. Completed prefixes stay coloured while new words wait for translation.")
         color: Appearance.colors.colSubtext
         font.pixelSize: Appearance.font.pixelSize.smaller
     }

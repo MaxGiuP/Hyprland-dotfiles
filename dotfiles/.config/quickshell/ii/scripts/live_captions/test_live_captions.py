@@ -140,7 +140,7 @@ class TranslationSegmentTests(unittest.TestCase):
             finally:
                 worker.stop()
 
-    def test_growing_source_does_not_pair_with_previous_prefix_translation(self):
+    def test_growing_source_marks_exact_completed_prefix(self):
         started, release = threading.Event(), threading.Event()
 
         def translate(text, *_):
@@ -160,7 +160,9 @@ class TranslationSegmentTests(unittest.TestCase):
                 pending = snapshot("Hello there everyone")[0]
                 self.assertTrue(started.wait(1))
                 self.assertEqual(pending["id"], old["id"])
-                self.assertEqual(pending["translated"], "")
+                self.assertEqual(pending["translated"], "translated Hello there")
+                self.assertEqual(pending["translated_source"], "Hello there")
+                self.assertEqual(pending["source"], "Hello there everyone")
                 self.assertTrue(pending["pending"])
                 release.set()
                 wait_for(lambda: not snapshot("Hello there everyone")[0]["pending"])
@@ -235,10 +237,10 @@ class WhisperTests(unittest.TestCase):
 
 
 class TranslatorTests(unittest.TestCase):
-    def test_translation_granularity_cli_defaults_to_phrases(self):
+    def test_translation_granularity_cli_defaults_to_sentences(self):
         command = ["live_captions", "--state-file", "/unused-state.json"]
         with patch.object(sys, "argv", command):
-            self.assertEqual(captions.parse_args().translation_granularity, "phrase")
+            self.assertEqual(captions.parse_args().translation_granularity, "sentence")
         with patch.object(sys, "argv", command + ["--translation-granularity", "sentence"]):
             self.assertEqual(captions.parse_args().translation_granularity, "sentence")
 

@@ -1,7 +1,26 @@
 .pragma library
 
-// A pair is valid only after that source sentence has its own completed
-// translation. Never infer alignment from two independently split paragraphs.
+// A growing source can retain its completed exact-prefix translation. The
+// untranslated suffix remains neutral; never infer alignment from word order.
+function isExactSourcePrefix(source, prefix) {
+    if (!prefix || !source.startsWith(prefix))
+        return false
+    if (source.length === prefix.length)
+        return true
+    const next = Array.from(source.slice(prefix.length))[0]
+    if (/\s/.test(next))
+        return true
+    if (/['’_\-\u2010\u2011]/.test(next))
+        return false
+    // Qt's JavaScript engine does not reliably implement Unicode property
+    // escapes. Explicit punctuation ranges cover the supported scripts while
+    // conservatively rejecting an unfamiliar boundary rather than guessing.
+    return /[\u0021-\u0023\u0025-\u002a\u002c-\u002f\u003a-\u003b\u003f-\u0040\u005b-\u005d\u007b\u007d]/.test(next)
+        || /[¡§«¶·»¿;·،؛؟۔।॥]/.test(next)
+        || /[\u2010-\u2027\u2030-\u2043\u2045-\u2051\u2053-\u205e\u3001-\u3003\u3008-\u3011\u3014-\u301f\u3030\u303d\u30a0\u30fb]/.test(next)
+        || /[\uff01-\uff03\uff05-\uff0a\uff0c-\uff0f\uff1a-\uff1b\uff1f-\uff20\uff3b-\uff3d\uff5b\uff5d\uff5f-\uff65]/.test(next)
+}
+
 function sanitizeSegments(payload, maximumSegments) {
     const input = Array.isArray(payload) ? payload : payload?.translation_segments
     if (!Array.isArray(input))
@@ -21,10 +40,15 @@ function sanitizeSegments(payload, maximumSegments) {
             continue
         seen.add(id)
         const translated = typeof item.translated === "string" ? item.translated.trim() : ""
-        const pending = item.pending !== false || translated.length === 0
+        const requestedPrefix = typeof item.translated_source === "string"
+            ? item.translated_source.trim() : (item.pending === false ? source : "")
+        const pairedSource = translated.length > 0 && isExactSourcePrefix(source, requestedPrefix)
+            ? requestedPrefix : ""
+        const pending = item.pending !== false || pairedSource.length < source.length
         // Older workers have no separator and retain their sentence-per-line layout.
         const separator = item.separator === " " || item.separator === "" ? item.separator : "\n"
-        result.push({ id, source, translated: pending ? "" : translated, pending, separator })
+        result.push({ id, source, translated: pairedSource ? translated : "",
+            translated_source: pairedSource, pending, separator })
     }
     return result.reverse()
 }
@@ -120,13 +144,19 @@ function markup(segments, translated, palette, background, neutralColor, minimum
     let lineBreak = false
     for (const segment of segments) {
         lineBreak = lineBreak || segment.separator !== " " && segment.separator !== ""
-        const completed = !segment.pending && segment.translated.length > 0
+        const completed = segment.translated.length > 0
         if (translated && !completed)
             continue
         const color = completed ? colorForId(segment.id, palette, background, minimumContrast) : neutral
-        const text = translated ? segment.translated : segment.source
         const separator = lines.length ? (lineBreak ? "<br>" : " ") : ""
-        lines.push(`${separator}<span style="color:${color};">${escapeRichText(text)}</span>`)
+        if (!translated && completed && segment.translated_source.length < segment.source.length) {
+            const prefix = escapeRichText(segment.translated_source)
+            const suffix = escapeRichText(segment.source.slice(segment.translated_source.length))
+            lines.push(`${separator}<span style="color:${color};">${prefix}</span><span style="color:${neutral};">${suffix}</span>`)
+        } else {
+            const text = translated ? segment.translated : segment.source
+            lines.push(`${separator}<span style="color:${color};">${escapeRichText(text)}</span>`)
+        }
         lineBreak = false
     }
     return lines.join("")
@@ -137,7 +167,7 @@ function plainText(segments, translated) {
     let lineBreak = false
     for (const segment of segments) {
         lineBreak = lineBreak || segment.separator !== " " && segment.separator !== ""
-        if (translated && (segment.pending || !segment.translated.length))
+        if (translated && !segment.translated.length)
             continue
         const separator = parts.length ? (lineBreak ? "\n" : " ") : ""
         parts.push(separator + (translated ? segment.translated : segment.source))

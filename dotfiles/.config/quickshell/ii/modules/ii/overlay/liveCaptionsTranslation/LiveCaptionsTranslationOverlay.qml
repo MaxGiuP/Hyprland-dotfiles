@@ -13,6 +13,8 @@ StyledOverlayWidget {
     minimumWidth: 320
     minimumHeight: 80
     readonly property bool translationFailed: (LiveCaptions.translationError ?? "").length > 0
+        && !CaptionSegments.hasCompletedPairs(LiveCaptions.translationSegments)
+        && !(LiveCaptions.visibleTranslatedTranscriptText ?? "").trim().length
     readonly property bool showSentenceColors: CaptionAppearance.sentenceHighlighting
         && LiveCaptions.translating && LiveCaptions.translationSegments.length > 0 && !root.translationFailed
     readonly property bool singleStreamMode: LiveCaptions.backendKind === "asr"

@@ -24,7 +24,7 @@ function service(name, directory = '/tmp/live-service-test') {
         state: {}, selectingRegion: false,
         Persistent: { ready: true, states: { [kind]: settings } },
         Translation: { tr: text => text },
-        CaptionAppearance: { translationGranularity: 'phrase', translationStyle: 'natural' },
+        CaptionAppearance: { translationGranularity: 'sentence', translationStyle: 'natural' },
         Appearance: { colors: { colOnSurfaceVariant: '#202020' } },
         CF: { StringUtils: { shellSingleQuoteEscape: value => String(value).replaceAll("'", "'\\''") } },
         Directories: {}, GlobalStates: { overlayOpen: true },
@@ -74,6 +74,43 @@ function service(name, directory = '/tmp/live-service-test') {
     };
     return root;
 }
+
+function captionAppearance(settings, ready = true) {
+    const source = fs.readFileSync(path.join(__dirname, '../../services/CaptionAppearance.qml'), 'utf8');
+    const root = { Persistent: { ready, states: { captionAppearance: settings } } };
+    root.root = root;
+    const context = vm.createContext(root);
+    for (const match of source.matchAll(/^    function (\w+)\([^\n]*\) \{.*?^    }$/gms))
+        vm.runInContext(match[0], context);
+    return root;
+}
+
+test('translation quality migration waits for persistence and preserves style and text settings', () => {
+    const settings = { translationGranularity: 'phrase', translationStyle: 'literal',
+        textScale: 1.5, sentenceHighlighting: false, translationQualityVersion: 0 };
+    const appearance = captionAppearance(settings, false);
+    appearance.migrateTranslationQuality();
+    assert.equal(settings.translationGranularity, 'phrase');
+    assert.equal(settings.translationQualityVersion, 0);
+    appearance.Persistent.ready = true;
+    appearance.migrateTranslationQuality();
+    assert.equal(settings.translationGranularity, 'sentence');
+    assert.equal(settings.translationQualityVersion, 1);
+    assert.equal(settings.translationStyle, 'literal');
+    assert.equal(settings.textScale, 1.5);
+    assert.equal(settings.sentenceHighlighting, false);
+});
+
+test('explicit short phrase selection survives later quality migration checks', () => {
+    const settings = { translationGranularity: 'sentence', translationQualityVersion: 0 };
+    const appearance = captionAppearance(settings);
+    appearance.setTranslationGranularity('phrase');
+    appearance.migrateTranslationQuality();
+    assert.equal(settings.translationGranularity, 'phrase');
+    assert.equal(settings.translationQualityVersion, 1);
+    appearance.setTranslationGranularity('unknown');
+    assert.equal(settings.translationGranularity, 'sentence');
+});
 
 for (const name of ['LiveCaptions', 'LiveScreenTranslation']) {
     test(`${name}: manual stop cancels queued configuration/recovery starts`, () => {

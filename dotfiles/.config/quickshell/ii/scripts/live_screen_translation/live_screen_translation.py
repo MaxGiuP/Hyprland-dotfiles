@@ -16,6 +16,7 @@ import sys
 import tempfile
 import threading
 import time
+import unicodedata
 from pathlib import Path
 
 # Shared source pairing is resolved relative to the installed scripts, not cwd.
@@ -39,7 +40,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--region", required=True)
     parser.add_argument("--target-language", default="en")
     parser.add_argument("--ocr-language", default="eng")
-    parser.add_argument("--translation-granularity", choices=["phrase", "sentence"], default="phrase")
+    parser.add_argument("--translation-granularity", choices=["phrase", "sentence"], default="sentence")
     parser.add_argument("--translation-style", choices=["natural", "literal"], default="natural")
     parser.add_argument("--interval-seconds", type=float, default=0.6)
     parser.add_argument("--confidence-threshold", type=float, default=60.0,
@@ -142,23 +143,37 @@ def translate_text(text: str, target_language: str,
 
 
 def translate_literal(text: str, target_language: str, source_language: str = "",
-                      stop_event: threading.Event | None = None) -> str:
+                      stop_event: threading.Event | None = None, *, on_progress=None, cache=None) -> str:
     # Keep normal translation independent of the optional local model helper.
     # Missing literal support is an explicit error, never a natural fallback.
     try:
         from literal_translation import translate_literal as translate
     except ImportError as error:
         raise RuntimeError("Literal translation backend is not installed.") from error
-    return translate(text, target_language, source_language=source_language, stop_event=stop_event)
+    return translate(text, target_language, source_language=source_language, stop_event=stop_event,
+                     on_progress=on_progress, cache=cache)
+
+
+def create_literal_cache():
+    try:
+        from literal_translation import LiteralCache
+    except ImportError as error:
+        raise RuntimeError("Literal translation backend does not support streaming yet.") from error
+    return LiteralCache()
+
+
+def can_reuse_literal_source(previous: str, current: str) -> bool:
+    from literal_translation import LiteralCache
+    return LiteralCache.can_reuse_source(previous, current)
 
 
 class AsyncTranslator:
-    """Translate exact source phrases without blocking or guessing correspondence."""
+    """Translate source groups without blocking capture or guessing correspondence."""
 
     CACHE_LIMIT = 128
     MAX_CONCURRENT = 2
 
-    def __init__(self, language: str, granularity: str = "phrase",
+    def __init__(self, language: str, granularity: str = "sentence",
                  translation_style: str = "natural") -> None:
         if translation_style not in {"natural", "literal"}:
             raise ValueError("Translation style must be 'natural' or 'literal'.")
@@ -170,16 +185,20 @@ class AsyncTranslator:
         self._error = ""
         self._latest_text = ""
         self._generation = 0
+        self._reset_epoch = 0
         self._retry_after = 0.0
         self._tracker = SegmentTracker(granularity=granularity)
         self._segments: list[dict] = []
         self._cache: OrderedDict[str, str] = OrderedDict()
+        self._progress: OrderedDict[str, dict] = OrderedDict()
+        self._literal_cache = None
+        self._literal_active: dict[str, threading.Event] = {}
         self._pending: tuple[int, list[dict]] | None = None
         self._thread: threading.Thread | None = None
         self._closed = threading.Event()
 
     def submit(self, text: str) -> None:
-        """Queue only changed/missing phrases with bounded concurrent requests."""
+        """Queue only changed/missing groups with bounded concurrent requests."""
         if not text:
             self.reset()
             return
@@ -191,6 +210,10 @@ class AsyncTranslator:
                 self._latest_text = text
                 self._segments = self._tracker.update(text)
                 self._error = ""
+                for requested_source, cancel in self._literal_active.items():
+                    if not any(can_reuse_literal_source(requested_source, item["source"])
+                               for item in self._segments):
+                        cancel.set()
             elif (all(item["source"] in self._cache for item in self._segments)
                   or self._pending or self._thread is not None
                   or time.monotonic() < self._retry_after):
@@ -199,15 +222,20 @@ class AsyncTranslator:
             if self._thread is None:
                 self._thread = threading.Thread(target=self._run, daemon=True)
                 self._thread.start()
+        self._refresh_literal_progress()
 
     def reset(self) -> None:
         with self._lock:
             self._generation += 1
+            self._reset_epoch += 1
             self._latest_text = ""
             self._error = ""
             self._pending = None
             self._segments = []
+            self._progress.clear()
             self._tracker.reset()
+            for cancel in self._literal_active.values():
+                cancel.set()
 
     def close(self) -> None:
         self._closed.set()
@@ -220,8 +248,9 @@ class AsyncTranslator:
     def _snapshot_locked(self) -> tuple[str, str, list[dict]]:
         segments = []
         for item in self._segments:
-            translated = self._cache.get(item["source"], "")
-            segments.append({**item, "translated": translated, "pending": not bool(translated)})
+            translated_source, translated, complete = self._completed_prefix_locked(item["source"])
+            segments.append({**item, "translated": translated, "translated_source": translated_source,
+                             "pending": not complete})
         translated_parts = []
         pending_break = False
         for item in segments:
@@ -247,13 +276,98 @@ class AsyncTranslator:
         with self._lock:
             return self._snapshot_locked()
 
-    def _translate(self, text: str) -> str:
+    @staticmethod
+    def _source_prefix(prefix: str, source: str) -> bool:
+        if not prefix or not source.startswith(prefix):
+            return False
+        if len(prefix) == len(source):
+            return True
+        following = source[len(prefix)]
+        return following.isspace() or (unicodedata.category(following).startswith("P")
+                                      and following not in "'’_-\u2010\u2011")
+
+    def _completed_prefix_locked(self, source: str) -> tuple[str, str, bool]:
+        if source in self._cache:
+            return source, self._cache[source], True
+        best_source, best_text, complete = "", "", False
+        if self._translation_style == "natural":
+            for previous, translated in self._cache.items():
+                if len(previous) > len(best_source) and self._source_prefix(previous, source):
+                    best_source, best_text = previous, translated
+        for requested_source, progress in self._progress.items():
+            prefix = progress["source"]
+            if (requested_source == source
+                    and len(prefix) >= len(best_source) and self._source_prefix(prefix, source)):
+                best_source, best_text = prefix, progress["translated"]
+                complete = prefix == source and progress["complete"]
+        return best_source, best_text, complete
+
+    def _publish_progress(self, current_source: str, epoch: int, snapshot,
+                          stop_event: threading.Event | None = None) -> None:
+        if not isinstance(snapshot, dict):
+            return
+        prefix, translated = snapshot.get("source"), snapshot.get("translated")
+        if (not isinstance(prefix, str) or not isinstance(translated, str)
+                or not translated.strip() or not self._source_prefix(prefix, current_source)):
+            return
+        with self._lock:
+            if (self._closed.is_set() or epoch != self._reset_epoch
+                    or (stop_event is not None and stop_event.is_set())):
+                return
+            if not any(current_source == item["source"] for item in self._segments):
+                return
+            previous = self._progress.get(current_source)
+            if previous and len(prefix) < len(previous["source"]):
+                return
+            self._progress[current_source] = {
+                "source": prefix, "translated": translated.strip(),
+                "complete": snapshot.get("complete") is True,
+            }
+            self._progress.move_to_end(current_source)
+            while len(self._progress) > self.CACHE_LIMIT:
+                self._progress.popitem(last=False)
+
+    def _refresh_literal_progress(self) -> None:
+        with self._lock:
+            cache, epoch = self._literal_cache, self._reset_epoch
+            sources = [item["source"] for item in self._segments]
+        if cache is not None:
+            for source in sources:
+                self._publish_progress(source, epoch, cache.snapshot(source, self._language, ""))
+
+    def _accept_progress(self, requested_source: str, epoch: int, snapshot,
+                         stop_event: threading.Event) -> None:
+        if (not isinstance(snapshot, dict) or not isinstance(snapshot.get("source"), str)
+                or not self._source_prefix(snapshot["source"], requested_source)):
+            return
+        with self._lock:
+            if epoch != self._reset_epoch or stop_event.is_set() or self._closed.is_set():
+                return
+            sources = [item["source"] for item in self._segments
+                       if can_reuse_literal_source(requested_source, item["source"])]
+            cache = self._literal_cache
+        for current_source in sources:
+            # Growth and tail revisions need context-sensitive projection.
+            # Raw old glosses would bypass the helper's revisable word buffer.
+            projected = (snapshot if current_source == requested_source
+                         else cache.snapshot(current_source, self._language, "") if cache else None)
+            self._publish_progress(current_source, epoch, projected, stop_event)
+
+    def _translate(self, text: str, epoch: int,
+                   stop_event: threading.Event | None = None) -> str:
         if self._translation_style == "natural":
             return translate_text(text, self._language, self._closed)
         try:
             # Tesseract's English recognition model does not prove the source
             # is English; let the local literal translator identify it.
-            translated = translate_literal(text, self._language, source_language="", stop_event=self._closed)
+            if self._literal_cache is None:
+                self._literal_cache = create_literal_cache()
+            on_progress = lambda snapshot: self._accept_progress(text, epoch, snapshot, stop_event)
+            cached = self._literal_cache.snapshot(text, self._language, "")
+            if cached:
+                on_progress(cached)
+            translated = translate_literal(text, self._language, source_language="", stop_event=stop_event,
+                                           on_progress=on_progress, cache=self._literal_cache)
             if not isinstance(translated, str) or not translated.strip():
                 raise RuntimeError("The local model returned no text.")
             return translated.strip()
@@ -280,15 +394,18 @@ class AsyncTranslator:
                     if self._closed.is_set() or generation != self._generation:
                         queued = []
                     queued = [item for item in queued if item["source"] not in self._cache]
-                    active_sources = {text for _, text in active.values()}
+                    active_sources = {text for _, text, _ in active.values()}
                     while queued and len(active) < self._max_concurrent:
                         candidate = next((index for index, item in enumerate(queued)
                                           if item["source"] not in active_sources), None)
                         if candidate is None:
                             break
                         text = queued.pop(candidate)["source"]
-                        future = pool.submit(self._translate, text)
-                        active[future] = (generation, text)
+                        cancel = threading.Event() if self._translation_style == "literal" else None
+                        if cancel is not None:
+                            self._literal_active[text] = cancel
+                        future = pool.submit(self._translate, text, self._reset_epoch, cancel)
+                        active[future] = (generation, text, cancel)
                         active_sources.add(text)
                     if not active:
                         self._thread = None
@@ -296,7 +413,7 @@ class AsyncTranslator:
 
                 completed, _ = wait(active, timeout=0.1, return_when=FIRST_COMPLETED)
                 for future in completed:
-                    task_generation, text = active.pop(future)
+                    task_generation, text, cancel = active.pop(future)
                     try:
                         translated, error = future.result(), ""
                     except ProcessCancelled:
@@ -304,7 +421,9 @@ class AsyncTranslator:
                     except Exception as exception:
                         translated, error = "", str(exception)
                     with self._lock:
-                        if self._closed.is_set():
+                        if cancel is not None:
+                            self._literal_active.pop(text, None)
+                        if self._closed.is_set() or (cancel is not None and cancel.is_set()):
                             continue
                         if translated:
                             # Exact keys allow caching a late result without

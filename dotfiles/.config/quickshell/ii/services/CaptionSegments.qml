@@ -34,6 +34,6 @@ QtObject {
     }
 
     function hasCompletedPairs(payload) {
-        return root.sanitizeSegments(payload).some(segment => !segment.pending)
+        return root.sanitizeSegments(payload).some(segment => segment.translated.length > 0)
     }
 }

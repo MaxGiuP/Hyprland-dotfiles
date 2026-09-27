@@ -47,6 +47,55 @@ test('pending or missing translations are neutral and never show stale paired te
     assert.equal(markup([{ ...pair(1), pending: true }], true), '');
 });
 
+test('growing speech retains a completed exact prefix and leaves the tail neutral', () => {
+    const first = { id: 'sentence-7', source: 'She has', translated: 'Sie hat', pending: false, separator: '' };
+    const expectedColor = renderedColors(markup([first], true))[0];
+    for (const suffix of [' already', ' already left', ' already left for', ' already left for the station']) {
+        const payload = { translation_segments: [{ ...first, source: first.source + suffix,
+            translated_source: first.source, pending: true }] };
+        const source = markup(payload);
+        const translated = markup(payload, true);
+        assert.deepEqual(renderedColors(source), [expectedColor, '#1d1b20']);
+        assert.deepEqual(renderedColors(translated), [expectedColor]);
+        assert.equal(utils.plainText(sanitize(payload), false), first.source + suffix);
+        assert.equal(utils.plainText(sanitize(payload), true), first.translated);
+        assert.match(source, /She has<\/span><span style="color:#1d1b20;"> already/);
+        assert.match(translated, /Sie hat/);
+    }
+});
+
+test('changed words, contractions, and partial words invalidate earlier prefix pairs', () => {
+    for (const [source, prefix] of [
+        ['She had already left', 'She has'], ['she has already left', 'She has'],
+        ['reading a book', 'read'], ["can't leave", 'can'], ['can’t leave', 'can'],
+        ['well-known phrase', 'well'], ['old_name', 'old'], ['Äpfel', 'Äp'],
+    ]) {
+        const input = [{ ...pair(1), source, translated_source: prefix, pending: true }];
+        assert.equal(markup(input, true), '', `${prefix} is not a completed prefix of ${source}`);
+        assert.deepEqual(renderedColors(markup(input)), ['#1d1b20']);
+    }
+    for (const source of ['Hello there, everyone', 'Hello there — everyone', 'Hello there…']) {
+        const input = [{ ...pair(1), source, translated_source: 'Hello there', pending: true }];
+        assert.notEqual(markup(input, true), '');
+    }
+});
+
+test('prefix pairs survive repeated service sanitization without colouring untranslated words', () => {
+    const payload = { translation_segments: [
+        { ...pair(1), source: 'Read <this> & then wait', translated_source: 'Read <this>',
+            translated: 'Lire <ceci>', pending: true, separator: '' },
+        { ...pair(2), source: 'A newer pending sentence', translated: 'stale text', pending: true, separator: '\n' },
+    ] };
+    const serviceState = sanitize(payload);
+    const viewState = sanitize(serviceState);
+    assert.equal(JSON.stringify(viewState), JSON.stringify(serviceState));
+    const source = markup(viewState);
+    const translated = markup(viewState, true);
+    assert.match(source, /Read &lt;this&gt;<\/span><span style="color:#1d1b20;"> &amp; then wait/);
+    assert.match(translated, /Lire &lt;ceci&gt;/);
+    assert.doesNotMatch(translated, /stale text|newer pending|then wait|<ceci>/);
+});
+
 test('malformed pairs are rejected and newest duplicate IDs supersede old completed results', () => {
     assert.equal(sanitize(null).length, 0);
     const input = [pair(1), null, 'invalid', { id: 2, source: 'invalid' },
