@@ -42,6 +42,7 @@ Singleton {
         "message": "",
         "ocr_text": "",
         "translated_text": "",
+        "translation_segments": [],
         "target_language": targetLanguage,
         "ocr_language": ocrLanguage,
         "region": region,
@@ -51,6 +52,7 @@ Singleton {
     readonly property string statusMessage: String(state?.message ?? "")
     readonly property string ocrText: String(state?.ocr_text ?? "")
     readonly property string translatedText: String(state?.translated_text ?? "")
+    readonly property var translationSegments: CaptionSegments.sanitizeSegments(state?.translation_segments)
     readonly property string summaryText: {
         if (stopRequested)
             return Translation.tr("Stopping")
@@ -152,6 +154,7 @@ Singleton {
             "message": messageText,
             "ocr_text": "",
             "translated_text": "",
+            "translation_segments": [],
             "target_language": root.targetLanguage,
             "ocr_language": root.ocrLanguage,
             "region": root.region,

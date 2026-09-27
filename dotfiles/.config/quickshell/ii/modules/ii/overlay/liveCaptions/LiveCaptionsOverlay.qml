@@ -11,6 +11,8 @@ StyledOverlayWidget {
     showCenterButton: true
     minimumWidth: 320
     minimumHeight: 80
+    readonly property bool showSentenceColors: CaptionAppearance.sentenceHighlighting
+        && LiveCaptions.translating && LiveCaptions.translationSegments.length > 0
     readonly property bool singleStreamMode: LiveCaptions.backendKind === "asr"
     function asrMarkup() {
         const committedLines = String(LiveCaptions.stableText ?? "")
@@ -55,9 +57,21 @@ StyledOverlayWidget {
             }
         }
 
+        CaptionSentenceView {
+            id: pairedView
+            visible: root.showSentenceColors
+            anchors.fill: parent
+            anchors.margins: 12
+            segments: LiveCaptions.translationSegments
+            translated: false
+            foreground: bubble.foreground
+            fallbackText: LiveCaptions.active
+                ? Translation.tr("Listening…") : Translation.tr("Not running")
+        }
+
         Item {
             id: singleStreamViewport
-            visible: root.singleStreamMode
+            visible: root.singleStreamMode && !root.showSentenceColors
             anchors.fill: parent
             anchors.margins: 12
             clip: true
@@ -75,7 +89,7 @@ StyledOverlayWidget {
                 verticalAlignment: Text.AlignTop
                 color: bubble.foreground
                 font.family: Appearance.font.family.main
-                font.pixelSize: Appearance.font.pixelSize.large
+                font.pixelSize: CaptionAppearance.mainTextPixelSize
                 font.hintingPreference: Font.PreferDefaultHinting
                 lineHeightMode: Text.ProportionalHeight
                 lineHeight: 1.12
@@ -90,7 +104,7 @@ StyledOverlayWidget {
 
             Column {
                 id: textColumn
-                visible: !root.singleStreamMode
+                visible: !root.singleStreamMode && !root.showSentenceColors
                 width: parent.width
                 y: Math.min(0, parent.height - height)
                 spacing: root.singleStreamMode ? 0 : (liveTailText.visible && stableText.visible ? 4 : 0)
@@ -105,7 +119,7 @@ StyledOverlayWidget {
                     verticalAlignment: Text.AlignTop
                     color: bubble.foreground
                     font.family: Appearance.font.family.main
-                    font.pixelSize: Appearance.font.pixelSize.large
+                    font.pixelSize: CaptionAppearance.mainTextPixelSize
                     font.hintingPreference: Font.PreferDefaultHinting
                     lineHeightMode: Text.ProportionalHeight
                     lineHeight: 1.12
@@ -122,7 +136,7 @@ StyledOverlayWidget {
                     verticalAlignment: Text.AlignTop
                     color: stableText.visible ? bubble.secondaryForeground : bubble.foreground
                     font.family: Appearance.font.family.main
-                    font.pixelSize: Appearance.font.pixelSize.large
+                    font.pixelSize: CaptionAppearance.mainTextPixelSize
                     font.hintingPreference: Font.PreferDefaultHinting
                     lineHeightMode: Text.ProportionalHeight
                     lineHeight: 1.12

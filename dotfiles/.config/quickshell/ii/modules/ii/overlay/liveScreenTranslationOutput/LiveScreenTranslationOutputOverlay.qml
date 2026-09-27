@@ -11,6 +11,9 @@ StyledOverlayWidget {
     showCenterButton: true
     minimumWidth: 320
     minimumHeight: 80
+    readonly property bool showSentenceColors: CaptionAppearance.sentenceHighlighting
+        && LiveScreenTranslation.translationSegments.length > 0
+        && LiveScreenTranslation.status !== "error"
 
     contentItem: CaptionBubble {
         id: bubble
@@ -33,7 +36,7 @@ StyledOverlayWidget {
                 Text {
                     id: translationText
                     width: parent.width
-                    textFormat: Text.PlainText
+                    textFormat: root.showSentenceColors ? Text.RichText : Text.PlainText
                     wrapMode: Text.Wrap
                     renderType: Text.QtRendering
                     color: {
@@ -42,10 +45,14 @@ StyledOverlayWidget {
                         return bubble.translationForeground
                     }
                     font.family: Appearance.font.family.main
-                    font.pixelSize: Appearance.font.pixelSize.large
+                    font.pixelSize: CaptionAppearance.mainTextPixelSize
                     text: {
                         if (LiveScreenTranslation.status === "error")
                             return LiveScreenTranslation.statusMessage || Translation.tr("OCR error")
+                        if (root.showSentenceColors) {
+                            const markup = CaptionSegments.markup(LiveScreenTranslation.translationSegments, true)
+                            return markup.length > 0 ? markup : Translation.tr("Translating…")
+                        }
                         const translated = String(LiveScreenTranslation.translatedText ?? "").trim()
                         if (translated.length > 0)
                             return translated
@@ -62,13 +69,15 @@ StyledOverlayWidget {
                         return src.length > 0 && LiveScreenTranslation.status !== "error"
                     }
                     width: parent.width
-                    textFormat: Text.PlainText
+                    textFormat: root.showSentenceColors ? Text.RichText : Text.PlainText
                     wrapMode: Text.Wrap
                     renderType: Text.QtRendering
                     color: bubble.secondaryForeground
                     font.family: Appearance.font.family.main
-                    font.pixelSize: Appearance.font.pixelSize.smaller
-                    text: String(LiveScreenTranslation.ocrText ?? "").trim()
+                    font.pixelSize: CaptionAppearance.mainTextPixelSize
+                    text: root.showSentenceColors
+                        ? CaptionSegments.markup(LiveScreenTranslation.translationSegments, false)
+                        : String(LiveScreenTranslation.ocrText ?? "").trim()
                 }
             }
         }

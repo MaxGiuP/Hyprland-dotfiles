@@ -12,6 +12,9 @@ StyledOverlayWidget {
     showCenterButton: true
     minimumWidth: 360
     minimumHeight: 180
+    readonly property bool showSentenceColors: CaptionAppearance.sentenceHighlighting
+        && LiveScreenTranslation.translationSegments.length > 0
+        && LiveScreenTranslation.status !== "error"
 
     contentItem: CaptionBubble {
         id: bubble
@@ -97,6 +100,11 @@ StyledOverlayWidget {
                     downAction: () => LiveScreenTranslation.clearRegion()
                 }
 
+                CaptionAppearanceControls {
+                    Layout.fillWidth: true
+                    visible: GlobalStates.overlayOpen
+                }
+
                 Rectangle {
                     Layout.fillWidth: true
                     visible: LiveScreenTranslation.status === "error" && LiveScreenTranslation.statusMessage.length > 0
@@ -134,13 +142,17 @@ StyledOverlayWidget {
                         Text {
                             id: translationText
                             width: parent.width
-                            textFormat: Text.PlainText
+                            textFormat: root.showSentenceColors ? Text.RichText : Text.PlainText
                             wrapMode: Text.Wrap
                             renderType: Text.QtRendering
                             color: bubble.translationForeground
                             font.family: Appearance.font.family.main
-                            font.pixelSize: Appearance.font.pixelSize.large
+                            font.pixelSize: CaptionAppearance.mainTextPixelSize
                             text: {
+                                if (root.showSentenceColors) {
+                                    const markup = CaptionSegments.markup(LiveScreenTranslation.translationSegments, true)
+                                    return markup.length > 0 ? markup : Translation.tr("Translating…")
+                                }
                                 const translated = String(LiveScreenTranslation.translatedText ?? "").trim()
                                 if (translated.length > 0)
                                     return translated
@@ -154,13 +166,15 @@ StyledOverlayWidget {
                             id: sourceText
                             visible: GlobalStates.overlayOpen && text.length > 0
                             width: parent.width
-                            textFormat: Text.PlainText
+                            textFormat: root.showSentenceColors ? Text.RichText : Text.PlainText
                             wrapMode: Text.Wrap
                             renderType: Text.QtRendering
                             color: bubble.secondaryForeground
                             font.family: Appearance.font.family.main
-                            font.pixelSize: Appearance.font.pixelSize.normal
-                            text: String(LiveScreenTranslation.ocrText ?? "").trim()
+                            font.pixelSize: CaptionAppearance.mainTextPixelSize
+                            text: root.showSentenceColors
+                                ? CaptionSegments.markup(LiveScreenTranslation.translationSegments, false)
+                                : String(LiveScreenTranslation.ocrText ?? "").trim()
                         }
                     }
                 }

@@ -109,6 +109,11 @@ Singleton {
                 property bool desiredRunning: false
             }
 
+            property JsonObject captionAppearance: JsonObject {
+                property real textScale: 1.0
+                property bool sentenceHighlighting: true
+            }
+
             property JsonObject audio: JsonObject {
                 property JsonObject sink: JsonObject {
                     property string name: ""

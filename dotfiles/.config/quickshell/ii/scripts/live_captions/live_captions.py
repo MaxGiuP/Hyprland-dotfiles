@@ -17,6 +17,10 @@ from pathlib import Path
 
 import numpy as np
 
+# Resolve this also when loaded by importlib or launched from another directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from translation_segments import SegmentTracker
+
 RUNNING = True
 SAMPLE_RATE = 16000
 MAX_BUFFER_SECS = 8.0
@@ -129,6 +133,7 @@ def build_base_state(args: argparse.Namespace) -> dict:
         "translated_text": "",
         "translated_stable_text": "",
         "translated_unstable_text": "",
+        "translation_segments": [],
         "source_language": "",
         "target_language": args.target_language,
         "history": [],
@@ -452,6 +457,8 @@ def translate_text(text: str, target_language: str, source_language: str = "",
 
 def set_status(path: Path, state: dict, status: str, message: str, *, backend_ready: bool = True) -> None:
     state.update({"status": status, "message": message, "backend_ready": backend_ready})
+    if status == "error":
+        state["translation_segments"] = []
     write_state(path, state)
 
 
@@ -618,7 +625,8 @@ class AsyncTranslator:
         self._thread = threading.Thread(target=self._run, name="live-captions-translator", daemon=True)
         self._thread.start()
 
-    def request(self, text: str, target_language: str, source_language: str = "", *, stream: str = "live") -> str:
+    def request(self, text: str, target_language: str, source_language: str = "", *,
+                stream: str = "live", allow_partial: bool = True) -> str:
         normalized_text = normalize_text(text)
         source_code = source_language.replace("_", "-").split("-")[0].lower()
         if source_code == "auto":
@@ -644,11 +652,19 @@ class AsyncTranslator:
                 self._pending[stream] = cache_key
                 self._wake_event.set()
 
-            if latest is not None:
+            if allow_partial and latest is not None:
                 latest_source, latest_translation = latest
                 if latest_translation and self._is_reusable_translation(latest_source, normalized_text):
                     return latest_translation
         return ""
+
+    def retain_streams(self, streams: set[str]) -> None:
+        """Drop obsolete queued phrases when the source window scrolls."""
+        with self._lock:
+            self._pending = OrderedDict((key, value) for key, value in self._pending.items()
+                                        if key in streams)
+            self._latest_by_target = {key: value for key, value in self._latest_by_target.items()
+                                      if key[2] in streams}
 
     @staticmethod
     def _is_reusable_translation(previous_source: str, next_source: str) -> bool:
@@ -690,6 +706,8 @@ class AsyncTranslator:
                         self._cache.move_to_end(task)
                         self._retry_after.pop(task, None)
                         self._latest_by_target[(target_language, source_language, stream)] = (text, translated)
+                        while len(self._latest_by_target) > self.CACHE_LIMIT:
+                            del self._latest_by_target[next(iter(self._latest_by_target))]
                         while len(self._cache) > self.CACHE_LIMIT:
                             self._cache.popitem(last=False)
                     else:
@@ -717,6 +735,33 @@ def translated_texts(translator: AsyncTranslator, display_text: str, stable_text
     # A translation may reorder the sentence. Show its complete current version
     # once instead of presenting it underneath a duplicate earlier translation.
     return full, "", full
+
+
+def paired_translations(translator: AsyncTranslator, tracker: SegmentTracker,
+                        display_text: str, stable_text: str, target_language: str,
+                        source_language: str) -> tuple[str, str, str, list[dict]]:
+    """Translate exact source units, without guessing alignment from target order."""
+    segments = tracker.update(display_text)
+    translator.retain_streams({item["id"] for item in segments})
+    # Start the most recent phrase first; unchanged older phrases use the cache.
+    for item in reversed(segments):
+        translated = translator.request(item["source"], target_language, source_language,
+                                        stream=item["id"], allow_partial=False)
+        item.update({"translated": translated, "pending": not bool(translated)})
+
+    stable_source = normalize_text(stable_text)
+    stable_parts, live_parts = [], []
+    offset = 0
+    for item in segments:
+        position = stable_source.find(item["source"], offset)
+        if position >= 0:
+            stable_parts.append(item["translated"])
+            offset = position + len(item["source"])
+        else:
+            live_parts.append(item["translated"])
+    return (" ".join(item["translated"] for item in segments if item["translated"]),
+            " ".join(part for part in stable_parts if part),
+            " ".join(part for part in live_parts if part), segments)
 
 
 class VoskStreamingTranscriber:
@@ -1094,6 +1139,7 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
         set_status(state_path, state, "error", f"Could not start audio capture: {error}")
         return 3
     translator = AsyncTranslator()
+    segment_tracker = SegmentTracker()
     last_display_text = ""
     last_translated_text = ""
     last_translated_stable_text = ""
@@ -1123,9 +1169,12 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
 
             if args.display_mode == "captions":
                 translated_text, translated_stable_text, translated_unstable_text = "", "", ""
+                translation_segments = []
             else:
-                translated_text, translated_stable_text, translated_unstable_text = translated_texts(
-                    translator, display_text, stable_text, args.target_language, transcriber.source_language,
+                (translated_text, translated_stable_text, translated_unstable_text,
+                 translation_segments) = paired_translations(
+                    translator, segment_tracker, display_text, stable_text,
+                    args.target_language, transcriber.source_language,
                 )
 
             if (
@@ -1133,6 +1182,7 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
                 and translated_text == last_translated_text
                 and translated_stable_text == last_translated_stable_text
                 and translated_unstable_text == last_translated_unstable_text
+                and translation_segments == state.get("translation_segments")
                 and committed_count == last_committed_count
                 and stable_text == state.get("stable_text")
                 and unstable_text == state.get("unstable_text")
@@ -1156,6 +1206,7 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
                 "translated_text": translated_text,
                 "translated_stable_text": translated_stable_text,
                 "translated_unstable_text": translated_unstable_text,
+                "translation_segments": translation_segments,
                 "source_language": transcriber.source_language,
                 "target_language": args.target_language,
                 "history": [],
@@ -1172,7 +1223,8 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
         translator.stop()
         capture.stop()
 
-    state.update({"status": "stopped", "message": "Live captions stopped."})
+    state.update({"status": "stopped", "message": "Live captions stopped.",
+                  "translation_segments": []})
     write_state(state_path, state)
     return 0
 
@@ -1239,6 +1291,7 @@ def main() -> int:
     )
     transcriber.runtime_device = runtime_device
     translator = AsyncTranslator()
+    segment_tracker = SegmentTracker()
     last_fast_tick = time.monotonic()
     last_stable_tick = time.monotonic()
     last_display_text = ""
@@ -1321,9 +1374,12 @@ def main() -> int:
 
             if args.display_mode == "captions":
                 translated_text, translated_stable_text, translated_unstable_text = "", "", ""
+                translation_segments = []
             else:
-                translated_text, translated_stable_text, translated_unstable_text = translated_texts(
-                    translator, display_text, stable_text, args.target_language, transcriber.source_language,
+                (translated_text, translated_stable_text, translated_unstable_text,
+                 translation_segments) = paired_translations(
+                    translator, segment_tracker, display_text, stable_text,
+                    args.target_language, transcriber.source_language,
                 )
 
             if (
@@ -1331,6 +1387,7 @@ def main() -> int:
                 and translated_text == last_translated_text
                 and translated_stable_text == last_translated_stable_text
                 and translated_unstable_text == last_translated_unstable_text
+                and translation_segments == state.get("translation_segments")
                 and committed_count == last_committed_count
                 and stable_text == state.get("stable_text")
                 and unstable_text == state.get("unstable_text")
@@ -1354,6 +1411,7 @@ def main() -> int:
                 "translated_text": translated_text,
                 "translated_stable_text": translated_stable_text,
                 "translated_unstable_text": translated_unstable_text,
+                "translation_segments": translation_segments,
                 "source_language": transcriber.source_language,
                 "target_language": args.target_language,
                 "history": [],
@@ -1370,7 +1428,8 @@ def main() -> int:
         translator.stop()
         capture.stop()
 
-    state.update({"status": "stopped", "message": "Live captions stopped."})
+    state.update({"status": "stopped", "message": "Live captions stopped.",
+                  "translation_segments": []})
     write_state(state_path, state)
     return 0
 

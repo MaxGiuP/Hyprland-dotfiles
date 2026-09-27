@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import OrderedDict
 import csv
 import io
 import json
@@ -15,6 +16,10 @@ import tempfile
 import threading
 import time
 from pathlib import Path
+
+# Shared source pairing is resolved relative to the installed scripts, not cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "live_captions"))
+from translation_segments import SegmentTracker
 
 STOP_REQUESTED = threading.Event()
 
@@ -133,22 +138,26 @@ def translate_text(text: str, target_language: str,
 
 
 class AsyncTranslator:
-    """Translates in a background thread so it never blocks the OCR loop."""
+    """Translate exact source phrases without blocking or guessing correspondence."""
+
+    CACHE_LIMIT = 128
 
     def __init__(self, language: str) -> None:
         self._language = language
         self._lock = threading.Lock()
-        self._result = ""
         self._error = ""
         self._latest_text = ""
         self._generation = 0
         self._retry_after = 0.0
-        self._pending: tuple[int, str] | None = None
+        self._tracker = SegmentTracker()
+        self._segments: list[dict] = []
+        self._cache: OrderedDict[str, str] = OrderedDict()
+        self._pending: tuple[int, list[dict]] | None = None
         self._thread: threading.Thread | None = None
         self._closed = threading.Event()
 
     def submit(self, text: str) -> None:
-        """Queue text for translation. Returns immediately."""
+        """Queue only changed/missing phrases; requests remain bounded and serial."""
         if not text:
             self.reset()
             return
@@ -158,12 +167,13 @@ class AsyncTranslator:
             if text != self._latest_text:
                 self._generation += 1
                 self._latest_text = text
-                self._result = ""
+                self._segments = self._tracker.update(text)
                 self._error = ""
-            elif (self._result or self._pending or self._thread is not None
+            elif (all(item["source"] in self._cache for item in self._segments)
+                  or self._pending or self._thread is not None
                   or time.monotonic() < self._retry_after):
                 return
-            self._pending = (self._generation, text)
+            self._pending = (self._generation, [dict(item) for item in self._segments])
             if self._thread is None:
                 self._thread = threading.Thread(target=self._run, daemon=True)
                 self._thread.start()
@@ -172,9 +182,10 @@ class AsyncTranslator:
         with self._lock:
             self._generation += 1
             self._latest_text = ""
-            self._result = ""
             self._error = ""
             self._pending = None
+            self._segments = []
+            self._tracker.reset()
 
     def close(self) -> None:
         self._closed.set()
@@ -184,13 +195,25 @@ class AsyncTranslator:
         if thread:
             thread.join()
 
+    def _snapshot_locked(self) -> tuple[str, str, list[dict]]:
+        segments = []
+        for item in self._segments:
+            translated = self._cache.get(item["source"], "")
+            segments.append({**item, "translated": translated, "pending": not bool(translated)})
+        return ("\n".join(item["translated"] for item in segments if item["translated"]),
+                self._error, segments)
+
     def result(self) -> str:
-        with self._lock:
-            return self._result
+        return self.snapshot()[0]
 
     def snapshot(self) -> tuple[str, str]:
         with self._lock:
-            return self._result, self._error
+            translated, error, _ = self._snapshot_locked()
+            return translated, error
+
+    def snapshot_segments(self) -> tuple[str, str, list[dict]]:
+        with self._lock:
+            return self._snapshot_locked()
 
     def _run(self) -> None:
         while True:
@@ -198,20 +221,41 @@ class AsyncTranslator:
                 if self._closed.is_set() or self._pending is None:
                     self._thread = None
                     return
-                generation, text = self._pending
+                generation, segments = self._pending
                 self._pending = None
-            try:
-                translated = translate_text(text, self._language, self._closed)
-                error = ""
-            except ProcessCancelled:
-                translated, error = "", ""
-            except Exception as exception:
-                translated, error = "", str(exception)
+            # Prefer the most recent visible phrase while reusing older results.
+            for item in reversed(segments):
+                text = item["source"]
+                with self._lock:
+                    if self._closed.is_set() or generation != self._generation:
+                        break
+                    if text in self._cache:
+                        self._cache.move_to_end(text)
+                        continue
+                try:
+                    translated = translate_text(text, self._language, self._closed)
+                    error = ""
+                except ProcessCancelled:
+                    translated, error = "", ""
+                except Exception as exception:
+                    translated, error = "", str(exception)
+                with self._lock:
+                    if self._closed.is_set():
+                        break
+                    if translated:
+                        # Exact source keys make late results safe to cache, but
+                        # they can never appear next to a changed source phrase.
+                        self._cache[text] = translated
+                        self._cache.move_to_end(text)
+                        while len(self._cache) > self.CACHE_LIMIT:
+                            self._cache.popitem(last=False)
+                    if generation == self._generation:
+                        if error:
+                            self._error = error
+                        self._retry_after = time.monotonic() + 2.0
             with self._lock:
-                if generation == self._generation and not self._closed.is_set():
-                    self._result = translated
-                    self._error = error
-                    self._retry_after = time.monotonic() + 2.0
+                if all(item["source"] in self._cache for item in self._segments):
+                    self._error = ""
 
 
 def capture_region(region: str, image_path: Path) -> None:
@@ -303,6 +347,7 @@ def main() -> int:
         "message": "Starting live screen translation…",
         "ocr_text": "",
         "translated_text": "",
+        "translation_segments": [],
         "target_language": args.target_language,
         "ocr_language": args.ocr_language,
         "region": args.region,
@@ -341,16 +386,19 @@ def main() -> int:
                 except ProcessCancelled:
                     break
                 except (FileNotFoundError, ValueError) as error:
-                    state.update({"status": "error", "message": str(error)})
+                    state.update({"status": "error", "message": str(error),
+                                  "translation_segments": []})
                     write_state(state_path, state)
                     exit_code = 2
                     break
                 except Exception as error:
+                    translated, _, translation_segments = translator.snapshot_segments()
                     state.update({
                         "status": "error",
                         "message": str(error),
                         "ocr_text": last_ocr_text,
-                        "translated_text": translator.result(),
+                        "translated_text": translated,
+                        "translation_segments": translation_segments,
                     })
                     write_state(state_path, state)
                     STOP_REQUESTED.wait(max(0.5, args.interval_seconds))
@@ -372,12 +420,13 @@ def main() -> int:
                 # backoff, and completed/active requests are deduplicated.
                 if last_ocr_text:
                     translator.submit(last_ocr_text)
-                translated, translation_error = translator.snapshot()
+                translated, translation_error, translation_segments = translator.snapshot_segments()
                 state.update({
                     "status": "error" if translation_error else "running",
                     "message": translation_error or "Reading selected screen area…",
                     "ocr_text": last_ocr_text,
                     "translated_text": translated,
+                    "translation_segments": translation_segments,
                     "target_language": args.target_language,
                     "ocr_language": args.ocr_language,
                     "region": args.region,
@@ -389,7 +438,7 @@ def main() -> int:
 
     if exit_code == 0:
         state.update({"status": "stopped", "message": "Live screen translation stopped.",
-                      "ocr_text": "", "translated_text": ""})
+                      "ocr_text": "", "translated_text": "", "translation_segments": []})
         write_state(state_path, state)
     return exit_code
 

@@ -141,6 +141,90 @@ class TranslatorTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Translation unavailable"):
                 backend.translate_text("hello", "en")
 
+    def test_exact_source_sentences_remain_paired_when_target_punctuation_differs(self):
+        translations = {"Hello there.": "Bonjour ! Salut !", "What now?": "Et maintenant"}
+        with patch.object(backend, "translate_text", side_effect=lambda text, *_: translations[text]) as translate:
+            worker = backend.AsyncTranslator("fr")
+            try:
+                worker.submit("Hello there. What now?")
+                wait_for(lambda: worker._thread is None)
+                result, error, segments = worker.snapshot_segments()
+                self.assertEqual([(item["source"], item["translated"]) for item in segments],
+                                 list(translations.items()))
+                self.assertEqual(result, "Bonjour ! Salut !\nEt maintenant")
+                self.assertEqual(error, "")
+                self.assertTrue(all(not item["pending"] for item in segments))
+                self.assertEqual(translate.call_count, 2)
+            finally:
+                worker.close()
+
+    def test_unchanged_sentence_is_reused_and_only_changed_tail_is_pending(self):
+        started, release = threading.Event(), threading.Event()
+        calls = []
+
+        def translate(text, *_):
+            calls.append(text)
+            if text == "A live tail keeps growing":
+                started.set()
+                release.wait(2)
+            return text.upper()
+
+        with patch.object(backend, "translate_text", side_effect=translate):
+            worker = backend.AsyncTranslator("fr")
+            try:
+                worker.submit("Complete sentence. A live tail")
+                wait_for(lambda: worker._thread is None)
+                original = worker.snapshot_segments()[2]
+                worker.submit("Complete sentence. A live tail keeps growing")
+                self.assertTrue(started.wait(1))
+                result, _, changed = worker.snapshot_segments()
+                self.assertEqual([item["id"] for item in original], [item["id"] for item in changed])
+                self.assertEqual(result, "COMPLETE SENTENCE.")
+                self.assertFalse(changed[0]["pending"])
+                self.assertTrue(changed[1]["pending"])
+                self.assertEqual(changed[1]["translated"], "")
+                release.set()
+                wait_for(lambda: worker._thread is None)
+                self.assertEqual(calls.count("Complete sentence."), 1)
+                self.assertEqual(len(calls), 3)
+            finally:
+                release.set()
+                worker.close()
+
+    def test_sliding_source_preserves_colours_and_translation_cache_is_bounded(self):
+        with patch.object(backend, "translate_text", side_effect=lambda text, *_: text.upper()):
+            worker = backend.AsyncTranslator("fr")
+            worker.CACHE_LIMIT = 6
+            try:
+                worker.submit("First sentence. Second sentence. Third sentence.")
+                wait_for(lambda: worker._thread is None)
+                original = worker.snapshot_segments()[2]
+                worker.submit("Second sentence. Third sentence. Fourth sentence.")
+                wait_for(lambda: worker._thread is None)
+                changed = worker.snapshot_segments()[2]
+                self.assertEqual([item["id"] for item in original[1:]],
+                                 [item["id"] for item in changed[:2]])
+                for index in range(10):
+                    worker.submit(f"Unique phrase {index}.")
+                    wait_for(lambda: worker._thread is None)
+                self.assertEqual(len(worker._cache), 6)
+                worker.reset()
+                self.assertEqual(worker.snapshot_segments(), ("", "", []))
+            finally:
+                worker.close()
+
+    def test_many_sentences_keep_only_six_recent_pairs_and_requests(self):
+        with patch.object(backend, "translate_text", side_effect=lambda text, *_: text.upper()) as translate:
+            worker = backend.AsyncTranslator("fr")
+            try:
+                worker.submit(" ".join(f"Sentence {index}." for index in range(20)))
+                wait_for(lambda: worker._thread is None)
+                self.assertEqual(len(worker.snapshot_segments()[2]), 6)
+                self.assertEqual(translate.call_count, 6)
+                self.assertEqual(worker.snapshot_segments()[2][0]["source"], "Sentence 14.")
+            finally:
+                worker.close()
+
 
 class OcrTests(unittest.TestCase):
     def test_quotes_and_malformed_rows_do_not_corrupt_other_words(self):
@@ -168,6 +252,10 @@ class MainLoopTests(unittest.TestCase):
                 def submit(self, text): self.text = text
                 def reset(self): self.text = ""
                 def snapshot(self): return self.text.upper(), ""
+                def snapshot_segments(self):
+                    return self.text.upper(), "", ([{"id": "test", "source": self.text,
+                                                     "translated": self.text.upper(), "pending": False}]
+                                                   if self.text else [])
                 def result(self): return self.text.upper()
                 def close(self): pass
 
@@ -193,6 +281,7 @@ class MainLoopTests(unittest.TestCase):
         states = self.run_frames([("hello", 90), ("", 0), ("", 0)])
         self.assertEqual([state["ocr_text"] for state in states], ["hello", "hello", ""])
         self.assertEqual(states[-1]["translated_text"], "")
+        self.assertEqual(states[-1]["translation_segments"], [])
 
     def test_low_confidence_frames_still_publish_current_translation(self):
         states = self.run_frames([("hello", 90), ("noise", 10)])

@@ -259,6 +259,10 @@ StyledOverlayWidget {
                     }
                 }
 
+                CaptionAppearanceControls {
+                    Layout.fillWidth: true
+                }
+
                 // Source section
                 StyledText {
                     Layout.fillWidth: true

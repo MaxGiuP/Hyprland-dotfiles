@@ -15,6 +15,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 import live_captions as captions
+from translation_segments import SegmentTracker, split_source_segments
 
 
 def wait_for(predicate, timeout=2):
@@ -87,6 +88,100 @@ class CaptionTextTests(unittest.TestCase):
             (root / "config.json").touch()
             (root / "tokenizer.json").touch()
             self.assertTrue(captions.model_is_complete(root))
+
+
+class TranslationSegmentTests(unittest.TestCase):
+    def test_sentence_boundaries_preserve_decimals_titles_initials_and_cjk(self):
+        self.assertEqual(split_source_segments('Dr. J. Smith paid 1.5 euros. "Hello!" Next?'),
+                         ['Dr. J. Smith paid 1.5 euros.', '"Hello!"', 'Next?'])
+        self.assertEqual(split_source_segments("你好。再见！またね？終わり"),
+                         ["你好。", "再见！", "またね？", "終わり"])
+        self.assertEqual(split_source_segments("first utterance\nsecond utterance"),
+                         ["first utterance", "second utterance"])
+
+    def test_identity_survives_tail_growth_and_sentence_window_scrolling(self):
+        tracker = SegmentTracker(limit=3)
+        first = tracker.update("One sentence. Another sentence. A growing")
+        grown = tracker.update("One sentence. Another sentence. A growing phrase.")
+        self.assertEqual([item["id"] for item in first], [item["id"] for item in grown])
+        scrolled = tracker.update("Another sentence. A growing phrase. New sentence.")
+        self.assertEqual([item["id"] for item in grown[1:]], [item["id"] for item in scrolled[:2]])
+        self.assertNotIn(scrolled[-1]["id"], [item["id"] for item in grown])
+
+    def test_rolling_unpunctuated_text_retains_identity_without_reusing_translation(self):
+        tracker = SegmentTracker()
+        first = tracker.update("the first few words of a longer live caption")[0]
+        revised = tracker.update("words of a longer live caption that keeps growing")[0]
+        self.assertEqual(first["id"], revised["id"])
+
+    def test_bounds_repeated_sentences_with_distinct_identities(self):
+        tracker = SegmentTracker(limit=3)
+        segments = tracker.update("Yes. Yes. Yes. Yes.")
+        self.assertEqual(len(segments), 3)
+        self.assertEqual(len({item["id"] for item in segments}), 3)
+        self.assertEqual(tracker.update(""), [])
+
+    def test_actual_translation_requests_define_pairs_even_when_punctuation_changes(self):
+        translations = {"Hello there.": "Bonjour ! Salut !", "What now?": "Et maintenant"}
+        with patch.object(captions, "translate_text", side_effect=lambda text, *_: translations[text]) as translate:
+            worker = captions.AsyncTranslator()
+            tracker = SegmentTracker()
+            try:
+                def snapshot():
+                    return captions.paired_translations(worker, tracker, "Hello there. What now?",
+                                                        "Hello there.", "fr", "en")
+                wait_for(lambda: all(not item["pending"] for item in snapshot()[3]))
+                full, stable, live, segments = snapshot()
+                self.assertEqual([(item["source"], item["translated"]) for item in segments],
+                                 list(translations.items()))
+                self.assertEqual((full, stable, live),
+                                 ("Bonjour ! Salut ! Et maintenant", "Bonjour ! Salut !", "Et maintenant"))
+                self.assertEqual(translate.call_count, 2)
+            finally:
+                worker.stop()
+
+    def test_growing_source_does_not_pair_with_previous_prefix_translation(self):
+        started, release = threading.Event(), threading.Event()
+
+        def translate(text, *_):
+            if text == "Hello there everyone":
+                started.set()
+                release.wait(2)
+            return "translated " + text
+
+        with patch.object(captions, "translate_text", side_effect=translate):
+            worker = captions.AsyncTranslator()
+            tracker = SegmentTracker()
+            try:
+                def snapshot(text):
+                    return captions.paired_translations(worker, tracker, text, "", "fr", "en")[3]
+                wait_for(lambda: not snapshot("Hello there")[0]["pending"])
+                old = snapshot("Hello there")[0]
+                pending = snapshot("Hello there everyone")[0]
+                self.assertTrue(started.wait(1))
+                self.assertEqual(pending["id"], old["id"])
+                self.assertEqual(pending["translated"], "")
+                self.assertTrue(pending["pending"])
+                release.set()
+                wait_for(lambda: not snapshot("Hello there everyone")[0]["pending"])
+                self.assertEqual(snapshot("Hello there everyone")[0]["translated"],
+                                 "translated Hello there everyone")
+            finally:
+                release.set()
+                worker.stop()
+
+    def test_removed_segments_are_not_left_in_translation_queue(self):
+        worker = captions.AsyncTranslator()
+        try:
+            with worker._lock:
+                worker._pending["obsolete"] = ("old source", "fr", "en")
+                worker._pending["current"] = ("current source", "fr", "en")
+                # Keep its sleeping background loop from doing any external work.
+                worker._stop_event.set()
+            worker.retain_streams({"current"})
+            self.assertEqual(list(worker._pending), ["current"])
+        finally:
+            worker.stop()
 
 
 class WhisperTests(unittest.TestCase):

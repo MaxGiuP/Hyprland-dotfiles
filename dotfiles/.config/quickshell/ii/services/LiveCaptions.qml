@@ -62,6 +62,7 @@ Singleton {
         "translated_text": "",
         "translated_stable_text": "",
         "translated_unstable_text": "",
+        "translation_segments": [],
         "source_language": "",
         "target_language": targetLanguage,
         "history": [],
@@ -76,6 +77,7 @@ Singleton {
     readonly property string translatedText: String(state?.translated_text ?? "")
     readonly property string translatedStableText: String(state?.translated_stable_text ?? "")
     readonly property string translatedUnstableText: String(state?.translated_unstable_text ?? "")
+    readonly property var translationSegments: CaptionSegments.sanitizeSegments(state?.translation_segments)
     readonly property string sourceLanguage: String(state?.source_language ?? "")
     readonly property string runtimeDevice: String(state?.runtime_device ?? "")
     readonly property var history: state?.history ?? []
@@ -319,6 +321,7 @@ Singleton {
             "stable_text": "",
             "unstable_text": "",
             "translated_text": "",
+            "translation_segments": [],
             "translated_stable_text": "",
             "translated_unstable_text": "",
             "source_language": "",
