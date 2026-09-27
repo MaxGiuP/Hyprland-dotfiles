@@ -180,6 +180,7 @@ Singleton {
         const region = CF.StringUtils.shellSingleQuoteEscape(root.region)
         const targetLanguage = CF.StringUtils.shellSingleQuoteEscape(root.targetLanguage)
         const ocrLanguage = CF.StringUtils.shellSingleQuoteEscape(root.ocrLanguage)
+        const translationGranularity = CaptionAppearance.translationGranularity
         const launchScript = workerShellPrelude() +
             `pid="$(cat "$pid_path" 2>/dev/null)"; worker_alive && exit 0; ` +
             stateWriteCommand(root.state) +
@@ -189,6 +190,7 @@ Singleton {
             `--state-file '${statePath}' ` +
             `--region='${region}' ` +
             `--target-language '${targetLanguage}' ` +
+            `--translation-granularity '${translationGranularity}' ` +
             `--ocr-language '${ocrLanguage}' ` +
             `>>'${logPath}' 2>&1 </dev/null & echo $! > '${pidPath}'`
         return ["bash", "-c", launchScript]
@@ -530,6 +532,14 @@ Singleton {
                 root.updateWorkerState(true)
             else if (!root.launchPending || !launchTimeoutTimer.running)
                 root.updateWorkerState(false)
+        }
+    }
+
+    Connections {
+        target: CaptionAppearance
+        function onTranslationGranularityChanged() {
+            if (Persistent.ready && root.active)
+                root.restartIfActive()
         }
     }
 

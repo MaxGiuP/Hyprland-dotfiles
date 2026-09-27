@@ -24,6 +24,7 @@ function service(name, directory = '/tmp/live-service-test') {
         state: {}, selectingRegion: false,
         Persistent: { ready: true, states: { [kind]: settings } },
         Translation: { tr: text => text },
+        CaptionAppearance: { translationGranularity: 'phrase' },
         Appearance: { colors: { colOnSurfaceVariant: '#202020' } },
         CF: { StringUtils: { shellSingleQuoteEscape: value => String(value).replaceAll("'", "'\\''") } },
         Directories: {}, GlobalStates: { overlayOpen: true },
@@ -183,3 +184,13 @@ test('tentative captions use the current theme and escape rich text', () => {
     s.Appearance.colors.colOnSurfaceVariant = '#eeeeee';
     assert.match(s.sourceCaptionMarkup(), /color:#eeeeee/);
 });
+
+for (const name of ['LiveCaptions', 'LiveScreenTranslation']) {
+    test(`${name}: passes selected translation granularity to its worker`, () => {
+        const s = service(name);
+        for (const mode of ['phrase', 'sentence']) {
+            s.CaptionAppearance.translationGranularity = mode;
+            assert.ok(s.buildBackendLaunchCommand()[2].includes(`--translation-granularity '${mode}'`));
+        }
+    });
+}

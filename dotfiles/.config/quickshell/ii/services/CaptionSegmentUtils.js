@@ -7,7 +7,7 @@ function sanitizeSegments(payload, maximumSegments) {
     if (!Array.isArray(input))
         return []
 
-    const limit = Math.max(1, Math.min(32, Math.floor(maximumSegments || 6)))
+    const limit = Math.max(1, Math.min(32, Math.floor(maximumSegments || 12)))
     const result = []
     const seen = new Set()
     for (let index = input.length - 1; index >= 0 && result.length < limit; index--) {
@@ -22,7 +22,9 @@ function sanitizeSegments(payload, maximumSegments) {
         seen.add(id)
         const translated = typeof item.translated === "string" ? item.translated.trim() : ""
         const pending = item.pending !== false || translated.length === 0
-        result.push({ id, source, translated: pending ? "" : translated, pending })
+        // Older workers have no separator and retain their sentence-per-line layout.
+        const separator = item.separator === " " || item.separator === "" ? item.separator : "\n"
+        result.push({ id, source, translated: pending ? "" : translated, pending, separator })
     }
     return result.reverse()
 }
@@ -39,8 +41,8 @@ function escapeRichText(text) {
 
 function colorIndex(id, colorCount) {
     // Backend IDs end with a monotonic sequence number. Cycling by that number
-    // gives the six recent sentences distinct colours without changing them
-    // when older sentences scroll out of view.
+    // cycles through the palette without changing colours when older phrases
+    // scroll out of view.
     const numericSuffix = String(id).match(/(\d+)$/)
     if (numericSuffix) {
         const number = Number(numericSuffix[1])
@@ -115,18 +117,31 @@ function colorForId(id, palette, background, minimumContrast) {
 function markup(segments, translated, palette, background, neutralColor, minimumContrast) {
     const neutral = contrastAdjustedColor(neutralColor, background, minimumContrast)
     const lines = []
+    let lineBreak = false
     for (const segment of segments) {
+        lineBreak = lineBreak || segment.separator !== " " && segment.separator !== ""
         const completed = !segment.pending && segment.translated.length > 0
         if (translated && !completed)
             continue
         const color = completed ? colorForId(segment.id, palette, background, minimumContrast) : neutral
         const text = translated ? segment.translated : segment.source
-        lines.push(`<span style="color:${color};">${escapeRichText(text)}</span>`)
+        const separator = lines.length ? (lineBreak ? "<br>" : " ") : ""
+        lines.push(`${separator}<span style="color:${color};">${escapeRichText(text)}</span>`)
+        lineBreak = false
     }
-    return lines.join("<br>")
+    return lines.join("")
 }
 
 function plainText(segments, translated) {
-    return segments.filter(segment => !translated || (!segment.pending && segment.translated.length > 0))
-        .map(segment => translated ? segment.translated : segment.source).join("\n")
+    const parts = []
+    let lineBreak = false
+    for (const segment of segments) {
+        lineBreak = lineBreak || segment.separator !== " " && segment.separator !== ""
+        if (translated && (segment.pending || !segment.translated.length))
+            continue
+        const separator = parts.length ? (lineBreak ? "\n" : " ") : ""
+        parts.push(separator + (translated ? segment.translated : segment.source))
+        lineBreak = false
+    }
+    return parts.join("")
 }

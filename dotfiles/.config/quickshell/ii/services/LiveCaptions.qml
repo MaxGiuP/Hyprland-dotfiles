@@ -370,6 +370,7 @@ Singleton {
         const targetLanguage = CF.StringUtils.shellSingleQuoteEscape(root.targetLanguage)
         const modelName = CF.StringUtils.shellSingleQuoteEscape(root.modelName)
         const tuningPreset = CF.StringUtils.shellSingleQuoteEscape(root.tuningPreset)
+        const translationGranularity = CaptionAppearance.translationGranularity
         const launchScript = workerShellPrelude() +
             `pid="$(cat "$pid_path" 2>/dev/null)"; worker_alive && exit 0; ` +
             stateWriteCommand(root.state) +
@@ -390,6 +391,7 @@ Singleton {
             `--display-mode '${displayMode}' ` +
             `--language '${preferredLanguage}' ` +
             `--target-language '${targetLanguage}' ` +
+            `--translation-granularity '${translationGranularity}' ` +
             `--model '${modelName}' ` +
             `--preset '${tuningPreset}' ` +
             `--model-cache-dir '${backendModelCachePath}' ` +
@@ -719,6 +721,14 @@ Singleton {
                 root.updateWorkerState(true)
             else if (!root.launchPending || !launchTimeoutTimer.running)
                 root.updateWorkerState(false)
+        }
+    }
+
+    Connections {
+        target: CaptionAppearance
+        function onTranslationGranularityChanged() {
+            if (Persistent.ready && root.active)
+                root.restartIfActive()
         }
     }
 

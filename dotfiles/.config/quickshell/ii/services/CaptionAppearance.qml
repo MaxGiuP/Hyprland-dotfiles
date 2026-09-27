@@ -8,6 +8,7 @@ Singleton {
 
     readonly property real textScale: root.normalizedScale(Persistent.states.captionAppearance.textScale)
     readonly property bool sentenceHighlighting: Persistent.states.captionAppearance.sentenceHighlighting
+    readonly property string translationGranularity: Persistent.states.captionAppearance.translationGranularity === "sentence" ? "sentence" : "phrase"
     readonly property int mainTextPixelSize: Math.round(Appearance.font.pixelSize.large * root.textScale)
 
     function normalizedScale(value) {
@@ -23,5 +24,9 @@ Singleton {
 
     function setSentenceHighlighting(enabled) {
         Persistent.states.captionAppearance.sentenceHighlighting = Boolean(enabled)
+    }
+
+    function setTranslationGranularity(value) {
+        Persistent.states.captionAppearance.translationGranularity = value === "sentence" ? "sentence" : "phrase"
     }
 }

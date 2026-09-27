@@ -339,6 +339,42 @@ StyledOverlayWidget {
                 StyledText {
                     Layout.fillWidth: true
                     visible: LiveCaptions.backendKind === "whisper"
+                    text: Translation.tr("Speech model")
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smaller
+                }
+
+                Flow {
+                    Layout.fillWidth: true
+                    visible: LiveCaptions.backendKind === "whisper"
+                    spacing: 8
+                    Repeater {
+                        model: LiveCaptions.modelOptions
+                        delegate: DialogButton {
+                            required property var modelData
+                            buttonText: modelData.label
+                            colBackground: LiveCaptions.modelName === modelData.id
+                                ? Appearance.colors.colPrimaryContainer : Appearance.colors.colLayer1
+                            colBackgroundHover: LiveCaptions.modelName === modelData.id
+                                ? Appearance.colors.colPrimaryContainer : Appearance.colors.colLayer1Hover
+                            colText: Appearance.colors.colOnLayer1
+                            downAction: () => LiveCaptions.setModelName(modelData.id)
+                        }
+                    }
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: LiveCaptions.backendKind === "whisper"
+                    wrapMode: Text.WordWrap
+                    color: Appearance.colors.colSubtext
+                    font.pixelSize: Appearance.font.pixelSize.smallie
+                    text: Translation.tr("Tiny is fastest. Base and Small can improve recognition but take longer. Models download on first use. Selecting the spoken language helps with short speech clips.")
+                }
+
+                StyledText {
+                    Layout.fillWidth: true
+                    visible: LiveCaptions.backendKind === "whisper"
                     text: Translation.tr("Tweaks")
                     color: Appearance.colors.colSubtext
                     font.pixelSize: Appearance.font.pixelSize.smaller

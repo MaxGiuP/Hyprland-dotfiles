@@ -8,7 +8,7 @@ import "CaptionSegmentUtils.js" as SegmentUtils
 QtObject {
     id: root
 
-    readonly property int maximumSegments: 6
+    readonly property int maximumSegments: 12
     readonly property string surfaceColor: Appearance.colors.colLayer1Base.toString()
     readonly property string neutralColor: Appearance.colors.colOnSurface.toString()
     readonly property real minimumContrast: Appearance.highContrast ? 7 : 4.5

@@ -53,6 +53,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--display-mode", choices=["captions", "translated", "bilingual"], default="bilingual")
     parser.add_argument("--language", default="auto")
     parser.add_argument("--target-language", choices=["en", "fr", "de", "es", "it", "pt", "nl", "ru", "zh", "ja", "ko", "pl", "ar", "hi", "tr", "sv", "da", "fi", "cs", "ro"], default="en")
+    parser.add_argument("--translation-granularity", choices=["phrase", "sentence"], default="phrase")
     parser.add_argument("--model", default="tiny")
     parser.add_argument("--preset", choices=["realtime", "snappy", "balanced", "accurate"], default="realtime")
     parser.add_argument("--model-cache-dir", default="")
@@ -612,18 +613,23 @@ def load_model(model_path: str, force_device: str | None = None):
 class AsyncTranslator:
     CACHE_LIMIT = 128
     RETRY_SECONDS = 2.0
+    MAX_WORKERS = 2
 
     def __init__(self):
         self._lock = threading.Lock()
-        self._wake_event = threading.Event()
+        self._ready = threading.Condition(self._lock)
         self._stop_event = threading.Event()
         self._pending: OrderedDict[str, tuple[str, str, str]] = OrderedDict()
-        self._current: tuple[str, tuple[str, str, str]] | None = None
+        self._inflight: set[tuple[str, str, str]] = set()
+        self._desired_by_stream: dict[str, tuple[str, str, str]] = {}
         self._cache: OrderedDict[tuple[str, str, str], str] = OrderedDict()
         self._retry_after: OrderedDict[tuple[str, str, str], float] = OrderedDict()
         self._latest_by_target: dict[tuple[str, str, str], tuple[str, str]] = {}
-        self._thread = threading.Thread(target=self._run, name="live-captions-translator", daemon=True)
-        self._thread.start()
+        self._threads = [threading.Thread(target=self._run,
+                                         name=f"live-captions-translator-{index + 1}", daemon=True)
+                         for index in range(self.MAX_WORKERS)]
+        for thread in self._threads:
+            thread.start()
 
     def request(self, text: str, target_language: str, source_language: str = "", *,
                 stream: str = "live", allow_partial: bool = True) -> str:
@@ -632,25 +638,35 @@ class AsyncTranslator:
         if source_code == "auto":
             source_code = ""
 
-        if not normalized_text:
-            return ""
-        if source_code and source_code == target_language:
-            return normalized_text
-
         cache_key = (normalized_text, target_language, source_code)
         with self._lock:
+            if not normalized_text or (source_code and source_code == target_language):
+                self._pending.pop(stream, None)
+                self._desired_by_stream.pop(stream, None)
+                return normalized_text
+
             if cache_key in self._cache:
+                self._pending.pop(stream, None)
+                self._desired_by_stream.pop(stream, None)
                 self._cache.move_to_end(cache_key)
+                self._remember_latest(stream, cache_key, self._cache[cache_key])
                 return self._cache[cache_key]
 
             latest = self._latest_by_target.get((target_language, source_code, stream))
-            current_key = self._current[1] if self._current else None
-            if (current_key != cache_key and self._pending.get(stream) != cache_key
-                    and time.monotonic() >= self._retry_after.get(cache_key, 0)
-                    and not self._stop_event.is_set()):
-                # Keep the latest request for each pane, without starving the other pane.
+            if self._stop_event.is_set() or time.monotonic() < self._retry_after.get(cache_key, 0):
+                self._pending.pop(stream, None)
+                self._desired_by_stream.pop(stream, None)
+            elif cache_key in self._inflight:
+                # A revision can revert to text already being translated. Remove
+                # its superseded queue entry even though no new task is needed.
+                self._pending.pop(stream, None)
+                self._desired_by_stream[stream] = cache_key
+            else:
+                # Replacing a queued revision preserves its position, so a
+                # frequently changing live phrase cannot starve other streams.
                 self._pending[stream] = cache_key
-                self._wake_event.set()
+                self._desired_by_stream[stream] = cache_key
+                self._ready.notify_all()
 
             if allow_partial and latest is not None:
                 latest_source, latest_translation = latest
@@ -663,6 +679,8 @@ class AsyncTranslator:
         with self._lock:
             self._pending = OrderedDict((key, value) for key, value in self._pending.items()
                                         if key in streams)
+            self._desired_by_stream = {key: value for key, value in self._desired_by_stream.items()
+                                       if key in streams}
             self._latest_by_target = {key: value for key, value in self._latest_by_target.items()
                                       if key[2] in streams}
 
@@ -679,44 +697,78 @@ class AsyncTranslator:
         )
 
     def stop(self) -> None:
-        self._stop_event.set()
-        self._wake_event.set()
-        self._thread.join(timeout=1.0)
+        with self._ready:
+            self._stop_event.set()
+            self._pending.clear()
+            self._desired_by_stream.clear()
+            self._ready.notify_all()
+        # Both subprocesses receive cancellation together. Use one bounded
+        # deadline rather than adding a full shutdown timeout per worker.
+        deadline = time.monotonic() + 2.0
+        for thread in self._threads:
+            thread.join(timeout=max(0, deadline - time.monotonic()))
+
+    def _remember_latest(self, stream: str, task: tuple[str, str, str], translated: str) -> None:
+        text, target_language, source_language = task
+        self._latest_by_target[(target_language, source_language, stream)] = (text, translated)
+        while len(self._latest_by_target) > self.CACHE_LIMIT:
+            del self._latest_by_target[next(iter(self._latest_by_target))]
+
+    def _finish(self, task: tuple[str, str, str], translated: str) -> None:
+        """Publish under the lock only to streams still requesting this revision."""
+        if translated:
+            self._cache[task] = translated
+            self._cache.move_to_end(task)
+            self._retry_after.pop(task, None)
+            while len(self._cache) > self.CACHE_LIMIT:
+                self._cache.popitem(last=False)
+        else:
+            self._retry_after[task] = time.monotonic() + self.RETRY_SECONDS
+            self._retry_after.move_to_end(task)
+            while len(self._retry_after) > self.CACHE_LIMIT:
+                self._retry_after.popitem(last=False)
+
+        for stream, desired in list(self._desired_by_stream.items()):
+            if desired == task:
+                self._desired_by_stream.pop(stream)
+                if translated:
+                    self._remember_latest(stream, task, translated)
 
     def _run(self) -> None:
-        while not self._stop_event.is_set():
-            self._wake_event.wait(timeout=0.1)
-            self._wake_event.clear()
-
-            while not self._stop_event.is_set():
-                with self._lock:
+        while True:
+            with self._ready:
+                while True:
+                    if self._stop_event.is_set():
+                        return
                     if not self._pending:
-                        break
+                        self._ready.wait()
+                        continue
                     stream, task = self._pending.popitem(last=False)
-                    self._current = (stream, task)
+                    if task in self._inflight:
+                        continue
                     cached = self._cache.get(task)
-
-                text, target_language, source_language = task
-                translated = cached or translate_text(text, target_language, source_language, self._stop_event)
-
-                with self._lock:
-                    self._current = None
-                    if translated:
-                        self._cache[task] = translated
-                        self._cache.move_to_end(task)
-                        self._retry_after.pop(task, None)
-                        self._latest_by_target[(target_language, source_language, stream)] = (text, translated)
-                        while len(self._latest_by_target) > self.CACHE_LIMIT:
-                            del self._latest_by_target[next(iter(self._latest_by_target))]
-                        while len(self._cache) > self.CACHE_LIMIT:
-                            self._cache.popitem(last=False)
-                    else:
-                        self._retry_after[task] = time.monotonic() + self.RETRY_SECONDS
-                        while len(self._retry_after) > self.CACHE_LIMIT:
-                            self._retry_after.popitem(last=False)
-
-                if self._stop_event.is_set():
+                    if cached:
+                        self._finish(task, cached)
+                        continue
+                    if time.monotonic() < self._retry_after.get(task, 0):
+                        self._desired_by_stream.pop(stream, None)
+                        continue
+                    self._inflight.add(task)
                     break
+
+            text, target_language, source_language = task
+            try:
+                translated = translate_text(text, target_language, source_language, self._stop_event)
+            except Exception:
+                # A provider or decoding error must not permanently kill a worker.
+                translated = ""
+
+            with self._ready:
+                self._inflight.discard(task)
+                if self._stop_event.is_set():
+                    return
+                self._finish(task, translated)
+                self._ready.notify_all()
 
 
 def translated_texts(translator: AsyncTranslator, display_text: str, stable_text: str,
@@ -1139,7 +1191,7 @@ def run_streaming_asr_backend(args: argparse.Namespace, state_path: Path, state:
         set_status(state_path, state, "error", f"Could not start audio capture: {error}")
         return 3
     translator = AsyncTranslator()
-    segment_tracker = SegmentTracker()
+    segment_tracker = SegmentTracker(granularity=getattr(args, "translation_granularity", "phrase"))
     last_display_text = ""
     last_translated_text = ""
     last_translated_stable_text = ""
@@ -1291,7 +1343,7 @@ def main() -> int:
     )
     transcriber.runtime_device = runtime_device
     translator = AsyncTranslator()
-    segment_tracker = SegmentTracker()
+    segment_tracker = SegmentTracker(granularity=getattr(args, "translation_granularity", "phrase"))
     last_fast_tick = time.monotonic()
     last_stable_tick = time.monotonic()
     last_display_text = ""

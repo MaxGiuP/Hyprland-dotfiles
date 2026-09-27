@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from collections import OrderedDict
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 import csv
 import io
 import json
@@ -38,6 +39,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--region", required=True)
     parser.add_argument("--target-language", default="en")
     parser.add_argument("--ocr-language", default="eng")
+    parser.add_argument("--translation-granularity", choices=["phrase", "sentence"], default="phrase")
     parser.add_argument("--interval-seconds", type=float, default=0.6)
     parser.add_argument("--confidence-threshold", type=float, default=60.0,
                         help="Minimum mean word confidence (0-100) to accept an OCR result")
@@ -122,7 +124,8 @@ def translate_text(text: str, target_language: str,
         result = run_command(
             # '--' prevents OCR from becoming flags. Leading whitespace prevents
             # translate-shell from treating file:// or URLs as files/web pages.
-            ["trans", "-brief", "-no-ansi", "-no-browser", f":{target_language}", "--", f" {text}"],
+            ["trans", "-brief", "-no-init", "-no-ansi", "-no-bidi", "-no-browser", "-no-play",
+             f":{target_language}", "--", f" {text}"],
             text=True,
             timeout=15,
             stop_event=stop_event,
@@ -141,15 +144,16 @@ class AsyncTranslator:
     """Translate exact source phrases without blocking or guessing correspondence."""
 
     CACHE_LIMIT = 128
+    MAX_CONCURRENT = 2
 
-    def __init__(self, language: str) -> None:
+    def __init__(self, language: str, granularity: str = "phrase") -> None:
         self._language = language
         self._lock = threading.Lock()
         self._error = ""
         self._latest_text = ""
         self._generation = 0
         self._retry_after = 0.0
-        self._tracker = SegmentTracker()
+        self._tracker = SegmentTracker(granularity=granularity)
         self._segments: list[dict] = []
         self._cache: OrderedDict[str, str] = OrderedDict()
         self._pending: tuple[int, list[dict]] | None = None
@@ -157,7 +161,7 @@ class AsyncTranslator:
         self._closed = threading.Event()
 
     def submit(self, text: str) -> None:
-        """Queue only changed/missing phrases; requests remain bounded and serial."""
+        """Queue only changed/missing phrases with bounded concurrent requests."""
         if not text:
             self.reset()
             return
@@ -200,7 +204,17 @@ class AsyncTranslator:
         for item in self._segments:
             translated = self._cache.get(item["source"], "")
             segments.append({**item, "translated": translated, "pending": not bool(translated)})
-        return ("\n".join(item["translated"] for item in segments if item["translated"]),
+        translated_parts = []
+        pending_break = False
+        for item in segments:
+            pending_break = pending_break or item.get("separator", "\n") == "\n"
+            if item["translated"]:
+                if translated_parts:
+                    translated_parts.append("\n" if pending_break else " ")
+                translated_parts.append(item["translated"])
+                pending_break = False
+        translated_text = "".join(translated_parts)
+        return (translated_text,
                 self._error, segments)
 
     def result(self) -> str:
@@ -216,46 +230,64 @@ class AsyncTranslator:
             return self._snapshot_locked()
 
     def _run(self) -> None:
-        while True:
-            with self._lock:
-                if self._closed.is_set() or self._pending is None:
-                    self._thread = None
-                    return
-                generation, segments = self._pending
-                self._pending = None
-            # Prefer the most recent visible phrase while reusing older results.
-            for item in reversed(segments):
-                text = item["source"]
+        active = {}
+        queued = []
+        generation = -1
+        with ThreadPoolExecutor(max_workers=self.MAX_CONCURRENT,
+                                thread_name_prefix="screen-phrase") as pool:
+            while True:
                 with self._lock:
+                    if self._pending is not None:
+                        generation, segments = self._pending
+                        self._pending = None
+                        # Replacing the queue drops obsolete text before a
+                        # network call. Start the latest visible groups first.
+                        queued = list(reversed(segments))
                     if self._closed.is_set() or generation != self._generation:
-                        break
-                    if text in self._cache:
-                        self._cache.move_to_end(text)
-                        continue
-                try:
-                    translated = translate_text(text, self._language, self._closed)
-                    error = ""
-                except ProcessCancelled:
-                    translated, error = "", ""
-                except Exception as exception:
-                    translated, error = "", str(exception)
-                with self._lock:
-                    if self._closed.is_set():
-                        break
-                    if translated:
-                        # Exact source keys make late results safe to cache, but
-                        # they can never appear next to a changed source phrase.
-                        self._cache[text] = translated
-                        self._cache.move_to_end(text)
-                        while len(self._cache) > self.CACHE_LIMIT:
-                            self._cache.popitem(last=False)
-                    if generation == self._generation:
-                        if error:
+                        queued = []
+                    queued = [item for item in queued if item["source"] not in self._cache]
+                    active_sources = {text for _, text in active.values()}
+                    while queued and len(active) < self.MAX_CONCURRENT:
+                        candidate = next((index for index, item in enumerate(queued)
+                                          if item["source"] not in active_sources), None)
+                        if candidate is None:
+                            break
+                        text = queued.pop(candidate)["source"]
+                        future = pool.submit(translate_text, text, self._language, self._closed)
+                        active[future] = (generation, text)
+                        active_sources.add(text)
+                    if not active:
+                        self._thread = None
+                        return
+
+                completed, _ = wait(active, timeout=0.1, return_when=FIRST_COMPLETED)
+                for future in completed:
+                    task_generation, text = active.pop(future)
+                    try:
+                        translated, error = future.result(), ""
+                    except ProcessCancelled:
+                        translated, error = "", ""
+                    except Exception as exception:
+                        translated, error = "", str(exception)
+                    with self._lock:
+                        if self._closed.is_set():
+                            continue
+                        if translated:
+                            # Exact keys allow caching a late result without
+                            # ever pairing it with a changed source group.
+                            self._cache[text] = translated
+                            self._cache.move_to_end(text)
+                            while len(self._cache) > self.CACHE_LIMIT:
+                                self._cache.popitem(last=False)
+                        else:
+                            # A new generation may still contain this phrase;
+                            # do not immediately repeat its failed request.
+                            queued = [item for item in queued if item["source"] != text]
+                        if task_generation == self._generation and error:
                             self._error = error
                         self._retry_after = time.monotonic() + 2.0
-            with self._lock:
-                if all(item["source"] in self._cache for item in self._segments):
-                    self._error = ""
+                        if all(item["source"] in self._cache for item in self._segments):
+                            self._error = ""
 
 
 def capture_region(region: str, image_path: Path) -> None:
@@ -307,7 +339,7 @@ def ocr_image(image_bytes: bytes, language: str) -> tuple[str, float]:
         detail = (result.stderr or b"").decode(errors="replace").strip()
         raise RuntimeError(f"tesseract failed: {detail}" if detail else "tesseract: OCR failed")
 
-    lines_dict: dict[tuple, list[tuple[int, str]]] = {}
+    paragraphs: dict[tuple, list[tuple[int, int, str]]] = {}
     confidences: list[float] = []
     stdout_text = result.stdout.decode(errors="replace")
     reader = csv.DictReader(io.StringIO(stdout_text), delimiter="\t", quoting=csv.QUOTE_NONE)
@@ -320,23 +352,50 @@ def ocr_image(image_bytes: bytes, language: str) -> tuple[str, float]:
         if not math.isfinite(conf) or not 0 <= conf <= 100 or not text:
             continue
         try:
-            key = tuple(int(row[name]) for name in ("page_num", "block_num", "par_num", "line_num"))
+            key = tuple(int(row[name]) for name in ("page_num", "block_num", "par_num"))
+            line_num = int(row["line_num"])
             word_num = int(row["word_num"])
         except (KeyError, ValueError, TypeError):
             continue
-        lines_dict.setdefault(key, []).append((word_num, text))
+        paragraphs.setdefault(key, []).append((line_num, word_num, text))
         confidences.append(conf)
 
-    if not lines_dict:
+    if not paragraphs:
         return "", 0.0
 
-    text_lines = []
-    for key in sorted(lines_dict):
-        words = [w for _, w in sorted(lines_dict[key])]
-        text_lines.append(" ".join(words))
+    text_paragraphs = []
+    for key in sorted(paragraphs):
+        # A wrapped display line is not a new utterance. Keep sentence context
+        # within each OCR paragraph, while retaining actual paragraph breaks.
+        words = [word for _, _, word in sorted(paragraphs[key])]
+        text_paragraphs.append(" ".join(words))
 
     mean_conf = sum(confidences) / len(confidences)
-    return normalize_lines("\n".join(text_lines)), mean_conf
+    return normalize_lines("\n".join(text_paragraphs)), mean_conf
+
+
+class OcrFrameCache:
+    """Reuse OCR only for the exact last successfully processed capture."""
+
+    def __init__(self) -> None:
+        self._image: bytes | None = None
+        self._language = ""
+        self._result: tuple[str, float] = ("", 0.0)
+
+    def read(self, image_path: Path, language: str) -> tuple[str, float]:
+        image = image_path.read_bytes()
+        if image == self._image and language == self._language:
+            return self._result
+        result = ocr_image(preprocess_image(image_path), language)
+        # Failed processing must retry, even if the next image is unchanged.
+        self._image, self._language, self._result = image, language, result
+        return result
+
+
+def capture_wait_seconds(started_at: float, interval: float, *, failed: bool = False) -> float:
+    """Target capture start-to-start cadence instead of adding processing time."""
+    period = max(0.5 if failed else 0.35, interval)
+    return max(0.1 if failed else 0.0, period - (time.monotonic() - started_at))
 
 
 def main() -> int:
@@ -368,7 +427,8 @@ def main() -> int:
 
     last_ocr_text = ""
     empty_frames = 0
-    translator = AsyncTranslator(args.target_language)
+    translator = AsyncTranslator(args.target_language, args.translation_granularity)
+    frame_cache = OcrFrameCache()
     exit_code = 0
 
     try:
@@ -379,10 +439,10 @@ def main() -> int:
             write_state(state_path, state)
 
             while not STOP_REQUESTED.is_set():
+                frame_started_at = time.monotonic()
                 try:
                     capture_region(args.region, image_path)
-                    image_bytes = preprocess_image(image_path)
-                    ocr_text, confidence = ocr_image(image_bytes, args.ocr_language)
+                    ocr_text, confidence = frame_cache.read(image_path, args.ocr_language)
                 except ProcessCancelled:
                     break
                 except (FileNotFoundError, ValueError) as error:
@@ -401,7 +461,7 @@ def main() -> int:
                         "translation_segments": translation_segments,
                     })
                     write_state(state_path, state)
-                    STOP_REQUESTED.wait(max(0.5, args.interval_seconds))
+                    STOP_REQUESTED.wait(capture_wait_seconds(frame_started_at, args.interval_seconds, failed=True))
                     continue
 
                 if not ocr_text:
@@ -432,7 +492,7 @@ def main() -> int:
                     "region": args.region,
                 })
                 write_state(state_path, state)
-                STOP_REQUESTED.wait(max(0.35, args.interval_seconds))
+                STOP_REQUESTED.wait(capture_wait_seconds(frame_started_at, args.interval_seconds))
     finally:
         translator.close()
 

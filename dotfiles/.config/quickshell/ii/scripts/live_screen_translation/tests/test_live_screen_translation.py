@@ -137,6 +137,8 @@ class TranslatorTests(unittest.TestCase):
                 self.assertEqual(backend.translate_text(text, "en"), "hello")
                 command = run.call_args.args[0]
                 self.assertEqual(command[-2:], ["--", " " + text])
+                for flag in ("-no-init", "-no-bidi", "-no-play", "-no-browser"):
+                    self.assertIn(flag, command)
         with patch.object(backend, "run_command", return_value=subprocess.CompletedProcess([], 0, "", "Network failure")):
             with self.assertRaisesRegex(RuntimeError, "Translation unavailable"):
                 backend.translate_text("hello", "en")
@@ -213,16 +215,110 @@ class TranslatorTests(unittest.TestCase):
             finally:
                 worker.close()
 
-    def test_many_sentences_keep_only_six_recent_pairs_and_requests(self):
+    def test_many_sentences_keep_only_twelve_recent_pairs_and_requests(self):
         with patch.object(backend, "translate_text", side_effect=lambda text, *_: text.upper()) as translate:
             worker = backend.AsyncTranslator("fr")
             try:
                 worker.submit(" ".join(f"Sentence {index}." for index in range(20)))
                 wait_for(lambda: worker._thread is None)
-                self.assertEqual(len(worker.snapshot_segments()[2]), 6)
-                self.assertEqual(translate.call_count, 6)
-                self.assertEqual(worker.snapshot_segments()[2][0]["source"], "Sentence 14.")
+                self.assertEqual(len(worker.snapshot_segments()[2]), 12)
+                self.assertEqual(translate.call_count, 12)
+                self.assertEqual(worker.snapshot_segments()[2][0]["source"], "Sentence 8.")
             finally:
+                worker.close()
+
+    def test_two_requests_overlap_without_exceeding_limit_or_duplicating_sources(self):
+        release = threading.Event()
+        lock = threading.Lock()
+        calls = []
+        active = peak = 0
+
+        def translate(text, *_):
+            nonlocal active, peak
+            with lock:
+                calls.append(text)
+                active += 1
+                peak = max(peak, active)
+            release.wait(2)
+            with lock:
+                active -= 1
+            return text.upper()
+
+        with patch.object(backend, "translate_text", side_effect=translate):
+            worker = backend.AsyncTranslator("fr")
+            try:
+                text = "First sentence. Second sentence. Third sentence."
+                worker.submit(text)
+                wait_for(lambda: len(calls) == 2)
+                for _ in range(5):
+                    worker.submit(text)
+                self.assertEqual(len(calls), 2)
+                release.set()
+                wait_for(lambda: worker._thread is None)
+                self.assertEqual(peak, 2)
+                self.assertCountEqual(calls, ["First sentence.", "Second sentence.", "Third sentence."])
+                self.assertEqual(worker.result(), "FIRST SENTENCE.\nSECOND SENTENCE.\nTHIRD SENTENCE.")
+            finally:
+                release.set()
+                worker.close()
+
+    def test_sentence_mode_retains_context_and_phrase_mode_keeps_inline_separators(self):
+        text = "I opened the settings panel, and I changed the font size."
+        with patch.object(backend, "translate_text", side_effect=lambda text, *_: text.upper()) as translate:
+            worker = backend.AsyncTranslator("fr", granularity="sentence")
+            try:
+                worker.submit(text)
+                wait_for(lambda: worker._thread is None)
+                self.assertEqual(translate.call_count, 1)
+                self.assertEqual(worker.result(), text.upper())
+            finally:
+                worker.close()
+            worker = backend.AsyncTranslator("fr", granularity="phrase")
+            try:
+                worker.submit(text)
+                wait_for(lambda: worker._thread is None)
+                segments = worker.snapshot_segments()[2]
+                self.assertGreater(len(segments), 1)
+                self.assertEqual(worker.result(), text.upper())
+                self.assertTrue(all(item["separator"] == " " for item in segments[1:]))
+            finally:
+                worker.close()
+
+    def test_close_interrupts_both_active_translation_requests(self):
+        started = []
+
+        def translate(text, language, stop_event):
+            started.append(text)
+            stop_event.wait(2)
+            return ""
+
+        with patch.object(backend, "translate_text", side_effect=translate):
+            worker = backend.AsyncTranslator("fr")
+            worker.submit("First sentence. Second sentence.")
+            wait_for(lambda: len(started) == 2)
+            worker.close()
+            self.assertIsNone(worker._thread)
+            self.assertEqual(worker.snapshot_segments(), ("", "", []))
+
+    def test_pending_sentence_beginning_does_not_join_its_tail_to_previous_sentence(self):
+        release = threading.Event()
+
+        def translate(text, *_):
+            if text == "I opened the settings panel,":
+                release.wait(2)
+            return text.upper()
+
+        with patch.object(backend, "translate_text", side_effect=translate):
+            worker = backend.AsyncTranslator("fr")
+            try:
+                worker.submit("First sentence. I opened the settings panel, and I changed the font size.")
+                wait_for(lambda: len(worker._cache) == 2)
+                self.assertEqual(worker.result(), "FIRST SENTENCE.\nAND I CHANGED THE FONT SIZE.")
+                segments = worker.snapshot_segments()[2]
+                self.assertTrue(segments[1]["pending"])
+                self.assertFalse(segments[2]["pending"])
+            finally:
+                release.set()
                 worker.close()
 
 
@@ -237,29 +333,85 @@ class OcrTests(unittest.TestCase):
         with patch.object(backend, "run_command", return_value=subprocess.CompletedProcess([], 0, tsv.encode(), b"")):
             self.assertEqual(backend.ocr_image(b"synthetic", "eng"), ('"Hello world"', 90.0))
 
+    def test_wrapped_lines_rejoin_in_reading_order_with_paragraph_boundaries(self):
+        tsv = ("level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tconf\ttext\n"
+               "5\t1\t1\t1\t2\t1\t90\tcontext.\n"
+               "5\t1\t1\t1\t1\t2\t90\tsentence\n"
+               "5\t1\t1\t1\t1\t1\t90\tFull\n"
+               "5\t1\t1\t2\t1\t1\t90\tNext.\n"
+               "5\t1\t2\t1\t1\t1\t90\tSeparate.\n")
+        with patch.object(backend, "run_command", return_value=subprocess.CompletedProcess([], 0, tsv.encode(), b"")):
+            self.assertEqual(backend.ocr_image(b"synthetic", "eng"),
+                             ("Full sentence context.\nNext.\nSeparate.", 90.0))
+
+    def test_identical_capture_reuses_ocr_but_image_or_language_change_reprocesses(self):
+        cache = backend.OcrFrameCache()
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(backend, "preprocess_image", return_value=b"processed") as preprocess, \
+             patch.object(backend, "ocr_image", side_effect=[("first", 90), ("changed", 80), ("French", 95)]) as ocr:
+            image = Path(temp) / "capture.png"
+            image.write_bytes(b"first PNG")
+            self.assertEqual(cache.read(image, "eng"), ("first", 90))
+            self.assertEqual(cache.read(image, "eng"), ("first", 90))
+            self.assertEqual(ocr.call_count, 1)
+            image.write_bytes(b"changed PNG")
+            self.assertEqual(cache.read(image, "eng"), ("changed", 80))
+            self.assertEqual(cache.read(image, "fra"), ("French", 95))
+            self.assertEqual(preprocess.call_count, 3)
+
+    def test_failed_ocr_retries_an_unchanged_capture(self):
+        cache = backend.OcrFrameCache()
+        with tempfile.TemporaryDirectory() as temp, \
+             patch.object(backend, "preprocess_image", return_value=b"processed"), \
+             patch.object(backend, "ocr_image", side_effect=[RuntimeError("temporary"), ("recovered", 90)]) as ocr:
+            image = Path(temp) / "capture.png"
+            image.write_bytes(b"same PNG")
+            with self.assertRaisesRegex(RuntimeError, "temporary"):
+                cache.read(image, "eng")
+            self.assertEqual(cache.read(image, "eng"), ("recovered", 90))
+            self.assertEqual(ocr.call_count, 2)
+
+    def test_capture_period_accounts_for_processing_and_bounds_failure_retries(self):
+        with patch.object(backend.time, "monotonic", return_value=10.4):
+            self.assertAlmostEqual(backend.capture_wait_seconds(10.0, 0.6), 0.2)
+        with patch.object(backend.time, "monotonic", return_value=10.9):
+            self.assertEqual(backend.capture_wait_seconds(10.0, 0.6), 0)
+            self.assertEqual(backend.capture_wait_seconds(10.0, 0.6, failed=True), 0.1)
+
 
 class MainLoopTests(unittest.TestCase):
-    def run_frames(self, frames):
+    def run_frames(self, frames, images=None, delayed_translation=False):
         backend.STOP_REQUESTED.clear()
         states = []
         with tempfile.TemporaryDirectory() as temp:
             args = argparse.Namespace(state_file=str(Path(temp) / "state.json"), region="-10,0 100x40",
                                       target_language="en", ocr_language="eng", interval_seconds=0.1,
-                                      confidence_threshold=60)
+                                      confidence_threshold=60, translation_granularity="phrase")
             # Fake translator results make frame/state timing deterministic.
             class Translator:
-                def __init__(self, language): self.text = ""
-                def submit(self, text): self.text = text
+                def __init__(self, language, granularity="phrase"):
+                    self.text = ""
+                    self.submits = 0
+                def submit(self, text):
+                    self.text = text
+                    self.submits += 1
                 def reset(self): self.text = ""
-                def snapshot(self): return self.text.upper(), ""
+                def snapshot(self): return self.result(), ""
                 def snapshot_segments(self):
-                    return self.text.upper(), "", ([{"id": "test", "source": self.text,
-                                                     "translated": self.text.upper(), "pending": False}]
+                    return self.result(), "", ([{"id": "test", "source": self.text,
+                                                     "translated": self.result(), "pending": not bool(self.result())}]
                                                    if self.text else [])
-                def result(self): return self.text.upper()
+                def result(self): return "" if delayed_translation and self.submits < 2 else self.text.upper()
                 def close(self): pass
 
             waits = 0
+            captures = 0
+
+            def capture(region, image_path):
+                nonlocal captures
+                image_path.write_bytes(images[captures] if images else f"frame {captures}".encode())
+                captures += 1
+
             def wait(_):
                 nonlocal waits
                 waits += 1
@@ -267,13 +419,14 @@ class MainLoopTests(unittest.TestCase):
                     backend.STOP_REQUESTED.set()
 
             with patch.object(backend, "parse_args", return_value=args), \
-                 patch.object(backend, "capture_region"), \
+                 patch.object(backend, "capture_region", side_effect=capture), \
                  patch.object(backend, "preprocess_image", return_value=b"synthetic"), \
-                 patch.object(backend, "ocr_image", side_effect=frames), \
+                 patch.object(backend, "ocr_image", side_effect=frames) as ocr, \
                  patch.object(backend, "AsyncTranslator", Translator), \
                  patch.object(backend, "write_state", side_effect=lambda path, state: states.append(state.copy())), \
                  patch.object(backend.STOP_REQUESTED, "wait", side_effect=wait):
                 self.assertEqual(backend.main(), 0)
+                self.ocr_calls = ocr.call_count
         backend.STOP_REQUESTED.clear()
         return states[2:-1]
 
@@ -288,6 +441,21 @@ class MainLoopTests(unittest.TestCase):
         self.assertEqual(len(states), 2)
         self.assertEqual(states[-1]["ocr_text"], "hello")
         self.assertEqual(states[-1]["translated_text"], "HELLO")
+
+    def test_unchanged_frames_still_publish_state_and_clear_blank_selection(self):
+        states = self.run_frames([("hello", 90), ("", 0), ("unused", 0)],
+                                 images=[b"text image", b"blank image", b"blank image"])
+        self.assertEqual(self.ocr_calls, 2)
+        self.assertEqual(len(states), 3)
+        self.assertEqual([state["ocr_text"] for state in states], ["hello", "hello", ""])
+        self.assertEqual(states[-1]["translation_segments"], [])
+
+    def test_cached_ocr_still_publishes_newly_completed_translation(self):
+        states = self.run_frames([("hello", 90), ("unused", 0)],
+                                 images=[b"same image", b"same image"], delayed_translation=True)
+        self.assertEqual(self.ocr_calls, 1)
+        self.assertEqual([state["translated_text"] for state in states], ["", "HELLO"])
+        self.assertFalse(states[-1]["translation_segments"][0]["pending"])
 
     def test_successful_low_confidence_capture_clears_previous_ocr_error(self):
         states = self.run_frames([("hello", 90), RuntimeError("Synthetic OCR failure"), ("noise", 10)])

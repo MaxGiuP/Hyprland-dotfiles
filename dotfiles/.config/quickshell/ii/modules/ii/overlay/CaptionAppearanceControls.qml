@@ -63,14 +63,37 @@ ColumnLayout {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             wrapMode: Text.WordWrap
-            text: Translation.tr("Match sentence colours")
+            text: Translation.tr("Match translation colours")
             color: Appearance.colors.colOnLayer1
         }
 
         StyledSwitch {
             checked: CaptionAppearance.sentenceHighlighting
-            Accessible.name: Translation.tr("Match sentence colours")
+            Accessible.name: Translation.tr("Match translation colours")
             onToggled: CaptionAppearance.setSentenceHighlighting(checked)
+        }
+    }
+
+    Flow {
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        spacing: 8
+
+        Repeater {
+            model: [
+                { id: "phrase", label: Translation.tr("Short phrases") },
+                { id: "sentence", label: Translation.tr("Whole sentences") }
+            ]
+            delegate: DialogButton {
+                required property var modelData
+                buttonText: modelData.label
+                colBackground: CaptionAppearance.translationGranularity === modelData.id
+                    ? Appearance.colors.colPrimaryContainer : Appearance.colors.colLayer1
+                colBackgroundHover: CaptionAppearance.translationGranularity === modelData.id
+                    ? Appearance.colors.colPrimaryContainer : Appearance.colors.colLayer1Hover
+                colText: Appearance.colors.colOnLayer1
+                downAction: () => CaptionAppearance.setTranslationGranularity(modelData.id)
+            }
         }
     }
 
@@ -78,7 +101,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.minimumWidth: 0
         wrapMode: Text.WordWrap
-        text: Translation.tr("Matching source and translated sentences share a colour. These settings apply to captions and screen translation.")
+        text: Translation.tr("Short phrases share matching colours across both panes. Whole sentences keep more context for translation. Changing this restarts active translation; text size and colours update immediately.")
         color: Appearance.colors.colSubtext
         font.pixelSize: Appearance.font.pixelSize.smaller
     }

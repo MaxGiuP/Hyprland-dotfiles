@@ -81,3 +81,27 @@ test('theme palettes and adaptive colours preserve text contrast', () => {
     }
     assert.notEqual(markup([pair(1)]), markup([pair(1)], false, dark, '#1c1b1c', '#e6e1e1'));
 });
+
+test('short phrases flow inline while real sentence boundaries survive pending results', () => {
+    const input = [
+        { ...pair(1), separator: '' },
+        { ...pair(2), separator: ' ' },
+        { ...pair(3), separator: '\n', pending: true },
+        { ...pair(4), separator: ' ' },
+    ];
+    assert.match(markup(input), /<\/span> <span/);
+    assert.equal((markup(input).match(/<br>/g) || []).length, 1);
+    assert.equal((markup(input, true).match(/<br>/g) || []).length, 1);
+    assert.equal(utils.plainText(sanitize(input), true), 'Translation 1. Translation 2.\nTranslation 4.');
+    assert.deepEqual(renderedColors(markup(input)).filter((_, index) => index !== 2),
+        renderedColors(markup(input, true)));
+});
+
+test('twelve shorter units retain enough history without accepting markup separators', () => {
+    const input = Array.from({ length: 16 }, (_, index) => ({ ...pair(index), separator: '<img>' }));
+    const result = utils.sanitizeSegments(input);
+    assert.equal(result.length, 12);
+    assert.equal(result[0].source, 'Source 4.');
+    assert.equal(result[0].separator, '\n');
+    assert.doesNotMatch(utils.markup(result, false, light, '#f7f2fa', '#1d1b20', 4.5), /<img>/);
+});

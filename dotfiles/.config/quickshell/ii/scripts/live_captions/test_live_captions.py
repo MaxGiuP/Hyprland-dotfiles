@@ -235,6 +235,226 @@ class WhisperTests(unittest.TestCase):
 
 
 class TranslatorTests(unittest.TestCase):
+    def test_translation_granularity_cli_defaults_to_phrases(self):
+        command = ["live_captions", "--state-file", "/unused-state.json"]
+        with patch.object(sys, "argv", command):
+            self.assertEqual(captions.parse_args().translation_granularity, "phrase")
+        with patch.object(sys, "argv", command + ["--translation-granularity", "sentence"]):
+            self.assertEqual(captions.parse_args().translation_granularity, "sentence")
+
+    def test_two_requests_run_concurrently_without_exceeding_limit(self):
+        release, both_started = threading.Event(), threading.Event()
+        lock = threading.Lock()
+        active, peak = 0, 0
+
+        def translate(text, *_):
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+                if active == 2:
+                    both_started.set()
+            release.wait(2)
+            with lock:
+                active -= 1
+            return "translated " + text
+
+        with patch.object(captions, "translate_text", side_effect=translate) as provider:
+            translator = captions.AsyncTranslator()
+            try:
+                for index in range(4):
+                    translator.request(str(index), "fr", "en", stream=str(index))
+                self.assertTrue(both_started.wait(1), "independent phrases should not wait in series")
+                self.assertEqual(provider.call_count, 2)
+                release.set()
+                wait_for(lambda: len(translator._cache) == 4)
+                self.assertEqual(peak, 2)
+                self.assertEqual(provider.call_count, 4)
+            finally:
+                release.set()
+                translator.stop()
+
+    def test_identical_requests_across_streams_share_one_inflight_translation(self):
+        release, started, other_started = threading.Event(), threading.Event(), threading.Event()
+
+        def translate(text, *_):
+            (started if text == "hello" else other_started).set()
+            release.wait(2)
+            return "translated " + text
+
+        with patch.object(captions, "translate_text", side_effect=translate) as provider:
+            translator = captions.AsyncTranslator()
+            try:
+                translator.request("hello", "fr", "en", stream="first")
+                self.assertTrue(started.wait(1))
+                for index in range(8):
+                    translator.request("hello", "fr", "en", stream=f"duplicate-{index}")
+                translator.request("other phrase", "fr", "en", stream="other")
+                self.assertTrue(other_started.wait(1))
+                self.assertEqual(provider.call_count, 2)
+                release.set()
+                wait_for(lambda: len(translator._cache) == 2)
+                for stream in ["first"] + [f"duplicate-{index}" for index in range(8)]:
+                    self.assertEqual(translator._latest_by_target[("fr", "en", stream)],
+                                     ("hello", "translated hello"))
+                self.assertEqual(provider.call_count, 2)
+            finally:
+                release.set()
+                translator.stop()
+
+    def test_reverting_to_inflight_text_removes_obsolete_queued_revision(self):
+        release = threading.Event()
+        started = {text: threading.Event() for text in ("original", "blocker")}
+
+        def translate(text, *_):
+            if text in started:
+                started[text].set()
+                release.wait(2)
+            return "translated " + text
+
+        with patch.object(captions, "translate_text", side_effect=translate) as provider:
+            translator = captions.AsyncTranslator()
+            try:
+                translator.request("original", "fr", "en", stream="live")
+                translator.request("blocker", "fr", "en", stream="other")
+                self.assertTrue(all(event.wait(1) for event in started.values()))
+                translator.request("obsolete revision", "fr", "en", stream="live")
+                self.assertIn("live", translator._pending)
+                translator.request("original", "fr", "en", stream="live")
+                self.assertNotIn("live", translator._pending)
+                release.set()
+                wait_for(lambda: not translator._inflight and not translator._pending)
+                self.assertEqual({call.args[0] for call in provider.call_args_list}, set(started))
+            finally:
+                release.set()
+                translator.stop()
+
+    def test_reverting_to_cached_text_removes_obsolete_queued_revision(self):
+        release = threading.Event()
+        started = {text: threading.Event() for text in ("blocker one", "blocker two")}
+
+        def translate(text, *_):
+            if text in started:
+                started[text].set()
+                release.wait(2)
+            return "translated " + text
+
+        with patch.object(captions, "translate_text", side_effect=translate) as provider:
+            translator = captions.AsyncTranslator()
+            try:
+                wait_for(lambda: translator.request("cached original", "fr", "en") == "translated cached original")
+                for text in started:
+                    translator.request(text, "fr", "en", stream=text)
+                self.assertTrue(all(event.wait(1) for event in started.values()))
+                translator.request("obsolete revision", "fr", "en")
+                self.assertIn("live", translator._pending)
+                self.assertEqual(translator.request("cached original", "fr", "en"), "translated cached original")
+                self.assertNotIn("live", translator._pending)
+                release.set()
+                wait_for(lambda: not translator._inflight and not translator._pending)
+                self.assertNotIn("obsolete revision", [call.args[0] for call in provider.call_args_list])
+            finally:
+                release.set()
+                translator.stop()
+
+    def test_older_completion_cannot_replace_newer_stream_result(self):
+        release = {text: threading.Event() for text in ("old", "new")}
+        started = {text: threading.Event() for text in release}
+
+        def translate(text, *_):
+            started[text].set()
+            release[text].wait(2)
+            return "translated " + text
+
+        with patch.object(captions, "translate_text", side_effect=translate):
+            translator = captions.AsyncTranslator()
+            try:
+                translator.request("old", "fr", "en")
+                self.assertTrue(started["old"].wait(1))
+                translator.request("new", "fr", "en")
+                self.assertTrue(started["new"].wait(1))
+                release["new"].set()
+                wait_for(lambda: ("new", "fr", "en") in translator._cache)
+                release["old"].set()
+                wait_for(lambda: not translator._inflight)
+                self.assertEqual(translator._latest_by_target[("fr", "en", "live")], ("new", "translated new"))
+            finally:
+                for event in release.values():
+                    event.set()
+                translator.stop()
+
+    def test_queued_duplicates_share_failure_backoff(self):
+        release = threading.Event()
+        started = {text: threading.Event() for text in ("blocker one", "blocker two")}
+
+        def translate(text, *_):
+            if text in started:
+                started[text].set()
+                release.wait(2)
+                return "translated " + text
+            return ""
+
+        with patch.object(captions, "translate_text", side_effect=translate) as provider:
+            translator = captions.AsyncTranslator()
+            try:
+                for text in started:
+                    translator.request(text, "fr", "en", stream=text)
+                self.assertTrue(all(event.wait(1) for event in started.values()))
+                translator.request("failed request", "fr", "en", stream="first")
+                translator.request("failed request", "fr", "en", stream="second")
+                release.set()
+                wait_for(lambda: not translator._pending and not translator._inflight)
+                self.assertEqual([call.args[0] for call in provider.call_args_list].count("failed request"), 1)
+                self.assertIn(("failed request", "fr", "en"), translator._retry_after)
+            finally:
+                release.set()
+                translator.stop()
+
+    def test_provider_exception_does_not_kill_workers(self):
+        with patch.object(captions, "translate_text", side_effect=[RuntimeError("temporary failure"), "bonjour"]):
+            translator = captions.AsyncTranslator()
+            try:
+                translator.request("first", "fr", "en")
+                wait_for(lambda: ("first", "fr", "en") in translator._retry_after)
+                wait_for(lambda: translator.request("second", "fr", "en") == "bonjour")
+                self.assertTrue(all(thread.is_alive() for thread in translator._threads))
+            finally:
+                translator.stop()
+
+    def test_stop_cancels_both_children_and_discards_waiting_work(self):
+        real_popen = subprocess.Popen
+        children = []
+
+        def fake_trans(command, **kwargs):
+            child = real_popen([sys.executable, "-c", "import time; time.sleep(30)"], **kwargs)
+            children.append(child)
+            return child
+
+        with patch.object(captions.subprocess, "Popen", side_effect=fake_trans):
+            translator = captions.AsyncTranslator()
+            try:
+                translator.request("first", "fr", "en", stream="first")
+                translator.request("second", "fr", "en", stream="second")
+                wait_for(lambda: len(children) == 2)
+                translator.request("waiting", "fr", "en", stream="third")
+                start = time.monotonic()
+                translator.stop()
+                self.assertLess(time.monotonic() - start, 2)
+                self.assertTrue(all(not thread.is_alive() for thread in translator._threads))
+                self.assertTrue(all(child.poll() is not None for child in children))
+                self.assertFalse(translator._pending)
+                self.assertFalse(translator._inflight)
+                self.assertFalse(translator._cache)
+                translator.request("after stop", "fr", "en")
+                self.assertFalse(translator._pending)
+                self.assertEqual(len(children), 2)
+            finally:
+                translator.stop()
+                for child in children:
+                    if child.poll() is None:
+                        child.kill()
+                        child.wait()
+
     def test_inflight_request_is_not_queued_twice(self):
         started, release = threading.Event(), threading.Event()
 
@@ -261,10 +481,8 @@ class TranslatorTests(unittest.TestCase):
         with patch.object(captions, "translate_text", side_effect=lambda text, *_: "translated " + text):
             translator = captions.AsyncTranslator()
             try:
-                with translator._lock:
-                    translator._pending["stable"] = ("hello", "fr", "en")
-                    translator._pending["live"] = ("hello everyone", "fr", "en")
-                translator._wake_event.set()
+                translator.request("hello", "fr", "en", stream="stable")
+                translator.request("hello everyone", "fr", "en", stream="live")
                 wait_for(lambda: len(translator._cache) == 2)
                 self.assertEqual(translator.request("hello", "fr", "en", stream="stable"), "translated hello")
                 self.assertEqual(translator.request("hello everyone", "fr", "en"), "translated hello everyone")
