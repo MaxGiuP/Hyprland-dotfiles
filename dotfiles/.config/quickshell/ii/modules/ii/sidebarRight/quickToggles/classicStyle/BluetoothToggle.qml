@@ -5,7 +5,6 @@ import qs.modules.common.widgets
 import qs.modules.common.functions
 import QtQuick
 import Quickshell
-import Quickshell.Bluetooth
 import Quickshell.Io
 import Quickshell.Hyprland
 
@@ -15,7 +14,7 @@ QuickToggleButton {
     toggled: BluetoothStatus.enabled
     buttonIcon: BluetoothStatus.connected ? "bluetooth_connected" : BluetoothStatus.enabled ? "bluetooth" : "bluetooth_disabled"
     onClicked: {
-        Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter?.enabled
+        BluetoothStatus.toggleEnabled()
     }
     altAction: () => {
         GlobalStates.sidebarRightOpen = false

@@ -686,19 +686,17 @@ ContentPage {
                     : BluetoothStatus.enabled ? Translation.tr("On, not connected") : Translation.tr("Off")
                 checked: BluetoothStatus.enabled
                 onClicked: {
-                    if (Bluetooth.defaultAdapter)
-                        Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter.enabled
+                    BluetoothStatus.toggleEnabled()
                 }
             }
 
             RippleButtonWithIcon {
                 Layout.fillWidth: true
                 materialIcon: "search"
-                mainText: (Bluetooth.defaultAdapter?.discovering ?? false) ? Translation.tr("Scanning…") : Translation.tr("Scan devices")
+                mainText: (BluetoothStatus.activeAdapter?.discovering ?? false) ? Translation.tr("Scanning…") : Translation.tr("Scan devices")
                 enabled: BluetoothStatus.enabled
                 onClicked: {
-                    if (Bluetooth.defaultAdapter)
-                        Bluetooth.defaultAdapter.discovering = !Bluetooth.defaultAdapter.discovering
+                    BluetoothStatus.toggleDiscovering()
                 }
             }
         }

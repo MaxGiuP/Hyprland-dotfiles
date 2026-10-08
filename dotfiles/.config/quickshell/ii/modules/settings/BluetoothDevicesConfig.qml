@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Bluetooth
+import Quickshell.Io
 import Quickshell.Services.Pipewire
 import qs.services
 import qs.modules.common
@@ -12,14 +13,12 @@ ContentPage {
     forceWidth: true
     baseWidth: 760
     property var settingsHost: null
+    property bool pageActive: true
 
     readonly property var trackedOutputDevices: Audio.outputDevices.filter(d => d.name !== "qs_mono_out")
     readonly property var realOutputDevices: Audio.selectableOutputDevices.filter(d => d.name !== "qs_mono_out")
-    readonly property var adapters: Bluetooth.adapters?.values ?? []
-    property string selectedAdapterId: Bluetooth.defaultAdapter?.adapterId ?? ""
-    readonly property var selectedAdapter: root.adapters.find(adapter => adapter.adapterId === root.selectedAdapterId)
-        ?? Bluetooth.defaultAdapter
-        ?? null
+    readonly property var adapters: BluetoothStatus.adapters
+    readonly property var selectedAdapter: BluetoothStatus.activeAdapter
     readonly property var selectedDevices: {
         const devices = root.selectedAdapter?.devices?.values ?? []
         return devices.slice().sort((left, right) => {
@@ -30,6 +29,59 @@ ContentPage {
     }
     readonly property bool isDiscovering: root.selectedAdapter?.discovering ?? false
     readonly property bool selectedConnected: root.selectedDevices.some(device => device.connected)
+    readonly property var mainShellIpcCommand: ["qs", "ipc", "-p", Quickshell.shellPath("shell.qml"), "call", "bluetooth"]
+    property string mainAdapterId: ""
+    property bool adapterSelectionChanged: false
+
+    function applyMainAdapterSelection() {
+        if (root.pageActive && !root.adapterSelectionChanged && root.mainAdapterId)
+            BluetoothStatus.selectAdapter(root.mainAdapterId)
+    }
+
+    function refreshMainAdapterSelection() {
+        if (selectMainAdapterProc.running)
+            return
+        root.adapterSelectionChanged = false
+        root.mainAdapterId = ""
+        readMainAdapterProc.running = false
+        readMainAdapterProc.running = true
+    }
+
+    function selectAdapter(adapterId) {
+        if (!BluetoothStatus.selectAdapter(adapterId))
+            return
+        root.adapterSelectionChanged = true
+        selectMainAdapterProc.running = false
+        selectMainAdapterProc.command = [...root.mainShellIpcCommand, "selectAdapter", adapterId]
+        selectMainAdapterProc.running = true
+    }
+
+    function setEnabled(value) {
+        if (!root.selectedAdapter)
+            return
+        root.selectAdapter(root.selectedAdapter.adapterId)
+        BluetoothStatus.setEnabled(value)
+    }
+
+    onAdaptersChanged: root.applyMainAdapterSelection()
+    onPageActiveChanged: if (root.pageActive) root.refreshMainAdapterSelection()
+    Component.onCompleted: if (root.pageActive) root.refreshMainAdapterSelection()
+
+    // The standalone settings app and the desktop shell have separate singletons.
+    Process {
+        id: readMainAdapterProc
+        command: [...root.mainShellIpcCommand, "activeAdapterId"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.mainAdapterId = text.trim()
+                root.applyMainAdapterSelection()
+            }
+        }
+    }
+
+    Process {
+        id: selectMainAdapterProc
+    }
 
     function scrollToSection(sectionId) {
         const map = {
@@ -53,10 +105,12 @@ ContentPage {
 
     Timer {
         id: scanTimer
+        property var adapter: null
         interval: 30000
         onTriggered: {
-            if (root.selectedAdapter?.discovering)
-                root.selectedAdapter.discovering = false
+            if (scanTimer.adapter?.discovering)
+                scanTimer.adapter.discovering = false
+            scanTimer.adapter = null
         }
     }
 
@@ -84,7 +138,7 @@ ContentPage {
                         : Translation.tr("Bluetooth off")
                 checked: root.selectedAdapter?.enabled ?? false
                 enabled: root.selectedAdapter !== null
-                onClicked: if (root.selectedAdapter) root.selectedAdapter.enabled = checked
+                onClicked: root.setEnabled(checked)
             }
 
             StyledComboBox {
@@ -118,8 +172,8 @@ ContentPage {
                 displayName: `${adapter.name} · ${adapter.adapterId}`,
                 adapterId: adapter.adapterId
             }))
-            currentIndex: Math.max(0, root.adapters.findIndex(adapter => adapter.adapterId === root.selectedAdapterId))
-            onActivated: index => root.selectedAdapterId = root.adapters[index].adapterId
+            currentIndex: Math.max(0, root.adapters.findIndex(adapter => adapter === root.selectedAdapter))
+            onActivated: index => root.selectAdapter(root.adapters[index]?.adapterId ?? "")
         }
 
         ConfigRow {
@@ -195,10 +249,13 @@ ContentPage {
                 onClicked: {
                     if (!root.selectedAdapter) return
                     if (root.isDiscovering) {
-                        root.selectedAdapter.discovering = false
+                        BluetoothStatus.setDiscovering(false)
                         scanTimer.stop()
+                        scanTimer.adapter = null
                     } else {
-                        root.selectedAdapter.discovering = true
+                        root.selectAdapter(root.selectedAdapter.adapterId)
+                        BluetoothStatus.setDiscovering(true)
+                        scanTimer.adapter = root.selectedAdapter
                         scanTimer.restart()
                     }
                 }

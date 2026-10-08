@@ -1,5 +1,4 @@
 import QtQuick
-import Quickshell.Bluetooth
 import qs.services
 import qs.modules.common
 import qs.modules.common.functions
@@ -17,7 +16,7 @@ QuickToggleModel {
     available: BluetoothStatus.available
     toggled: BluetoothStatus.enabled
     mainAction: () => {
-        Bluetooth.defaultAdapter.enabled = !Bluetooth.defaultAdapter?.enabled
+        BluetoothStatus.toggleEnabled()
     }
     hasMenu: true
 }

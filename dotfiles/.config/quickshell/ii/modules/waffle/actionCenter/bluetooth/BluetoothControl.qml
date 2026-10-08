@@ -17,7 +17,7 @@ Item {
     id: root
 
     Component.onDestruction: {
-        Bluetooth.defaultAdapter.discovering = false;
+        BluetoothStatus.setDiscovering(false);
     }
 
     WPanelPageColumn {
@@ -47,22 +47,15 @@ Item {
                         WSwitch {
                             id: toggleSwitch
                             Layout.rightMargin: 12
-                            checked: Bluetooth.defaultAdapter?.enabled ?? false
-                            onCheckedChanged: {
-                                if (Bluetooth.defaultAdapter) {
-                                    Bluetooth.defaultAdapter.enabled = checked;
-                                    if (!checked) {
-                                        Bluetooth.defaultAdapter.discovering = false;
-                                    }
-                                }
-                            }
+                            checked: BluetoothStatus.enabled
+                            onClicked: BluetoothStatus.setEnabled(checked)
                         }
                     }
                     FadeLoader {
                         Layout.leftMargin: -4
                         Layout.rightMargin: -4
                         Layout.fillWidth: true
-                        shown: Bluetooth.defaultAdapter?.discovering ?? false
+                        shown: BluetoothStatus.activeAdapter?.discovering ?? false
                         visible: true
                         sourceComponent: WIndeterminateProgressBar {}
                     }
@@ -109,10 +102,10 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 anchors.right: parent.right
                 anchors.rightMargin: 12
-                enabled: !Bluetooth.defaultAdapter?.discovering && Bluetooth.defaultAdapter?.enabled
+                enabled: !(BluetoothStatus.activeAdapter?.discovering ?? false) && BluetoothStatus.enabled
 
                 onClicked: {
-                    Bluetooth.defaultAdapter.discovering = true;
+                    BluetoothStatus.setDiscovering(true);
                 }
 
                 contentItem: FluentIcon {

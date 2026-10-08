@@ -16,6 +16,8 @@ Item {
     function syncChildActivity() {
         if (internetLoader.item && "pageActive" in internetLoader.item)
             internetLoader.item.pageActive = root.pageActive && swipeView.currentIndex === 0
+        if (bluetoothLoader.item && "pageActive" in bluetoothLoader.item)
+            bluetoothLoader.item.pageActive = root.pageActive && swipeView.currentIndex === 1
     }
 
     onPageActiveChanged: root.syncChildActivity()
@@ -112,6 +114,7 @@ Item {
                 onLoaded: {
                     if (item && "settingsHost" in item)
                         item.settingsHost = root.settingsHost
+                    root.syncChildActivity()
                     root.applyPendingNavigation()
                 }
             }

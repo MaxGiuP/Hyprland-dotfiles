@@ -21,10 +21,10 @@ WindowDialog {
         text: Translation.tr("Bluetooth devices")
     }
     WindowDialogSeparator {
-        visible: !(Bluetooth.defaultAdapter?.discovering ?? false)
+        visible: !(BluetoothStatus.activeAdapter?.discovering ?? false)
     }
     StyledIndeterminateProgressBar {
-        visible: Bluetooth.defaultAdapter?.discovering ?? false
+        visible: BluetoothStatus.activeAdapter?.discovering ?? false
         Layout.fillWidth: true
         Layout.topMargin: -8
         Layout.bottomMargin: -8
