@@ -193,11 +193,17 @@ ContentPage {
         root.monitorApplyMessage = "";
     }
 
-    function monitorCommand(mon) {
+    function monitorSettings(mon) {
         const draft = root.monitorDraft(mon);
         const refresh = Number(mon.refreshRate || 60).toFixed(2);
         const scale = Number(draft.scale || mon.scale || 1);
-        return `hl.monitor({ output = ${JSON.stringify(mon.name)}, mode = "${mon.width}x${mon.height}@${refresh}", position = "${Math.round(draft.x)}x${Math.round(draft.y)}", scale = ${scale}, transform = ${draft.transform} })`;
+        return {
+            output: mon.name,
+            mode: `${mon.width}x${mon.height}@${refresh}`,
+            position: `${Math.round(draft.x)}x${Math.round(draft.y)}`,
+            scale: scale,
+            transform: draft.transform
+        };
     }
 
     function applyMonitorTransform(mon, transform) {
@@ -219,10 +225,11 @@ ContentPage {
         if (monitorApplyProc.running || monitors.length === 0)
             return;
         root.monitorApplyFailed = false;
-        root.monitorApplyMessage = Translation.tr("Applying monitor positions…");
-        // Lua configurations reject the legacy `hyprctl keyword monitor` API.
-        // Submit the whole layout together so individual monitor updates cannot race.
-        monitorApplyProc.command = ["hyprctl", "eval", monitors.map(mon => root.monitorCommand(mon)).join("\n")];
+        root.monitorApplyMessage = Translation.tr("Applying and saving display settings…");
+        monitorApplyProc.command = [
+            "python3", `${Directories.scriptPath}/hyprland/monitor-layout.py`.replace(/file:\/\//, ""),
+            JSON.stringify(monitors.map(mon => root.monitorSettings(mon)))
+        ];
         monitorApplyProc.running = true;
     }
 
@@ -231,12 +238,12 @@ ContentPage {
         stdout: StdioCollector { id: monitorApplyOutput }
         stderr: StdioCollector { id: monitorApplyErrors }
         onExited: (exitCode, exitStatus) => {
-            // hyprctl can return exit code zero even when its reply is an error.
+            // The helper only reports success after both applying and saving.
             root.monitorApplyFailed = exitCode !== 0 || exitStatus !== 0 || monitorApplyOutput.text.trim() !== "ok";
             root.monitorApplyMessage = root.monitorApplyFailed
-                ? Translation.tr("Could not apply monitor positions") + ": "
+                ? Translation.tr("Could not save display settings") + ": "
                     + (monitorApplyErrors.text.trim() || monitorApplyOutput.text.trim() || String(exitCode))
-                : Translation.tr("Monitor positions applied");
+                : Translation.tr("Display settings saved; restored after restart or reconnection");
             monitorRefreshTimer.restart();
         }
     }
@@ -408,7 +415,7 @@ ContentPage {
             RippleButtonWithIcon {
                 Layout.fillWidth: true
                 materialIcon: "save"
-                mainText: Translation.tr("Apply all monitor positions")
+                mainText: Translation.tr("Apply and save all displays")
                 enabled: !monitorApplyProc.running && HyprlandData.monitors.length > 0
                 onClicked: root.applyAllMonitorLayouts()
             }
@@ -497,7 +504,7 @@ ContentPage {
                     RippleButtonWithIcon {
                         Layout.fillWidth: true
                         materialIcon: "save"
-                        mainText: Translation.tr("Apply this monitor")
+                        mainText: Translation.tr("Apply and save this display")
                         enabled: !monitorApplyProc.running
                         onClicked: root.applyMonitorLayout(modelData)
                     }

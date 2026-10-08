@@ -163,9 +163,7 @@ hl.animation({ leaf = "workspaces", enabled = true, speed = 7, bezier = "menu_de
 hl.animation({ leaf = "specialWorkspaceIn", enabled = true, speed = 2.8, bezier = "emphasizedDecel", style = "slidevert" })
 hl.animation({ leaf = "specialWorkspaceOut", enabled = true, speed = 1.2, bezier = "emphasizedAccel", style = "slidevert" })
 
--- Local monitor and workspace layout
-hl.monitor({ output = "DP-1", mode = "2560x1440@165", position = "1920x0", scale = 1 })
-hl.monitor({ output = "HDMI-A-1", mode = "1920x1080@60", position = "0x550", scale = 1 })
+-- Saved desktop monitor positions and rotations are loaded by monitors.lua.
 hl.monitor({ output = "HDMI-A-2", mode = "preferred", position = "auto-right", scale = 1 })
 
 for i = 1, 30 do
