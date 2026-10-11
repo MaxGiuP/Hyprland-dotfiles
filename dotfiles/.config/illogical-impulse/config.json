@@ -199,7 +199,8 @@
       "showPerformanceProfileToggle": false,
       "showScreenRecord": false,
       "showScreenSnip": true,
-      "showUpdates": true
+      "showUpdates": true,
+      "groupUtilities": false
     },
     "verbose": true,
     "vertical": false,
