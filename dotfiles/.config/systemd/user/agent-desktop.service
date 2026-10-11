@@ -1,0 +1,15 @@
+[Unit]
+Description=Isolated agent desktop (private display and input)
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/dbus-run-session -- /usr/bin/python %h/.local/share/agent-desktop/agent_desktop.py serve-session
+Environment=XDG_RUNTIME_DIR=%t
+UnsetEnvironment=DISPLAY WAYLAND_DISPLAY XAUTHORITY DBUS_SESSION_BUS_ADDRESS AT_SPI_BUS_ADDRESS HYPRLAND_INSTANCE_SIGNATURE SWAYSOCK
+UMask=0077
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+
+[Install]
+WantedBy=default.target
