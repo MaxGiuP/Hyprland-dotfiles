@@ -1,0 +1,9 @@
+[Unit]
+Description=Watch wallpaper palette changes for Hermes
+
+[Path]
+PathChanged=%h/.local/state/quickshell/user/generated/colors.json
+Unit=hermes-wallpaper-theme.service
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Sync Hermes colours with the desktop wallpaper palette
+ConditionPathExists=%h/.local/state/quickshell/user/generated/colors.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 %h/.config/systemd/user/hermes-wallpaper-theme.py
+Environment=HERMES_HOME=%h/.hermes
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.hermes/skins
+
+[Install]
+WantedBy=default.target
