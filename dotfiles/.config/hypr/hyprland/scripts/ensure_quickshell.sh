@@ -40,9 +40,9 @@ quickshell_ready() {
   resolve_qs_bin || return 1
 
   if command -v timeout >/dev/null 2>&1; then
-    timeout "$QS_IPC_TIMEOUT" "$QS_BIN" -c "$QS_CONFIG" ipc call lock focus >/dev/null 2>&1
+    timeout "$QS_IPC_TIMEOUT" "$QS_BIN" -c "$QS_CONFIG" ipc call health ping >/dev/null 2>&1
   else
-    "$QS_BIN" -c "$QS_CONFIG" ipc call lock focus >/dev/null 2>&1
+    "$QS_BIN" -c "$QS_CONFIG" ipc call health ping >/dev/null 2>&1
   fi
 }
 

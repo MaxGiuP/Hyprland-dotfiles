@@ -6,6 +6,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 EVENT_LOG="$SCRIPT_DIR/quickshell_event_log.sh"
 QS_BIN="${QS_BIN:-}"
+QS_IPC_TIMEOUT="${QS_IPC_TIMEOUT:-0.25}"
 
 if [ -z "$QS_BIN" ]; then
   for candidate in "$HOME/.local/bin/qs" "$HOME/.local/bin/quickshell" qs quickshell /usr/bin/qs /usr/bin/quickshell; do
@@ -28,7 +29,7 @@ call_lock_ipc() {
 
   i=0
   while [ "$i" -lt "$attempts" ]; do
-    if "$QS_BIN" -c ii ipc call lock "$method" >/dev/null 2>&1; then
+    if timeout "$QS_IPC_TIMEOUT" "$QS_BIN" -c ii ipc call lock "$method" >/dev/null 2>&1; then
       "$EVENT_LOG" "resume-ipc-$label-ok" "attempt=$i" "bin=$QS_BIN" || true
       return 0
     fi
@@ -43,7 +44,9 @@ call_lock_ipc() {
 "$EVENT_LOG" resume-invoked "argv=$*" || true
 sleep 0.1
 "$EVENT_LOG" resume-before-ensure || true
-"$SCRIPT_DIR/ensure_quickshell.sh" ii
-"$EVENT_LOG" resume-after-ensure || true
+ensure_status=0
+"$SCRIPT_DIR/ensure_quickshell.sh" ii || ensure_status=$?
+"$EVENT_LOG" resume-after-ensure "status=$ensure_status" || true
 sleep 1.5
 call_lock_ipc focus 15 focus || true
+exit "$ensure_status"

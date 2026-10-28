@@ -60,6 +60,13 @@ wait_for_wireplumber() {
 }
 wait_for_wireplumber
 
+# Keep scene-graph rendering on the GUI thread. The threaded loop can wedge
+# during lock-surface teardown after suspend (GUI waits while a render thread
+# spins), leaving both the panels and IPC unresponsive. Keep GPU rendering and
+# allow an explicit override when testing a newer Qt/driver combination.
+QSG_RENDER_LOOP="${QSG_RENDER_LOOP:-basic}"
+export QSG_RENDER_LOOP
+
 NOTIFICATION_ACTIVATION_QML_ROOT="$HOME/.local/lib/qt6/qml"
 NOTIFICATION_ACTIVATION_BUILD="$HOME/.config/quickshell/ii/native/notification-activation/build.sh"
 NOTIFICATION_ACTIVATION_MODULE="$NOTIFICATION_ACTIVATION_QML_ROOT/Linmax/NotificationActivation"
