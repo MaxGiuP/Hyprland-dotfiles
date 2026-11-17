@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from ipaddress import IPv4Address
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from urllib.request import urlopen
@@ -743,6 +744,33 @@ def kdeconnect_device_id():
     return next((line.strip() for line in output.splitlines() if line.strip()), "")
 
 
+def kdeconnect_local_ip(device_id):
+    try:
+        peers = command_output([
+            "qdbus6", "org.kde.kdeconnect", f"/modules/kdeconnect/devices/{device_id}",
+            "org.kde.kdeconnect.device.reachableAddresses",
+        ]).splitlines()
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    for peer in peers:
+        try:
+            peer_address = str(IPv4Address(peer.strip()))
+            connections = command_output(["ss", "-Htnp", "state", "established", "dst", peer_address])
+        except (ValueError, OSError, subprocess.SubprocessError):
+            continue
+        for connection in connections.splitlines():
+            fields = connection.split(maxsplit=4)
+            if len(fields) != 5 or not fields[4].startswith('users:(("kdeconnectd",'):
+                continue
+            host = fields[2].rsplit(":", 1)[0].strip("[]").removeprefix("::ffff:")
+            try:
+                return str(IPv4Address(host))
+            except ValueError:
+                continue
+    return None
+
+
 class RemoteHandler(BaseHTTPRequestHandler):
     pointer_carry_x = 0.0
     pointer_carry_y = 0.0
@@ -964,9 +992,10 @@ def start():
 
 def share_url():
     token = ensure_token()
-    url = f"http://{local_ip()}:{PORT}/?token={token}"
-    run_quiet(["notify-send", "TV Phone Remote", url])
     device_id = kdeconnect_device_id()
+    connected_address = kdeconnect_local_ip(device_id) if device_id else None
+    url = f"http://{connected_address or local_ip()}:{PORT}/?token={token}"
+    run_quiet(["notify-send", "TV Phone Remote", url])
     if device_id:
         run_quiet(["kdeconnect-cli", "--device", device_id, "--share", url])
     print(url)
