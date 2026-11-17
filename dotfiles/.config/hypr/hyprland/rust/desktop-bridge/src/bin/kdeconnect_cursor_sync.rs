@@ -286,11 +286,12 @@ fn main() -> Result<()> {
                         let dy = current.1 - previous.1;
                         if scroll_mode {
                             scroll.input(f64::from(dx), f64::from(dy), &log_path);
-                        } else if let Some(mapped) =
+                        } else if let Some((x, y)) =
                             map_pointer(current.0, current.1, &x_layout, &hypr_layout)
                         {
-                            let _ =
-                                ipc.dispatch("movecursor", &format!("{} {}", mapped.0, mapped.1));
+                            let _ = ipc.command(&format!(
+                                "eval hl.dispatch(hl.dsp.cursor.move({{ x = {x}, y = {y} }}))"
+                            ));
                         }
                     }
                 }
